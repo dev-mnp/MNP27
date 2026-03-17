@@ -1,0 +1,30 @@
+-- ============================================================================
+-- CREATE FIRST ADMIN USER (OPTIONAL - RUN THIS AFTER CREATING USER IN SUPABASE DASHBOARD)
+-- ============================================================================
+-- This script helps you create the first admin user.
+-- 
+-- IMPORTANT: You need to create the user in Supabase Auth first, then run this.
+-- 
+-- Steps:
+-- 1. Go to Supabase Dashboard > Authentication > Users
+-- 2. Click "Add User" and create a user with email and password
+-- 3. Copy the user's UUID from the users table
+-- 4. Replace 'USER_UUID_HERE' below with the actual UUID
+-- 5. Replace 'admin@example.com' with the actual email
+-- 6. Run this migration
+--
+-- OR use the Supabase SQL Editor to run:
+-- INSERT INTO app_users (id, email, name, role, status)
+-- VALUES ('USER_UUID_HERE', 'admin@example.com', 'Admin User', 'admin', 'active');
+-- ============================================================================
+
+-- Example (uncomment and modify):
+-- INSERT INTO app_users (id, email, name, role, status)
+-- VALUES (
+--   'USER_UUID_HERE',  -- Replace with actual UUID from auth.users
+--   'admin@example.com',  -- Replace with actual email
+--   'Admin User',
+--   'admin',
+--   'active'
+-- )
+-- ON CONFLICT (id) DO NOTHING;

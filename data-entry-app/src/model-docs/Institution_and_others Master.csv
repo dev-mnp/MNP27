@@ -1,0 +1,312 @@
+﻿App. No.,Institution Name,Article Name,Quantity,Cost Per Unit,Total Value,Address,Mobile,Comments,Beneficiary Type,ITEM TYPE
+A 001,Kallakurichi - Kannagi Mayazhagu,Accident Victim,1,3000,3000,Kallakurichi,9999999999,A: 339002257674,Others,Aid
+A 002,Kallakurichi - Priyanga Gandhi,Accident Victim,1,8000,8000,Kallakurichi,9999999999,A: 545045897495,Others,Aid
+A 003,Kallakurichi - Sivagami,Accident Victim,1,10000,10000,Kallakurichi,9999999999,A: 290218141057,Others,Aid
+A 004,Kallakurichi - Rani,Accident Victim,1,7500,7500,Kallakurichi,9999999999,A: 907938031037,Others,Aid
+A 005,Kallakurichi - Santhi,Accident Victim,1,5000,5000,Kallakurichi,9999999999,A: 906926701129,Others,Aid
+A 006,Kallakurichi - Lakshmi,Accident Victim,1,5000,5000,Kallakurichi,9999999999,A: 794881677154,Others,Aid
+A 007,Kallakurichi - Tamilarasi,Accident Victim,1,3000,3000,Kallakurichi,9999999999,A: 911476547286,Others,Aid
+A 008,Kallakurichi - Ramalingam,Accident Victim,1,8000,8000,Kallakurichi,9999999999,A: 877352990338,Others,Aid
+A 009,Kallakurichi - Pazhani,Accident Victim,1,3000,3000,Kallakurichi,9999999999,A: 749232813457,Others,Aid
+A 010,Thiruvannamalai - M.POONKODI,Ex gratia for Deceased,1,200000,200000,Thiruvannamalai,9999999999,A: 898341484714,Others,Aid
+A 011,Thiruvannamalai - P.SATHYA,Ex gratia for Deceased,1,200000,200000,Thiruvannamalai,9999999999,A: AAY33353071B264,Others,Aid
+A 012,Villupuram - G.JAYANTHI,Ex gratia for Deceased,1,200000,200000,Villupuram,9999999999,A: 714815771605,Others,Aid
+A 013,Dharmapuri West - M.SARAVANAN,Ex gratia for Deceased,1,200000,200000,Dharmapuri West,9999999999,A: 544163518359,Others,Aid
+A 014,Dharmapuri West - P.CHINNASAMY,Ex gratia for Deceased,1,200000,200000,Dharmapuri West,9999999999,A: 836876012054,Others,Aid
+A 015,Dharmapuri West - POONGA,Accident Victim,1,15000,15000,Dharmapuri West,9999999999,A: 406571747416,Others,Aid
+A 016,Dharmapuri West - M.MARI,Accident Victim,1,30000,30000,Dharmapuri West,9999999999,A: 825912234454,Others,Aid
+A 017,Dharmapuri West - SAROJA CHINNAVELLIYAN,Accident Victim,1,10000,10000,Dharmapuri West,9999999999,A: 407678520346,Others,Aid
+A 018,Dharmapuri West - A.KUPPUSAMY,Accident Victim,1,40000,40000,Dharmapuri West,9999999999,A: 529168326801,Others,Aid
+A 019,Dharmapuri West - K.MADHESWARI,Accident Victim,1,30000,30000,Dharmapuri West,9999999999,A: 574038475283,Others,Aid
+A 020,Dharmapuri West - MUTHUMANI MURUGESAN,Accident Victim,1,30000,30000,Dharmapuri West,9999999999,A: 293440050428,Others,Aid
+A 021,Dharmapuri West - R.PALANIAMMAL,Accident Victim,1,30000,30000,Dharmapuri West,9999999999,A: GVYPP6108K,Others,Aid
+A 022,Dharmapuri West - G.JAIGANESH,Accident Victim,1,10000,10000,Dharmapuri West,9999999999,A: 783230840971,Others,Aid
+A 023,Dharmapuri West - A.TODESWARI,Accident Victim,1,100000,100000,Dharmapuri West,9999999999,A: 698178650372,Others,Aid
+A 024,Tenkasi - R.KALAI SELVI,Accident Victim,1,20000,20000,Tenkasi,9999999999,A: 779770354283,Others,Aid
+A 025,Tenkasi - PALANIAMMAL,Accident Victim,1,20000,20000,Tenkasi,9999999999,A: 716404085796,Others,Aid
+A 026,Tenkasi - KALIAMMAL,Accident Victim,1,20000,20000,Tenkasi,9999999999,A: 501639614330,Others,Aid
+F 001,Kallakurichi - Kalamani,Flood Relief Fund,1,25000,25000,Kallakurichi,9999999999,A: 594214590222,Others,Aid
+F 002,Kallakurichi - Muniyapillai,Flood Relief Fund,1,25000,25000,Kallakurichi,9999999999,A: 790755970359,Others,Aid
+F 003,Kallakurichi - Aruleswari,Flood Relief Fund,1,25000,25000,Kallakurichi,9999999999,A: 829814089408,Others,Aid
+F 004,Kallakurichi - Munusamy,Flood Relief Fund,1,15000,15000,Kallakurichi,9999999999,A: 751634215995,Others,Aid
+F 005,Kallakurichi - Thangamani,Flood Relief Fund,1,25000,25000,Kallakurichi,9999999999,A: 546865353943,Others,Aid
+F 006,Kallakurichi - Chandra Munusamy,Flood Relief Fund,1,25000,25000,Kallakurichi,9999999999,A: 619625950090,Others,Aid
+F 007,Kallakurichi - KANNAMMA,Flood Relief Fund,1,25000,25000,Kallakurichi,9999999999,A: 307175565837,Others,Aid
+F 008,Kallakurichi - P.SHANKAR,Flood Relief Fund,1,10000,10000,Kallakurichi,9999999999,A: 995862013796,Others,Aid
+F 009,Kallakurichi - VENKATESAN,Flood Relief Fund,1,5000,5000,Kallakurichi,9999999999,A: 881818284513,Others,Aid
+F 010,Kallakurichi - P.RAVI,Flood Relief Fund,1,5000,5000,Kallakurichi,9999999999,A: 357807522987,Others,Aid
+F 011,Kallakurichi - GANAPATHI,Flood Relief Fund,1,15000,15000,Kallakurichi,9999999999,A: 454698984508,Others,Aid
+F 012,Kallakurichi - JEYAPRAKSH,Flood Relief Fund,1,8000,8000,Kallakurichi,9999999999,A: 956050601022,Others,Aid
+F 013,Kallakurichi - BANUMATHI,Flood Relief Fund,1,15000,15000,Kallakurichi,9999999999,A: 719021876939,Others,Aid
+F 014,Kallakurichi - G.VASANTHA,Flood Relief Fund,1,8000,8000,Kallakurichi,9999999999,A: 717828989305,Others,Aid
+F 015,Kallakurichi - THANGADURAI,Flood Relief Fund,1,10000,10000,Kallakurichi,9999999999,A: 870961384168,Others,Aid
+F 016,Kallakurichi - RAGULGANDHI,Flood Relief Fund,1,10000,10000,Kallakurichi,9999999999,A: 201694830939,Others,Aid
+F 017,Kallakurichi - ARUMUGAM,Flood Relief Fund,1,15000,15000,Kallakurichi,9999999999,A: 499780590738,Others,Aid
+F 018,Kallakurichi - ARUMUGAM,Flood Relief Fund,1,10000,10000,Kallakurichi,9999999999,A: 532239944947,Others,Aid
+F 019,Kallakurichi - ALAMELU,Flood Relief Fund,1,5000,5000,Kallakurichi,9999999999,A: 905017688646,Others,Aid
+F 020,Kallakurichi - PALANI,Flood Relief Fund,1,5000,5000,Kallakurichi,9999999999,A: 428182813716,Others,Aid
+F 021,Kallakurichi - VENKATESAN,Flood Relief Fund,1,5000,5000,Kallakurichi,9999999999,A: 457261610638,Others,Aid
+F 022,Kallakurichi - AYYAPPAN,Flood Relief Fund,1,20000,20000,Kallakurichi,9999999999,A: 537140187798,Others,Aid
+F 023,Kallakurichi - RAMACHANDRAN,Flood Relief Fund,1,20000,20000,Kallakurichi,9999999999,A: 566026192774,Others,Aid
+F 024,Kallakurichi - LAKSHMI,Flood Relief Fund,1,3000,3000,Kallakurichi,9999999999,A: 382886176679,Others,Aid
+F 025,Kallakurichi - ELUMALAI,Flood Relief Fund,1,3000,3000,Kallakurichi,9999999999,A: 815278795586,Others,Aid
+F 026,Kallakurichi - ARUMUGAM,Flood Relief Fund,1,3000,3000,Kallakurichi,9999999999,A: 539159247463,Others,Aid
+F 027,Thiruvannamalai - SUMATHI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 504040126395,Others,Aid
+F 028,Thiruvannamalai - SUGUNA,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 212731012491,Others,Aid
+F 029,Thiruvannamalai - ANJALAI,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 421735266920,Others,Aid
+F 030,Thiruvannamalai - RANI,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 314504675554,Others,Aid
+F 031,Thiruvannamalai - PANJAVARANAM,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 642114000040,Others,Aid
+F 032,Thiruvannamalai - SUMATHI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 251093190327,Others,Aid
+F 033,Thiruvannamalai - PAVNUU,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 744827957075,Others,Aid
+F 034,Thiruvannamalai - KAMATCHI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 729144116714,Others,Aid
+F 035,Thiruvannamalai - SARASWATHI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 207047386110,Others,Aid
+F 036,Thiruvannamalai - UTHIRA,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 928606665122,Others,Aid
+F 037,Thiruvannamalai - ABIRAMI,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 739505010371,Others,Aid
+F 038,Thiruvannamalai - PONIYAMMAL,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 398620376796,Others,Aid
+F 039,Thiruvannamalai - VIJAYLAKSHMI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 717969397648,Others,Aid
+F 040,Thiruvannamalai - KAMALA,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 574716290993,Others,Aid
+F 041,Thiruvannamalai - KUMARI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 576608155621,Others,Aid
+F 042,Thiruvannamalai - LATHA,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 957972218058,Others,Aid
+F 043,Thiruvannamalai - SUMATHI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 818905276216,Others,Aid
+F 044,Thiruvannamalai - NEELAVATHI,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 644310513875,Others,Aid
+F 045,Thiruvannamalai - MUNIYAMMAL,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 752282757561,Others,Aid
+F 046,Thiruvannamalai - RAJESHWARI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 248098072151,Others,Aid
+F 047,Thiruvannamalai - UNNAMALAI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 830073074655,Others,Aid
+F 048,Thiruvannamalai - KUMARI,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 828441626718,Others,Aid
+F 049,Thiruvannamalai - MUTHUAMMAL,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 439123964867,Others,Aid
+F 050,Thiruvannamalai - BIRUNTHA,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 975625607214,Others,Aid
+F 051,Thiruvannamalai - MURALI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 526974719357,Others,Aid
+F 052,Thiruvannamalai - AZHAGMMAL,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 777359667086,Others,Aid
+F 053,Thiruvannamalai - CHANDRIGA,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 809542987225,Others,Aid
+F 054,Thiruvannamalai - SUMATHI,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 792203848932,Others,Aid
+F 055,Thiruvannamalai - JAMUNA,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 524683464988,Others,Aid
+F 056,Thiruvannamalai - REAKHA,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 203840301749,Others,Aid
+F 057,Thiruvannamalai - AZHAGMMAL,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 399876126255,Others,Aid
+F 058,Thiruvannamalai - MUTHUTHAMIZHARSI,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 980713902501,Others,Aid
+F 059,Thiruvannamalai - THAVAMANI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 663975855383,Others,Aid
+F 060,Thiruvannamalai - ANJALAI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 614555846405,Others,Aid
+F 061,Thiruvannamalai - GOWTHAMI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 673844841463,Others,Aid
+F 062,Thiruvannamalai - SAROJA,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 536582450730,Others,Aid
+F 063,Thiruvannamalai - AMUTHA,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 260867430957,Others,Aid
+F 064,Thiruvannamalai - THAMIZHARASI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 733024053654,Others,Aid
+F 065,Thiruvannamalai - SENBAGAM,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 428406181875,Others,Aid
+F 066,Thiruvannamalai - GOWRI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 684324576248,Others,Aid
+F 067,Thiruvannamalai - PARIMALA,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 428406181875,Others,Aid
+F 068,Thiruvannamalai - GUNASUNDHARI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 525832332672,Others,Aid
+F 069,Thiruvannamalai - THAMIZHARASI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 882123134809,Others,Aid
+F 070,Thiruvannamalai - SIVASANKARI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 332534172632,Others,Aid
+F 071,Thiruvannamalai - SELVAKUMARI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 579655166146,Others,Aid
+F 072,Thiruvannamalai - ANJALAI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 541929988308,Others,Aid
+F 073,Thiruvannamalai - PARASAKTHI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 248018647064,Others,Aid
+F 074,Thiruvannamalai - POORINMA,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 738318117144,Others,Aid
+F 075,Thiruvannamalai - DHANALAKSHMI,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 633616943007,Others,Aid
+F 076,Thiruvannamalai - POOVARASI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 804047164426,Others,Aid
+F 077,Thiruvannamalai - MALLIGA,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 226593088494,Others,Aid
+F 078,Thiruvannamalai - MANIYAMMAL,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 568302589661,Others,Aid
+F 079,Thiruvannamalai - ANBAZHGAN,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 568302589661,Others,Aid
+F 080,Thiruvannamalai - MOORTHI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 631855770074,Others,Aid
+F 081,Thiruvannamalai - LALITHA,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 579714299935,Others,Aid
+F 082,Thiruvannamalai - AMBIGA,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 708338964101,Others,Aid
+F 083,Thiruvannamalai - CHANDRABABU,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 739707809100,Others,Aid
+F 084,Thiruvannamalai - USHA,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 257099179754,Others,Aid
+F 085,Thiruvannamalai - NARAYANASAMY,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 793182172849,Others,Aid
+F 086,Thiruvannamalai - KUZUTHAIVEL,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 269549670204,Others,Aid
+F 087,Thiruvannamalai - SELVI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 986003948788,Others,Aid
+F 088,Thiruvannamalai - MUTHUVEL,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 342548084959,Others,Aid
+F 089,Thiruvannamalai - MANI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 600229310942,Others,Aid
+F 090,Thiruvannamalai - MANIKANDAN,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 536765528206,Others,Aid
+F 091,Thiruvannamalai - ALAMELU,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 224704179016,Others,Aid
+F 092,Thiruvannamalai - PAZHANIYAMMAL,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 761427541605,Others,Aid
+F 093,Thiruvannamalai - MANIKANDAN,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 920385325701,Others,Aid
+F 094,Thiruvannamalai - VIGNESH,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 775885044817,Others,Aid
+F 095,Thiruvannamalai - KAVITHA,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 252915424164,Others,Aid
+F 096,Thiruvannamalai - MUTHU,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 360124656954,Others,Aid
+F 097,Thiruvannamalai - PAVNU,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 585530596583,Others,Aid
+F 098,Thiruvannamalai - PAZHANIYAMMAL,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 217074625905,Others,Aid
+F 099,Thiruvannamalai - PULLAR,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 784912758176,Others,Aid
+F 100,Thiruvannamalai - ELUMALAI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 236440001813,Others,Aid
+F 101,Thiruvannamalai - DEVAGI,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 659867114261,Others,Aid
+F 102,Thiruvannamalai - ARUMUGAM,Flood Relief Fund,1,15000,15000,Thiruvannamalai,9999999999,A: 765124035596,Others,Aid
+F 103,Thiruvannamalai - VENGATASAN,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 338212591383,Others,Aid
+F 104,Thiruvannamalai - MALLIGA,Flood Relief Fund,1,10000,10000,Thiruvannamalai,9999999999,A: 838767048679,Others,Aid
+F 105,Villupuram - S NADARAJAN,Flood Relief Fund,1,20000,20000,Villupuram,9999999999,A: 9245 1311 9946,Others,Aid
+F 106,Villupuram - KAMALA VALLI R,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 7899 9738 2638,Others,Aid
+F 107,Villupuram - S JAYAMEERA,Flood Relief Fund,1,20000,20000,Villupuram,9999999999,A: 9734 0759 3170,Others,Aid
+F 108,Villupuram - K SARASWATHI,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 6325 6149 9998,Others,Aid
+F 109,Villupuram - R KRISHNA KUMARI,Flood Relief Fund,1,20000,20000,Villupuram,9999999999,A: 7542 1685 8709,Others,Aid
+F 110,Villupuram - S SARANYA,Flood Relief Fund,1,25000,25000,Villupuram,9999999999,A: 2223 4997 3527,Others,Aid
+F 111,Villupuram - A PICHAIKARAN,Flood Relief Fund,1,25000,25000,Villupuram,9999999999,A: 7905 1699 2643,Others,Aid
+F 112,Villupuram - S ARUL JOTHI,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 6820 5736 8103,Others,Aid
+F 113,Villupuram - G RAMACHANDIRAN,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 7001 5965 4663,Others,Aid
+F 114,Villupuram - K PARTHIBAN,Flood Relief Fund,1,20000,20000,Villupuram,9999999999,A: 4588 4917 4260,Others,Aid
+F 115,Villupuram - M SANGEETHA,Flood Relief Fund,1,20000,20000,Villupuram,9999999999,A: 3286 4879 1218,Others,Aid
+F 116,Villupuram - R VIJI KALA,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 2172 7686 3227,Others,Aid
+F 117,Villupuram - N VALLI,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 5786 6302 2897,Others,Aid
+F 118,Villupuram - R RAJAMMAL,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 6635 5869 7390,Others,Aid
+F 119,Villupuram - SANKARA LINGAM,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 3763 2733 9331,Others,Aid
+F 120,Villupuram - AANANTHAI,Flood Relief Fund,1,10000,10000,Villupuram,9999999999,A: 2365 4765 0376,Others,Aid
+F 121,Villupuram - E SOWMIYA,Flood Relief Fund,1,20000,20000,Villupuram,9999999999,A: 9882 5866 4474,Others,Aid
+F 122,Villupuram - CHITHRA K,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 7561 9913 6991,Others,Aid
+F 123,Villupuram - KANAGA VALLI,Flood Relief Fund,1,10000,10000,Villupuram,9999999999,A: 5534 1530 6955,Others,Aid
+F 124,Villupuram - DEENATHAYALAN,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 6333 5933 0816,Others,Aid
+F 125,Villupuram - R.BALA SUBRAMANIYAN,Flood Relief Fund,1,20000,20000,Villupuram,9999999999,A: 6368 9252 7937,Others,Aid
+F 126,Villupuram - K VANITHA,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 9550 8135 1602,Others,Aid
+F 127,Villupuram - C ELUMALAI,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 8049 3775 8819,Others,Aid
+F 128,Villupuram - K ROSE AMMAL,Flood Relief Fund,1,10000,10000,Villupuram,9999999999,A: 7248 2528 8476,Others,Aid
+F 129,Villupuram - D DHANA SEKAR,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 4624 8270 1879,Others,Aid
+F 130,Villupuram - ABIRAMBAL V,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 2861 3003 1613,Others,Aid
+F 131,Villupuram - K NIVETHA,Flood Relief Fund,1,10000,10000,Villupuram,9999999999,A: 2958 4168 7336,Others,Aid
+F 132,Villupuram - R RAJA,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 2950 5442 3687,Others,Aid
+F 133,Villupuram - SANGEETHA,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 4797 4015 8454,Others,Aid
+F 134,Villupuram - ANJALAI,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 2617 2021 8760,Others,Aid
+F 135,Villupuram - K ARUNTHAVAM,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 2527 8990 2718,Others,Aid
+F 136,Villupuram - P PAKKIYAM,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 8572 9336 8445,Others,Aid
+F 137,Villupuram - N KALIYA MOORTHY,Flood Relief Fund,1,10000,10000,Villupuram,9999999999,A: 4812 2113 0250,Others,Aid
+F 138,Villupuram - K REVATHY,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 2813 3592 4720,Others,Aid
+F 139,Villupuram - SIYAMALA,Flood Relief Fund,1,20000,20000,Villupuram,9999999999,A: 2675 5495 2028,Others,Aid
+F 140,Villupuram - M BAKKIYA LAKSHMI,Flood Relief Fund,1,10000,10000,Villupuram,9999999999,A: 6841 7531 5600,Others,Aid
+F 141,Villupuram - CITHRA A,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 3220 3061 0432,Others,Aid
+F 142,Villupuram - PAZHANIAMMAL,Flood Relief Fund,1,20000,20000,Villupuram,9999999999,A: 8769 5765 6586,Others,Aid
+F 143,Villupuram - J TAMIL SELVI,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 5296 1600 1835,Others,Aid
+F 144,Villupuram - M AMMA KANNU,Flood Relief Fund,1,15000,15000,Villupuram,9999999999,A: 3718 9967 6430,Others,Aid
+F 145,Villupuram - A GEETHA,Flood Relief Fund,1,10000,10000,Villupuram,9999999999,A: 5456 8358 0379,Others,Aid
+F 146,Villupuram - ELUMALAI .K,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 9491 4461 9875,Others,Aid
+F 147,Villupuram - VIJAYA.G,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 375673991096,Others,Aid
+F 148,Villupuram - CHANDIRA.R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 764122214051,Others,Aid
+F 149,Villupuram - RAJESHWARI.G,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 231283025996,Others,Aid
+F 150,Villupuram - NITHIYA DEVI.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 257447432733,Others,Aid
+F 151,Villupuram - GENGAMMAL.V,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 349426449349,Others,Aid
+F 152,Villupuram - LAKSHMI.R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 452950663119,Others,Aid
+F 153,Villupuram - PORKODI.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 540192688301,Others,Aid
+F 154,Villupuram - SUDAMANI.D,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 708436703684,Others,Aid
+F 155,Villupuram - SURIYA.V,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 769944339380,Others,Aid
+F 156,Villupuram - SATHIYA.R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 493525043224,Others,Aid
+F 157,Villupuram - VIJI.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 548498444680,Others,Aid
+F 158,Villupuram - KARPAGAM.R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 998144238369,Others,Aid
+F 159,Villupuram - KALA.K,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 262893050766,Others,Aid
+F 160,Villupuram - DHIVYA.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 843187513399,Others,Aid
+F 161,Villupuram - VADIVU.K,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 798493333072,Others,Aid
+F 162,Villupuram - KOVINDHAMMAL.V,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 990427279338,Others,Aid
+F 163,Villupuram - GOWRI.R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 798593986016,Others,Aid
+F 164,Villupuram - ANANTHI.E,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 842188980674,Others,Aid
+F 165,Villupuram - SIVANSANGARI.K.P,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 577555379216,Others,Aid
+F 166,Villupuram - LAKSHMI.G,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 544529793213,Others,Aid
+F 167,Villupuram - AMUTHA.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 678758961054,Others,Aid
+F 168,Villupuram - KRISHANAN.G,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 243487719090,Others,Aid
+F 169,Villupuram - VALLI.G,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 981399305509,Others,Aid
+F 170,Villupuram - GOWRI.U,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 756758224383,Others,Aid
+F 171,Villupuram - RATHA.R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 528335672136,Others,Aid
+F 172,Villupuram - MALIGA.R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 716471368600,Others,Aid
+F 173,Villupuram - VASUKI.V,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 420112400032,Others,Aid
+F 174,Villupuram - RAMESH KANNAN.K,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 346129242007,Others,Aid
+F 175,Villupuram - MAHESWARAN.T,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 230047139926,Others,Aid
+F 176,Villupuram - ROJA.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 818263516812,Others,Aid
+F 177,Villupuram - ANBALAGAN.K,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 390483760230,Others,Aid
+F 178,Villupuram - AMBIGA.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 498176770278,Others,Aid
+F 179,Villupuram - BADMA.R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 436304142421,Others,Aid
+F 180,Villupuram - AVUSABEEVI.M,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 466949102265,Others,Aid
+F 181,Villupuram - AMUTHA.K,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 984382557909,Others,Aid
+F 182,Villupuram - MALAR.K,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 411481471250,Others,Aid
+F 183,Villupuram - BHARATHI.R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 2558 7569 9704,Others,Aid
+F 184,Villupuram - FARTHIMA BEGAM.A,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 364748592376,Others,Aid
+F 185,Villupuram - KALAVNI.R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 580522170760,Others,Aid
+F 186,Villupuram - MUTHULAKSHMI KUMAR.K,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 412608134940,Others,Aid
+F 187,Villupuram - SELVI .R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 312220607692,Others,Aid
+F 188,Villupuram - KUMARI.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 217818162459,Others,Aid
+F 189,Villupuram - VALLI.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 948619726161,Others,Aid
+F 190,Villupuram - SOUNDARYA.A,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 994165722573,Others,Aid
+F 191,Villupuram - MANIKANDAN.E,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 211247128362,Others,Aid
+F 192,Villupuram - SARASU.V,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 440890440573,Others,Aid
+F 193,Villupuram - MARIYAMMA.R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 461957031577,Others,Aid
+F 194,Villupuram - DHANASEKARAN.D,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 927060622606,Others,Aid
+F 195,Villupuram - SATHIYA.B,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 944853937235,Others,Aid
+F 196,Villupuram - VASANTHI.K,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 706773056574,Others,Aid
+F 197,Villupuram - SUMATHI.P,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 545397665134,Others,Aid
+F 198,Villupuram - MEENATCHI.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 756666476624,Others,Aid
+F 199,Villupuram - GOWRI.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 719519915235,Others,Aid
+F 200,Villupuram - SARASWATHI.R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 753745673592,Others,Aid
+F 201,Villupuram - VASANTHA.P,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 945391589475,Others,Aid
+F 202,Villupuram - RAMANI.A,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 559257909822,Others,Aid
+F 203,Villupuram - POONGAVANAM.P,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 992308998117,Others,Aid
+F 204,Villupuram - SANTHI.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 504457010342,Others,Aid
+F 205,Villupuram - SWETHA.V,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 828762233380,Others,Aid
+F 206,Villupuram - CHANDRALEKHA.V,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 920654107126,Others,Aid
+F 207,Villupuram - PARASAKTHI SEENUVASAN.A,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 286265027890,Others,Aid
+F 208,Villupuram - KALPANA.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 845436912802,Others,Aid
+F 209,Villupuram - KRISHNA VENI.G,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 831014751986,Others,Aid
+F 210,Villupuram - MEENATCHI.T,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 371221262157,Others,Aid
+F 211,Villupuram - JOTHI.K,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 664492632914,Others,Aid
+F 212,Villupuram - KANNAGI.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 426904977688,Others,Aid
+F 213,Villupuram - SARALA.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 262061592371,Others,Aid
+F 214,Villupuram - PAVITHRA GANESH.K,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 633247993687,Others,Aid
+F 215,Villupuram - NELIIMA.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 517978371687,Others,Aid
+F 216,Villupuram - PARAMESWARI.K,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 844050342008,Others,Aid
+F 217,Villupuram - THILAGAM GANESH.K,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 281707823898,Others,Aid
+F 218,Villupuram - MEERA.P,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 495360888863,Others,Aid
+F 219,Villupuram - VANITHA.D,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 569605511129,Others,Aid
+F 220,Villupuram - MAYAVAN,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 364464516431,Others,Aid
+F 221,Villupuram - GIRIJA EZHUMALAI.E,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 782469255339,Others,Aid
+F 222,Villupuram - KANNAN MAYAVAN .M,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 770851011634,Others,Aid
+F 223,Villupuram - VIJAYALAKSHMI.R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 602436294976,Others,Aid
+F 224,Villupuram - AMUTHA.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 463130314323,Others,Aid
+F 225,Villupuram - VIJAKUMARI.M,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 228342989663,Others,Aid
+F 226,Villupuram - KAMATCHI.V,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 210541186471,Others,Aid
+F 227,Villupuram - SIVAGAMI.P,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 236549697530,Others,Aid
+F 228,Villupuram - SATHYA B,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 271921431590,Others,Aid
+F 229,Villupuram - ALAMELU.A,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 721726854391,Others,Aid
+F 230,Villupuram - INDIRA.K,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 276822929703,Others,Aid
+F 231,Villupuram - RANI.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 608969678525,Others,Aid
+F 232,Villupuram - KAVITHA.P,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 400441822943,Others,Aid
+F 233,Villupuram - KUMUTHA.M,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 99497009722,Others,Aid
+F 234,Villupuram - KUMARI.A,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 580712352087,Others,Aid
+F 235,Villupuram - JAYANTHI.R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 327172846271,Others,Aid
+F 236,Villupuram - PARASURAMAN.M,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 378394850881,Others,Aid
+F 237,Villupuram - ANANTHANAYAGI.S,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 434762801961,Others,Aid
+F 238,Villupuram - KALAI SELVI.P,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 538603106122,Others,Aid
+F 239,Villupuram - BANUMATHI.T,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 833109662082,Others,Aid
+F 240,Villupuram - VIJAYA MALA.R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 317038850080,Others,Aid
+F 241,Villupuram - POONGAVANAM.R,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 666706075923,Others,Aid
+F 242,Villupuram - CHITHRA.T,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 898411133831,Others,Aid
+F 243,Villupuram - DHAVAMANI.V,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 671424951882,Others,Aid
+F 244,Villupuram - Sumithra.K,Flood Relief Fund,1,7000,7000,Villupuram,9999999999,A: 731291923145,Others,Aid
+I 001,Cheyyur Thasildar Office,Laptop - i5,1,60800,60800,"Thasildar Office, Cheyyur, Chengalpattu",9999999999,No,Institution,Article
+I 002,Adhiparasakthi Institutions,Laptop,81,34000,2754000,Melmaruvathur,4427529096,No,Institution,Article
+I 003,Govt School - MKM,Steel Cupboard,2,12390,24780,Marakanam,9444662668,No,Institution,Article
+I 004,Govt School - KDPM,Office Table 4X2,5,4602,23010,Kadapakkam,9442826622,No,Institution,Article
+I 004,Govt School - KDPM,S Type Chair,5,2242,11210,Kadapakkam,9442826622,No,Institution,Article
+I 005,Govt.School - AVPR,Office Table 4X2,5,4602,23010,"Avanipur, Villupuram",8778403593,No,Institution,Article
+I 006,Govt.School- NMBR,Steel Cupboard,2,12390,24780,Nolambur,94442375680,No,Institution,Article
+I 007,Govt.School - CYR,Steel Cupboard,3,12390,37170,Cheiyur,8339068395,No,Institution,Article
+I 008,Anbu Thondu Nilayam,Rice 1000 Kgs,1,60000,60000,Chengalpattu,9865336966,No,Institution,Article
+I 009,"Fire Station, Acharapakkam",Epson Printer L3250 (Lite),1,15800,15800,"Acharapakkam, Chengalpattu",9444279203,No,Institution,Article
+I 010,Adhiparasakthi Mat Hr.Sec.School,"Acer Monitor 21.5""",15,7100,106500,Melmaruvathur,9999999999,No,Institution,Article
+I 010,Adhiparasakthi Mat Hr.Sec.School,Orient 20 W Bulb,20,130,2600,Melmaruvathur,4427529208,No,Institution,Article
+I 010,Adhiparasakthi Mat Hr.Sec.School,Flood Light 50 W,3,500,1500,Melmaruvathur,4427529208,No,Institution,Article
+I 010,Adhiparasakthi Mat Hr.Sec.School,"HP Printer 126NW (Heavy, All in 1)",1,23700,23700,Melmaruvathur,4427529208,No,Institution,Article
+I 010,Adhiparasakthi Mat Hr.Sec.School,Ceiling Fan- Ord,35,1857,64995,Melmaruvathur,4427529208,No,Institution,Article
+I 010,Adhiparasakthi Mat Hr.Sec.School,Water Hose -Braided,1,8000,8000,Melmaruvathur,4427529208,No,Institution,Article
+I 010,Adhiparasakthi Mat Hr.Sec.School,Laptop (3511),2,47500,95000,Melmaruvathur,4427529208,No,Institution,Article
+I 010,Adhiparasakthi Mat Hr.Sec.School,Grass Cutter Machine,1,34515,34515,Melmaruvathur,4427529208,No,Institution,Article
+I 010,Adhiparasakthi Mat Hr.Sec.School,Desktop Computer,1,45500,45500,Melmaruvathur,4427529208,No,Institution,Article
+I 011,G.B.Public School,Laptop - i5(Lite),1,53000,53000,Melmaruvathur,4427528350,No,Institution,Article
+I 011,G.B.Public School,Laptop (Victus),1,79000,79000,Melmaruvathur,4427528350,No,Institution,Article
+I 011,G.B.Public School,Canon TR 4826 Photocopier,1,265000,265000,Melmaruvathur,4427528350,No,Institution,Article
+I 012,Adhiparasakthi Annai Illam,Colour Printer HP Smart Tank 760 All in one,1,27500,27500,Melmaruvathur,7639101207,No,Institution,Article
+I 012,Adhiparasakthi Annai Illam,Canon EOS 1500 Camera,1,48000,48000,Melmaruvathur,7639101207,No,Institution,Article
+I 012,Adhiparasakthi Annai Illam,Desktop Computer,1,45500,45500,Melmaruvathur,7639101207,No,Institution,Article
+I 012,Adhiparasakthi Annai Illam,Podiam Mike- Digimore,1,1900,1900,Melmaruvathur,7639101207,No,Institution,Article
+I 012,Adhiparasakthi Annai Illam,Portable Speaker,1,12000,12000,Melmaruvathur,7639101207,No,Institution,Article
+I 013,Union Public School,Epson Printer L3250 (Lite),1,15800,15800,"Athivakkam, Acharapakkam",9999999999,No,Institution,Article
+I 013,Union Public School,Steel Cupboard,1,12390,12390,"Gandhi nagar, Acharapakkam",9999999999,No,Institution,Article
+I 014,MAPIMS,Foldable Wheel Chair,15,5775,86625,Melmaruvathur,9999999999,No,Institution,Article
+I 018,ADHIPARASAKTHI ANMIGA IYAKKAM,Tea can 10 ltrs,5,1500,7500,MELMARUVATHUR,99999999,No,Institution,Article
+I 018,ADHIPARASAKTHI ANMIGA IYAKKAM,Wet Grinder 3 Ltrs,3,15930,47790,MELMARUVATHUR,99999999,No,Institution,Article
+I 018,ADHIPARASAKTHI ANMIGA IYAKKAM,HP Printer 1108 Plus,3,15700,47100,MELMARUVATHUR,99999999,No,Institution,Article
+I 018,ADHIPARASAKTHI ANMIGA IYAKKAM,Desktop Computer,3,45500,136500,MELMARUVATHUR,99999999,No,Institution,Article
+I 018,ADHIPARASAKTHI ANMIGA IYAKKAM,Handicapped Scooter,1,0,0,MELMARUVATHUR,99999999,No,Institution,Article
+I 018,ADHIPARASAKTHI ANMIGA IYAKKAM,Laptop,5,34000,170000,MELMARUVATHUR,99999999,No,Institution,Article
+I 018,ADHIPARASAKTHI ANMIGA IYAKKAM,Girls Cycle,15,5200,78000,MELMARUVATHUR,99999999,No,Institution,Article
+I 018,ADHIPARASAKTHI ANMIGA IYAKKAM,Gents Cycle,15,5500,82500,MELMARUVATHUR,99999999,No,Institution,Article
+I 018,ADHIPARASAKTHI ANMIGA IYAKKAM,Agri Battery Sprayer,5,4200,21000,MELMARUVATHUR,99999999,No,Institution,Article
+I 018,ADHIPARASAKTHI ANMIGA IYAKKAM,Sewing Machine ORD,10,5200,52000,MELMARUVATHUR,99999999,No,Institution,Article
+I 018,ADHIPARASAKTHI ANMIGA IYAKKAM,Push Cart Without Top,2,13000,26000,MELMARUVATHUR,99999999,No,Institution,Article

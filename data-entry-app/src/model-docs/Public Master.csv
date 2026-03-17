@@ -1,0 +1,347 @@
+﻿App. No.,Name,Aadhar (Without Space),Handicapped (Yes / No),Address,Mobile,Article Name,Cost Per Unit,Quantity,Total Value,Comments,Beneficiary Type,ITEM TYPE
+P 001,Rekha Elumalai,6.29796E+11,Yes,"96 Palla St, Thiruvannamalai",9003985442,Handicapped Hand Tricycle,7350,1,7350,No,Public,Article
+P 002,G.J.Arulmanimaran,3.79284E+11,Yes,"5A, First Cross St,Ambattur, Chennai
+",9444278675,Education Aid,0,0,0,Rejected. 15000,Public,Aid
+P 003,A.Manikandan,3.20664E+11,No,"390, South St, Kallakurichy",6382220459,Education Aid,15000,1,15000,Rs.15000,Public,Aid
+P 004,V.Jayavel,5.48331E+11,Yes,"46 Jothi Nagar, Thiruvallur",8668000173,Business Aid,10000,1,10000,Rs.10000,Public,Aid
+P 005,K.Ganesh,7.65725E+11,No,"Kesavarayanpettai, Melmaruvathur",9655989549,Gents Cycle,5500,1,5500,No,Public,Article
+P 006,K.Malar,7.99405E+11,Yes,"2/519 Selva Vinayakar Koil St, Thuraiakkam, Chennai",7401234296,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 007,M.Vilvanathan,2.81683E+11,No,"NGO Nagar, Saravambakkam, Chenglepat",7358991411,Gents Cycle,5500,1,5500,No,Public,Article
+P 008,Thenmozhi,9.02809E+11,No,"312 North St, Villupuram",7695877623,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 009,V.Sumathi,2.88407E+11,No,"36,Mettu St, Vridhachalam, Cuddalore",9384920615,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 010,Subhasree,3.64828E+11,No,"18, Seethalakshmi Nagar, Pudhucherry",8667248576,Girls Cycle,5200,1,5200,No,Public,Article
+P 011,G.Baskaran,7.04199E+11,Yes,"33 3rd St, Uthangudi,Madurai",9677540754,Handicapped Scooter,50000,1,50000,50% of the cost of  Tvs Jupiter 110,Public,Article
+P 012,B.Balamurugan,3.06705E+11,Yes,"Kamarajar Nagar, Madurai",9976269642,Handicapped Scooter,0,0,0,"Rejected. 50% of the cost of handicapped motorized two wheeler, 50000",Public,Article
+P 013,Abitha,6.08714E+11,No,"Thandalam Village, Cheiyur",9994967607,Girls Cycle,5200,1,5200,No,Public,Article
+P 014,P.Karthick Kumar,6.30939E+11,Yes,"Kudaiparapatti, Dindigul",9677901784,Laptop,34000,1,34000,No,Public,Article
+P 015,V.Muthupandi,6.03863E+11,Yes,"Pallakapatti, Madurai",9003628725,Livelihood Aid,25000,1,25000,Rs.25000 aid to buy Cow,Public,Aid
+P 016,Malliga,2.84214E+11,Yes,"DVPuram, Thiruthani",6369093645,Business Aid,5000,1,5000,Rs.5000,Public,Aid
+P 017,R.Kathirkumar,7.11583E+11,No,"Maniyeripatti, Boodalur, Tanjore",6381795860,Lenova Tab,13000,1,13000,No,Public,Article
+P 018,G.Rasathi,9.20748E+11,No,"Thirutani, Thiruvallur",9944204487 & 8248583820,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 019,P.Keerthana,6.22734E+11,No,"Thittakudi, Cuddalore",9150599380,Laptop,34000,1,34000,No,Public,Article
+P 020,V.Jeeva,2.02041E+11,No,"Manaparai, Tiruchy",7010694187,Laptop,34000,1,34000,No,Public,Article
+P 021,Alexandar Rayappan,3.98231E+11,Yes,Pallavaram Chennai,9380644234,Business Aid,10000,1,10000,Rs.10000,Public,Aid
+P 022,Pachiappan,7.37865E+11,Yes,"Trichengode, Namakkal",8870096041,Renovation Aid,20000,1,20000,Rs.20000,Public,Aid
+P 023,Rebaideen,5.5609E+11,Yes,"Avadi, Chennai",9094214214 & 9445922414,Business Aid,10000,1,10000,Rs.10000,Public,Aid
+P 024,M.IniyaSri,6.47391E+11,No,"Palavakkam, Chennai",8939288108,Education Aid,15000,1,15000,Rs.15000,Public,Aid
+P 025,A.Mohanraj,8.22141E+11,Yes,"Erukancherry, Chennai 1158",7358185389,Medical Aid,10000,1,10000,"Rs.10000
+",Public,Aid
+P 026,S.Harish,2.30316E+11,Yes,"Perambur, Chennai 11",9629127406,Education Aid,10000,1,10000,"Rs.10000
+",Public,Aid
+P 027,P.Suresh,9.07893E+11,Yes,"Vyasarpadi, Chennai 11",6382767358,Laptop,34000,1,34000,No,Public,Article
+P 028,Hemalatha,9.62572E+11,No,"Mettupalayam, Chennai 11",8925268539,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 029,R.Venkatesan,6.99678E+11,Yes,"madhuranthakam, Chenglepat",8110810403,Handicapped Scooter,0,0,0,"Rejected.50% of the cost of scooter
+",Public,Article
+P 030,P.Rathinam,3.52747E+11,Yes,"Viralimalai, Pudhukottai",8610176207,Handicapped Scooter,55000,1,55000,"50% of the cost of Activa scooter
+",Public,Article
+P 031,P.Krishnaveni,5.80767E+11,Yes,"Kamdar nagar, Nungambakkam, Chennai",6379621287,Hand Sewing Machine with Motor,5916,1,5916,No,Public,Article
+P 032,A.Rajeswari,4.63908E+11,No,"Oonkur, Thindivanam, Villupuram",9843727514 & 9585917835,Renovation Aid,25000,1,25000,Rs.25000,Public,Aid
+P 033,Murugan,9.42139E+11,No,"Thandalam, Cheiyur",9943631956,Gents Cycle,5500,1,5500,No,Public,Article
+P 034,Saranya,5.04936E+11,Yes,"Vikkiravandi, Villupuram",9600034883,Sewing Machine ORD / Motor,6300,1,6300,to check with Surendar,Public,Article
+P 035,Anitha,4.27177E+11,No,"Veppur, Cuddalore",7558151310 & 9789369743,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 036,K.Periasamy,3.95053E+11,No,"N.Pudhupatty, Namakkal",9626854629,Laptop,34000,1,34000,No,Public,Article
+P 037,Naseema Begam,3.46098E+11,No,"Perambur, Chennai",7397349382,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 038,E.Manikandan,7.03703E+11,Yes,"RA.Puram, Chennai",7397459130,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 039,S.Lawrence,6.46515E+11,Yes,"pallavaram, Chennai",9840880938,Business Aid,20000,1,20000,Rs.20000,Public,Aid
+P 040,S.Mageswari,5.16542E+11,Yes,"Okkiyampettai, Chennai",9962188393 & 9150559070,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 041,A.Righana Sulthan,8.64107E+11,Yes,"Vettuvankeni, Chennai",9342552312,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 042,Kavitha,7.08804E+11,Yes,"Vettuvankeni, Chennai",9789082411 & 9514080089,Laptop,34000,1,34000,No,Public,Article
+P 043,P.Rajesh,3.51365E+11,No,"Periyar Arts College, Tirichy",9677806099,Laptop,34000,1,34000,No,Public,Article
+P 044,V.Megala,6.3728E+11,No,"Subramaniapuram, Tirichy",9965107744,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 045,K.Rajendran,7.06406E+11,Yes,"Kundrathur, Chennai",9941168693,Business Aid,15000,1,15000,Rs.15000,Public,Aid
+P 046,R.Karpagam,4.93957E+11,Yes,"Kundrathur, Chennai",9551125412,Business Aid,10000,1,10000,Rs.10000,Public,Aid
+P 047,Chandrakumar,9.33755E+11,Yes,"Kaliyur PO, Cheyyar",7708732297,Handicapped Scooter,65000,1,65000,50% of the cost of Handicapped Activa Scooter,Public,Article
+P 048,T.Kalaivani,9.13503E+11,No,"Chengapuram, Kolapalur",8667894369,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 049,Powziya Banu,5.03464E+11,No,"Vandhavasi, Thiruvannamalai",6379790365,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 050,Uma,5.1464E+11,No,"Chetpat, Thiruvannamalai",9600448582,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 051,K.Vasuki,6.07315E+11,Yes,"Ariyathur Villager, Vandhavasi",9884217310 & 807232519,Handicapped Scooter,55000,1,55000,50% of the cost of Activa scooter,Public,Article
+P 052,V.Sugandhi,2.83381E+11,No,"Anna nagar, Thiruvannamalai",9043615369,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 053,P.Porkodi,5.35726E+11,No,Kolapalur,9952649521,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 054,Bhuvaneswari,7.95916E+11,No,"Keelavampoondi, Villupuram",6374183683,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 055,S.Mala,2.13075E+11,No,"Vinnamangalam, Aarani",6380330017,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 056,K.Marimuthu,2.04705E+11,Yes,"Manaparai, Tirichy",9489724654,Business Aid,25000,1,25000,Rs.25000,Public,Aid
+P 057,P.Meenakshi,6.46326E+11,No,Kappiyampuliyur,9786171482,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 058,A.Aananthayee,2.2064E+11,No,Kappiyampuliyur,9894211849,Business Aid,10000,1,10000,Rs.10000,Public,Aid
+P 059,P.Amsavalli,4.81887E+11,No,Kappiyampuliyur,9488692659,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 060,A.Jagadeeswaran,4.17999E+11,No,Kappiyampuliyur,9442484659,Gents Cycle,5500,1,5500,No,Public,Article
+P 061,B.Yuvanraj,5.85907E+11,Yes,"Othhivakkam, Thirukalukundram",7639259300,Tiffen Set + Idli Box +2 burner stove,11200,1,11200,No,Public,Article
+P 062,S.Anbu,4.91794E+11,Yes,"Vandalur, Chenglepat",8939599423,Wet Grinder 3 Ltrs,15930,1,15930,No,Public,Article
+P 063,S.Padmini,2.66394E+11,Yes,"Thirukalukundram, Chenglepat",7305198423,Goat,10000,2,20000,No,Public,Article
+P 064,I.Nirmala,8.33295E+11,Yes,"Peruveli Village, Madhuranthakam",8220944768 & 9710834845,Hand Sewing Machine with Motor,5916,1,5916,No,Public,Article
+P 065,K.Gowri,5.15851E+11,Yes,"Peruveli Village, Madhuranthakam",9629047640 & 9003948441,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 066,Baskar,4.28155E+11,Yes,"Venkatapuram Village, Krishnagiri",9047308790,Livelihood Aid,25000,1,25000,Accident victim in 2013,Public,Aid
+P 067,S.Kalaivani,4.29795E+11,Yes,"Palamukkal, Villupuram",9360682695 & 8870450935,Tiffen Set,4000,1,4000,No,Public,Article
+P 068,P.Pichaiammal,7.80217E+11,Yes,"AAsur, Perambalur",7395698642,Medical Aid,0,0,0,call not answered. Rs.10000,Public,Aid
+P 069,Jayalalitha,8.37319E+11,Yes,"Srirangam , Tirichy",7094583487,Business Aid,15000,1,15000,No,Public,Aid
+P 070,K.Santhi,3.26047E+11,Yes,"Thirukalukundram, Chenglepat",8489656460,Tiffen Set,4000,1,4000,No,Public,Article
+P 071,M.Adhilakshmi,5.03875E+11,No,"Kesavarayanpettai, Melmaruvathur",9087940836,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 072,M.Mageswari,7.00197E+11,No,"Acharapakkam, Kanchipuram",9994987868,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 073,Abdul Khader,8.61429E+11,No,"Vrithachalam, Cuddalore",9442991624,Bosch Electrician Kit 13 Re,5428,1,5428,No,Public,Article
+P 074,E.Alavudheen,9.22719E+11,No,"Vridhachalam,  Cuddalore",9361860875,Electronic weighing scale,7000,1,7000,No,Public,Article
+P 075,Ravi,3.40065E+11,Yes,"Alathur, Perambalur",9943966236,Livelihood Aid,15000,1,15000,No,Public,Aid
+P 076,P.Subhalakshmi,8.0276E+11,Yes,"Mannachanallur, Tirichy",8610550075,Laptop,34000,1,34000,No,Public,Article
+P 077,T.Thilagavathy,6.48581E+11,No,"Poravachery, Nagapatinam",7639431879,Education Aid,20000,1,20000,No,Public,Aid
+P 078,T.Pandian,6.85561E+11,No,"Sangamangalam, Nagapatinam",8870293761,Business Aid,15000,1,15000,No,Public,Aid
+P 079,S.Lakshmi,6.1145E+11,No,"VK Pudhur, Thenkasi",7092216171,Tiffen Set,4000,1,4000,No,Public,Article
+P 080,Murugan,9.50044E+11,Yes,"Sadaiyapuram, Mukkoodal",9362087602,Renovation Aid,20000,1,20000,No,Public,Aid
+P 081,R.Babu,6.59695E+11,Yes,"Nammalvar pettai, Chennai",9840587844,Auto- 3 Wheeler,90000,1,90000,50% of the cost of Auto,Public,Article
+P 082,P.Ramadoss,4.24827E+11,Yes,"Melma, Cheiyar",8940956800,Push Cart With Top,15000,1,15000,No,Public,Article
+P 083,Paechiammal,9.83698E+11,Yes,"Pudhukulam, Tirunelveli",9677432931,Mini freezer,17000,1,17000,No,Public,Article
+P 084,E.Ambika,9.3445E+11,No,"Orathi Village, Madhuranthakam",6380652325,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 085,M.Saadhana,6.96263E+11,No,"Pathiri Village, vandhavaasi",9840733029,Girls Cycle,5200,1,5200,No,Public,Article
+P 086,M.Vaenisha,4.11386E+11,No,"Paathiri Village, Vandhavaashi",9840733029,Girls Cycle,5200,1,5200,No,Public,Article
+P 087,R.Padmanaban,7.18164E+11,Yes,"Tambaram, Chennai",9790781934,Business Aid,10000,1,10000,No,Public,Aid
+P 088,C.Karthick,8.20065E+11,Yes,"Mambakkam, Chenglepat",9176186695,Business Aid,10000,1,10000,No,Public,Aid
+P 089,K.Renuka,5.53311E+11,No,"Thuraipakkam, Chennai",6383591173,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 090,C.Deivani,7.1048E+11,Yes,"Nerkundram, Chennai",7401218167,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 091,Sankar Sahadevan,6.90446E+11,Yes,"Kanalpadi, Thiruvannamalai",9003985442,Handicapped Hand Tricycle,7350,1,7350,No,Public,Article
+P 092,S.Ravikumar,3.42419E+11,Yes,"Cholavaram, Chennai",7299486794,Renovation Aid,20000,1,20000,No,Public,Aid
+P 093,M.Aruna,2.54642E+11,No,"Keelpavur, Thenkasi",6374296487,Construction Aid,20000,1,20000,No,Public,Aid
+P 094,B.Murugan,4.88008E+11,Yes,Madurai North,8144381383,Business Aid,10000,1,10000,No,Public,Aid
+P 095,K.Kalyanasundaram,5.58053E+11,Yes,"Vikiramasingapuram, Tirunelveli",8754894750,Construction Aid,20000,1,20000,No,Public,Aid
+P 096,S.Thangam,6.01878E+11,Yes,"Therkupatti, Thenkasi",8903369662,Renovation Aid,10000,1,10000,No,Public,Aid
+P 097,M.thangammal,3.07923E+11,Yes,"Vikiramasingapuram, Tirunelveli",9965078125,Construction Aid,20000,1,20000,No,Public,Aid
+P 098,C.Isakiammal,3.15582E+11,Yes,"Vikiramasingapuram, Tirunelveli",9488668140,Construction Aid,20000,1,20000,No,Public,Aid
+P 099,R.Dhanalakshmi,7.81583E+11,No,"Pallavaram, Chennai",9840709035,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 100,T.Manjula,5.56131E+11,Yes,"Iduvampalayam, Tirupur",8525852422,Business Aid,5000,1,5000,No,Public,Aid
+P 101,M.Kumar,6.12081E+11,Yes,"Ozkalur, Kancheepuram",9597058028,Business Aid,10000,1,10000,No,Public,Aid
+P 103,D.Yuvasree,7.26647E+11,No,"Arakonam, Ranipet",9500061246,Education Aid,100000,1,100000,No,Public,Aid
+P 104,T.selvi,4.11012E+11,No,"Melakalangal, Tenkasi",9751217032,Construction Aid,20000,1,20000,No,Public,Aid
+P 105,S.Agasthiarajan,6.17866E+11,Yes,"Vikramasingapuram, Tirunelveli",9942268548,Construction Aid,20000,1,20000,No,Public,Aid
+P 106,M.Anjalai,3.92932E+11,No,"Irulakurichy, Vridhachalam",9597623416,Sewing Machine ORD / Motor,5916,1,5916,No,Public,Article
+P 107,S.Vidhya,9.70146E+11,No,"Irulakurichi, Vridhachalam",7639035867,Education Aid,30000,1,30000,Cheque in favor of Institution,Public,Aid
+P 108,V.Puspha,6.13299E+11,No,"Puratchi nagar, Chennai",9094713291,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 109,Deevidha.G,7.04497E+11,No,"Kalavai, Ranipettai",9787166198,Laptop,34000,1,34000,No,Public,Article
+P 110,Ramani Sampoornam,2.50253E+11,No,Thiruvannamalai,9677803581,Ex gratia for Deceased,200000,1,200000,"Referred by Principal, Venkatesan",Public,Aid
+P 111,Sulekha Banu,9.27075E+11,No,Kancheepuram,9943086133,Girls Cycle,5200,1,5200,No,Public,Article
+P 112,D.Rajalakshmi,4.16124E+11,No,Vellore,9994322556,Medical Aid,10000,1,10000,No,Public,Aid
+P 113,Kumar N,9.53949E+11,Yes,"Valavanur, Vilupuram",9655873179 & 6382411759,Business Aid,20000,1,20000,To buy cotton waste segregation Machine,Public,Aid
+P 114,V.Loganathan,7.34053E+11,No,"Uthiramerur
+kanchipuram",9940956417,Gents Cycle,5500,1,5500,No,Public,Article
+P 115,Silvistar Chhalya Tewar,2.82884E+11,Yes,"Alapakkam, Kancheepuram",9137251040,Handicapped Hand Tricycle,7350,1,7350,No,Public,Article
+P 116,V.Baskar,7.03606E+11,Yes,Thiruvallur,9751491681,Business Aid,10000,1,10000,Petty shop,Public,Aid
+P 117,Ganesan,2.599E+11,Yes,"Thirumani,  Chengalpattu",8270133174,Handicapped Hand Tricycle,7350,1,7350,No,Public,Article
+P 118,Usha,5.76278E+11,No,"Melareipakkam, Kancheepuram",8489096152,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 119,J.Manjula,8.35294E+11,No,"Kandachipuram, Villupuram",9976981994,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 120,Kalaiselvi.L,6.91052E+11,No,"Kallapattu, Villupuram",7639834243,Flood Relief Fund,15000,1,15000,No,Public,Aid
+P 121,C.Kasi,5.91887E+11,Yes,Thiruvallur,7397591775,Handicapped Hand Tricycle,7350,1,7350,No,Public,Article
+P 122,A.Sarasu,5.07286E+11,No,"Kalpattu, Kancheepuram",9791518112,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 123,S.Kumar,5.99635E+11,No,"Athiyur, Kancheepuram",9585715880,Agri Battery Sprayer,4200,1,4200,No,Public,Article
+P 124,Venkatesan Boobalan,7.63526E+11,No,Vandhavaasai,9025257025,Handicapped Scooter,40000,1,40000,25 % of the vehicle cost,Public,Article
+P 125,Kamali,3.42603E+11,No,"Andipatti, Theni",8248344567,Two Wheeler,0,0,0,Rejected.25 % of the vehicle cost,Public,Article
+P 126,K.Revathy,3.76715E+11,No,"Kayapakkam, Kancheepuram",9884305626,Girls Cycle,5200,1,5200,No,Public,Article
+P 127,Gayathri,2.27419E+11,No,"Valavanur, Villupuram",8148575133 &6381253712,Business Aid,20000,1,20000,grocery shop,Public,Aid
+P 128,K.Madhumitha,2.08742E+11,Yes,"Thiruparankundram, Madurai",7845036269,Laptop,34000,1,34000,No,Public,Article
+P 129,M.Sathya,4.93216E+11,No,"Mylapore, Chennai",7305834568 & 9789944320,Push Cart With Top,13000,1,13000,No,Public,Article
+P 130,S.Bhavani,4.29675E+11,No,"Pallavaram, Chennai",7845288012 & 9003124470,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 131,Thilagavathy,5.29827E+11,No,"Mattaparai, Villupuram",7200124436,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 132,Rajeswari,2.27074E+11,No,"Thirisulam, Kancheepuram",9941870715 & 8072458671,Push Cart With Top,15000,1,15000,No,Public,Article
+P 133,Bhavani Raju,8.22575E+11,No,"Keelkattali, Chennai",8939233870,Laptop,34000,1,34000,No,Public,Article
+P 134,V.Sarasvathy,5.07986E+11,No,"Madipakkam, Chennai",9042260478,Iron Box,6600,1,6600,No,Public,Article
+P 135,V.Saranya,3.49368E+11,No,"Melapatty, Madurai",8939219409,Girls Cycle,5200,1,5200,No,Public,Article
+P 136,Ammu.s,7.61149E+11,No,"Manimangalam, Kancheepuram",8675683781,Renovation Aid,10000,1,10000,No,Public,Aid
+P 137,"Anjali, Thirumalai",2.61896E+11,No,Manimangalam,9043936660,Renovation Aid,10000,1,10000,No,Public,Aid
+P 138,Ananthan,9.34365E+11,Yes,"Vikkiravandi, Villupuram",9159583083,Flood Relief Fund,15000,1,15000,No,Public,Aid
+P 139,K.Mahadevan,2.79158E+11,No,"Illankadu, Villupuram",8524880888 & 8489485464,Business Aid,20000,1,20000,No,Public,Aid
+P 140,M.Surya,7.88337E+11,No,"Enjambakkam,Chennai",8925104407,Medical Aid,5000,1,5000,Spinal Chord Surgery,Public,Aid
+P 141,P.Selvam,6.47814E+11,No,"Enjambakkam, Chennai",9363221531,Push Cart With Top,0,0,0,Rejected,Public,Article
+P 142,P.Bharathi,5.55371E+11,Yes,"Kuthalam, Myladuthurai",9600359789,Laptop,34000,1,34000,No,Public,Article
+P 143,S.Kailash Raj,8.36836E+11,No,"Adhiparasakthi Engg College, Melmaruvathur",8754765694,Laptop,34000,1,34000,No,Public,Article
+P 144,G.Kanniselvi,2.68715E+11,No,"Muttukadu, Chennai",9677006704,Financial Aid,8000,1,8000,Mother having 2 Handicapped Children,Public,Aid
+P 145,P.Jothi,9.91414E+11,No,"Ilangadu, Villupuram",9597826562,Flood Relief Fund,10000,1,10000,No,Public,Aid
+P 146,HARINISHREE,8.86647E+11,Yes,"VALAVANUR, VILLUPURAM",8526245902,Medical Aid,10000,1,10000,No,Public,Aid
+P 147,K.Munusamy,8.25266E+11,Yes,"Parasur, Thiruvannamalai",8940540783,Financial Aid,5000,1,5000,No,Public,Aid
+P 148,A.Rekha,8.8241E+11,Yes,"Thaethurai, Thiruvannamalai",9003995233,Financial Aid,5000,1,5000,No,Public,Aid
+P 149,N.Rani,2.92993E+11,Yes,"Cheyaru, Thiruvannamalai",8973218779,Financial Aid,5000,1,5000,No,Public,Aid
+P 150,S.Nagalingam,7.21256E+11,Yes,"Aarani Road, Thiruvannamalai",9380697380,Financial Aid,5000,1,5000,No,Public,Aid
+P 151,S.Gopalakrishnan,5.93006E+11,Yes,"Thirumullaivayal, Chennai",9884955096,Financial Aid,5000,1,5000,No,Public,Aid
+P 152,Hari Krishnan,2.27344E+11,Yes,"Ambattur, Thiruvallur",9840286620,Financial Aid,5000,1,5000,No,Public,Aid
+P 153,Rajagopal,5.02136E+11,Yes,"Kodungaiyur, Chennai",8124282019,Financial Aid,5000,1,5000,No,Public,Aid
+P 154,N.Muthu,9.12012E+11,No,"Valavanur, Villupuram",7550272743,Flood Relief Fund,10000,1,10000,No,Public,Aid
+P 155,S.Ananthi,9.27135E+11,No,"Valavanur, Villupuram",9047728985,Flood Relief Fund,10000,1,10000,No,Public,Aid
+P 156,J.Rani,2.22627E+11,No,"Madukarai, Pudhucherry",9751759121,Flood Relief Fund,10000,1,10000,No,Public,Aid
+P 157,K.Raja,3.67182E+11,Yes,"Koliyanur, Villupuram",9626071012,Flood Relief Fund,10000,1,10000,No,Public,Aid
+P 158,V.Mariappan,6.9849E+11,Yes,"Pilliyarpatty, Thanjavur",7867050972,Financial Aid,10000,1,10000,No,Public,Aid
+P 159,S.Muniyammal,6.69194E+11,Yes,"Pudhur, Krishnagiri",7538829193,Financial Aid,5000,1,5000,No,Public,Aid
+P 160,K.Dharman,7.86748E+11,Yes,"Maraimalainagar, Chenglapattu",9043352566,Financial Aid,5000,1,5000,No,Public,Aid
+P 161,K.Karpagavalli,8.31448E+11,Yes,"Thirunindravur, Thiruvallur",8675946482 & 9677060069,Fruit Juice Mixie,5850,1,5850,Asked for commercial mixie,Public,Article
+P 162,S.Sasikala,5.81449E+11,Yes,"Pallavaram, Chennai",8610599965,Financial Aid,5000,1,5000,No,Public,Aid
+P 163,A.John Peter,4.80103E+11,Yes,"Vadugapatty, Pudhukottai",9943808584,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 164,Elangovan,6.6215E+11,Yes,"Paapakkapatty, Karur",9585395729,Financial Aid,5000,1,5000,No,Public,Aid
+P 165,M.Karthiga,7.25283E+11,Yes,"Danishpettai, Salem",9786020295,Financial Aid,5000,1,5000,No,Public,Aid
+P 166,V.Mahendran,5.84213E+11,No,"Kallakurichy, Villupuram",7373818655,Flood Relief Fund,10000,1,10000,No,Public,Aid
+P 167,J.Suryakala,7.41378E+11,Yes,"Srirangam, Trichy",8190807217,Business Aid,5000,1,5000,No,Public,Aid
+P 168,Venkatesan,9.08071E+11,Yes,"Oddapatty, krishnagiri",9543189604 & 9825948779,Business Aid,5000,1,5000,No,Public,Aid
+P 169,POONGAVANAM,9.2848E+11,No,"Nadupattu, Thiruvannamalai",8838154306,Financial Aid,5000,1,5000,No,Public,Aid
+P 170,S.Mageswari,8.6742E+11,No,"Thindivanam, Villupuram",8015462803,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 171,Soundary,9.99312E+11,No,"Nadupattu, Thiruvannamalai",9150343835,Financial Aid,5000,1,5000,No,Public,Aid
+P 172,Palaniammal,9.37416E+11,No,"Vaikundam, Krishnagiri",9791406729,Business Aid,5000,1,5000,No,Public,Aid
+P 173,K.Rajeswari,6.74847E+11,No,"Vinnamangalam, Thiruvannamalai",8608314435,Girls Cycle,5200,1,5200,No,Public,Article
+P 174,Sarojini,8.83752E+11,No,"Arcot Road, Cheyyar",9943388054,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 175,E.Loganathan,6.58273E+11,No,"Saraswathi Nagar, Thiruvallur",9952295789,Push Cart With Top,15000,1,15000,No,Public,Article
+P 176,Parimaladevi,9.09408E+11,No,"Thindivanam, Villupuram",9597400834,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 177,Muthulakshmi,2.24737E+11,No,"Thindivanam, Villupuram",8925016150,Table fan,1300,1,1300,No,Public,Article
+P 178,A.Anbu Raja,4.29812E+11,Yes,"Neiveli, Cuddalore",9626185516,Handicapped Scooter,60000,1,60000,50% of the cost of Scooter,Public,Article
+P 179,G.Amudha,8.50908E+11,Yes,"Edachitoor, Cuddalore",9787436798,Handicapped Scooter,65000,1,65000,50% of the cost of Handicapped Scooter,Public,Article
+P 180,Kuppan,6.32001E+11,No,"Ambalam Village, Thiruvannamalai",8525893692,Iron Box,6600,1,6600,No,Public,Article
+P 181,Velayudham,2.4725E+11,Yes,"Perumbakkam, Kancheepuram",8454826720,Handicapped Scooter,0,0,0,Rejected.50 % of the cost to be borne by the beneficiary,Public,Article
+P 182,C.Kannan,5.74293E+11,Yes,"Paeranur, Chenglepattu",8667687815,Table fan,1300,1,1300,No,Public,Article
+P 183,K.muruganandham,4.61428E+11,Yes,"Katpadi, Vellore",9944632388,Laptop,34000,1,34000,No,Public,Article
+P 184,N.Dinesh,3.45233E+11,Yes,"Chendivakkam, Chenglepattu",9003544147,Wet Grinder Floor Model 2 Ltr,6726,1,6726,Siddhar peedam Security Son,Public,Article
+P 185,J.Rithika,7.20412E+11,No,"Manojipatty, Thanjavur",9443476047,Laptop,34000,1,34000,No,Public,Article
+P 186,Tamil selvi,6.81099E+11,No,"valavanur, Villupuram",9500715053,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 187,Sak.Kuruvammal,2.4149E+11,No,"KUDUMIYANKUPPAM, Villupuram",7200475380,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 188,S.BAMA,7.5207E+11,No,"KUDUMIYANKUPPAM,  VILLUPURAM",6384015240,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 189,T.SARITHA,5.33061E+11,No,"SINGAPERUMAL KOVIL, CHENGLEPATTU",9999999999,Wet Grinder 3 Ltrs,15930,1,15930,No,Public,Article
+P 190,K.RAMAKRISHNAN,2.18137E+11,No,"MELAANUPADI, MADURAI",8610745569,Bosch Electrician Kit 13 Re,5428,1,5428,No,Public,Article
+P 191,RAJANGAM,3.98914E+11,No,"KAPPIYAMPULIYUR, VILLUPURAM",9786866013,Laptop,34000,1,34000,No,Public,Article
+P 192,SAI SANJAI,3.07705E+11,No,SOTHUPAKKAM,9176428292,Junior Cycle,5500,1,5500,No,Public,Article
+P 193,KISHORE KUMAR,2.08735E+11,No,SOONAMBEDU,9025982463,Junior Cycle,5000,1,5000,No,Public,Article
+P 194,K.LAKSHMI,8.31315E+11,No,"KESAVARAYANPETTAI, MELMARUVATHUR",9566134171,Wet Grinder Floor Model 2 Ltr,6726,1,6726,No,Public,Article
+P 195,SHANKAR,9.12477E+11,Yes,"PALAVANTHANGAL, VILLUPURAM",9976856485,Push Cart With Top,15000,1,15000,No,Public,Article
+P 196,JAGADEESAN,5.85654E+11,Yes,"KANDAACHIPURAM, VILLUPURAM",9585995435,Push Cart With Top,15000,1,15000,No,Public,Article
+P 197,S.KAMATCHI,8.48237E+11,No,"MADIPAKKAM, CHENNAI",8056107496,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 198,S.KARANSINGH KUMAR,5.94302E+11,No,"PARAMAKUDI, RAMNAD",7708286172,Lenova Tab,13000,1,13000,No,Public,Article
+P 199,MUTHUMANICKAM,3.98188E+11,Yes,"THARANGAMPADI, MAYLADUTHURAI",7639531017,Laptop,34000,1,34000,No,Public,Article
+P 200,S.NESAMANI,8.13755E+11,No,"LALKUDI, TRICHY",7540001346,Laptop,34000,1,34000,LIVELIHOOD,Public,Article
+P 201,N.AMUTHAVANI,8.99461E+11,No,"ALAGAPPA UNIVERSITY , KARAIKUDI",9751780027,Lenova Tab,13000,1,13000,No,Public,Article
+P 202,S.AANDAL,5.43607E+11,No,"AAVIYUR, VIRUDHUNAGAR",9787648978,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 203,S.SELVANATHAN,6.33907E+11,No,"MUTTAVAKKAM, KANCHIPURAM",8438530918,Gents Cycle,5500,1,5500,No,Public,Article
+P 204,M.VIJAY,6.66093E+11,No,"ECCHUR,  KANCHIPURAM",8808686610,Gents Cycle,5500,1,5500,No,Public,Article
+P 205,J.VICTORIA,7.02492E+11,No,"THATAARKULAM, KANCHIPURAM",9629023447,Aluminium Idli Making Box,4800,1,4800,No,Public,Article
+P 206,V.THAMESWARAN,2.09525E+11,No,"PULIYAMBAKKAM, KANCHIPURAM",9976515423,Junior Cycle,5000,1,5000,No,Public,Article
+P 207,M.RAJENDRAN,6.4624E+11,Yes,"KALLARAIPADI, CHENGAM TK",7373696879,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 208,SENTHIR KUMAR,9.89408E+11,Yes,"THOLUPEDU, CHENGLEPATTU",9841479526,TIFFEN SET + MS STOVE 2 BURNER,4000,1,4000,No,Public,Article
+P 209,V.HARIHARAN,2.70597E+11,No,"PALLIKARANAI, CHENNAI",9150572128,Laptop,34000,1,34000,No,Public,Article
+P 210,R.VIJAYASREE,2.20881E+11,No,"PAATHIRI VILLAGE, VANDHAVAASI",7871660982,Girls Cycle,5200,1,5200,No,Public,Article
+P 211,N.MURUGESAN,4.1563E+11,No,"KODAI ROAD, DINDUGAL",7094908462,Gents Cycle,5500,1,5500,No,Public,Article
+P 212,S.Sanjay,2.84984E+11,No,"Nadupattu, Thiruvannamalai",9787072739,Gents Cycle,0,0,0,Rejected.5500,Public,Article
+P 213,Mekala,5.10506E+11,Yes,"Thirubhuvanm, Karaikal",9750227050,Medical Aid,13000,1,13000,Aid to buy Moulding foot,Public,Aid
+P 214,Ranganayaki,6.59674E+11,No,"Kandachipuram, Villupuram",8778909398,Goat,10000,1,10000,Purchase of Goat for Rs.10000,Public,Article
+P 215,Illayaraja,8.32133E+11,Yes,"Kattumannarkudi, Cuddalore",8778930017,Business Aid,10000,1,10000,No,Public,Aid
+P 216,K.Selvamani,5.50929E+11,Yes,"Kallaraipadi, Chengam",9344706129,Medical Aid,0,0,0,Call not answered. Rs.10000,Public,Aid
+P 217,Viswa,5.96965E+11,Yes,"Aalathur, Chengam",9976060938,Medical Aid,15000,1,15000,No,Public,Aid
+P 218,S.Mathivanan,6.43062E+11,Yes,"G.R.Nagar, Madurai",9788147156,Business Aid,10000,1,10000,No,Public,Aid
+P 219,V.Lakshmi,3.09608E+11,Yes,"KK Nagar, Chennai",9884622321,Education Aid,16500,1,16500,No,Public,Aid
+P 220,Kalyani Mani,8.64976E+11,No,"Manimangalam, Kanchipuram",9094226325,Business Aid,15000,1,15000,Setting up provision shop,Public,Aid
+P 221,Anjalatchi,4.37604E+11,Yes,"Anniyur, Villupuram",9597275214,Goat,10000,1,10000,No,Public,Article
+P 222,Ambika,4.62489E+11,No,"Kandaachipuram, Villupuram",9360142483,Goat,10000,1,10000,No,Public,Article
+P 223,M.Sabitha,2.82161E+11,No,"Perambur, Chennai",8610782639,Two Wheeler,25000,1,25000,25% Aid to buy the TVS XL,Public,Article
+P 224,Sathish,9.83919E+11,No,"Kalasapakkam, Thiruvannamalai",6379989667,Education Aid,0,0,0,Beneficiary to get certificate from college,Public,Aid
+P 225,Ammakannu,3.719E+11,No,"Aiyur Agaram, Villupuram",8300402982,Flood Relief Fund,15000,1,15000,No,Public,Aid
+P 226,P.Baladhandayutham,9.66964E+11,No,"Thalaivasal, Salem",9445634819,Two Wheeler,40000,1,40000,50% of the cost of the vehicle,Public,Article
+P 227,J.Prabhu,9.51264E+11,No,"Vilangadupakkam,  Thiruvallur",9176148221,Auto- 3 Wheeler,75000,1,75000,50% cost of the vehicle,Public,Article
+P 228,P.Venkatesan,3.38213E+11,No,"Kunnankuppam, Thiruvannamalai",9994189848,Flood Relief Fund,0,0,0,Rejected 10000,Public,Aid
+P 229,Devaki,6.59867E+11,No,"Valligai, Thiruvannamalai",8056488480,Flood Relief Fund,0,0,0,Rejected.10000,Public,Aid
+P 230,Balaji,6.58534E+11,No,"Purasivakkam, Chennai",8807737135,Medical Aid,20020,1,20020,Cheque in favour of BIO CIRCLE LIFE SCIENCES,Public,Aid
+P 231,G.Deepalakshmi,2.51978E+11,No,"Mathigiri, Hosur",9999999999,Agri Cart Weeder,74000,1,74000,Cheque in favour of VENUS INDUSTRIES,Public,Article
+P 232,Mohanraj,6.85815E+11,Yes,"Thiruninravur, Thiruvallur",9025150136,Business Aid,10000,1,10000,No,Public,Aid
+P 233,R.Sundaram,6.29806E+11,Yes,"Gomathipuram, Thiruvallur",9940332464,Business Aid,10000,1,10000,No,Public,Aid
+P 234,G.Sathya,7.79319E+11,No,"Kumbakonam, Tanjore",9360843529,Education Aid,45000,1,45000,"Tution fees
+",Public,Aid
+P 235,Indhu Uma Ezilarasi,3.4004E+11,Yes,"Melakottaiyur, Kanchipuram",6380319962,Medical Aid,10000,1,10000,No,Public,Aid
+P 236,Arokia Mary,8.66909E+11,Yes,"Vadavalli, Coimbatore",9791530076,Education Aid,10000,1,10000,No,Public,Aid
+P 237,K.Duraisamy,5.72887E+11,Yes,"Mamangalam, Vellore",8144633088,Business Aid,5000,1,5000,No,Public,Aid
+P 238,J.Nirmala,6.4659E+11,No,"Varaganeri, Trichy",9176181017,Business Aid,5000,1,5000,No,Public,Aid
+P 239,S.Nandhini,2.70757E+11,No,"Nadupattu, Thiruvannamalai",9787072739,Education Aid,0,0,0,Rejected.10000,Public,Aid
+P 240,P.Parameswari,8.58659E+11,No,"Konangipatty, Namakkal",6380581726,Medical Aid,10000,1,10000,No,Public,Aid
+P 241,K.Manikandan,2.39756E+11,No,"Singanur, Villupuram",7550089643,Education Aid,10000,1,10000,No,Public,Aid
+P 242,S.Pachaiammal,5.14087E+11,No,"Nadupattu, Thiruvannamalai",9787072739,Business Aid,10000,1,10000,No,Public,Aid
+P 243,S.Palaniammal,9.05881E+11,Yes,"Thimiri, Vellore",9787422210,Business Aid,5000,1,5000,No,Public,Aid
+P 244,Sathishkumar,5.74205E+11,Yes,"Thimiri, Ranipettai",9150248075,Business Aid,10000,1,10000,No,Public,Aid
+P 245,Jayalakshmi,4.22343E+11,No,Paathirapuliyur,8098949447,Flood Relief Fund,10000,1,10000,No,Public,Aid
+P 246,Thaiyalnayaki,6.31241E+11,No,"Nallambal, Karaikal",7904205628,Medical Aid,5000,1,5000,No,Public,Aid
+P 247,K.Dhanalakshmi,5.30885E+11,No,"Madhuravayal, Chennai",9940274591,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 248,R.Lakshmi Narashimhan,1111111,No,"Thirupapuliyur, Cuddalore",8825601479,Dictionary English - Tamil,120,500,60000,No,Public,Article
+P 249,Rahul,99999999,No,Melmaruvathur,9999999999,Desktop Computer - HVY,119225,1,119225,No,Public,Article
+P 250,G.Shyam,9.64442E+11,No,"Kilkodungavur, Thiruvannamalai",9962220424,Junior Cycle,5000,1,5000,No,Public,Article
+P 251,S.Yamuna,5.17363E+11,No,"Narayanamangalam, Thiruvannamalai",6374918910,Laptop,34000,1,34000,No,Public,Article
+P 252,Agalya,4.46881E+11,No,"Aripakkam, Pondicherry",6374179495,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 253,sakthi Sundaresan,9.12122E+11,No,"Pillaiyarpaliyam, Kanchipuram",6369403054,Education Aid,70000,1,70000,To be paid to APRC Hostel Account,Public,Aid
+P 254,P.Manikandan,7.47752E+11,Yes,"Naramangani, Villupuram",9884894879,Tea can 10 ltrs,1500,1,1500,No,Public,Article
+P 255,V.Bhuvanesh,7.5729E+11,No,"Kiliya Nagar, Kanchipuram",6381018032,Laptop,34000,1,34000,No,Public,Article
+P 256,R.Bagyalakshmi,7.71977E+11,No,"Ambedthkar nagar, Melmaruvathur",9092860094,Two Wheeler,25000,1,25000,25% of the cost of the vehicle,Public,Article
+P 257,N.GOPINATHAN,8.44795E+11,Yes,"ATHIVAKKAM, CHENGLEPATTU",9342030484,Two Wheeler,108000,1,108000,No,Public,Article
+P 258,P.SEVVANTHI,3.32156E+11,No,"MARAKANAM, VILLUPURAM",6385369372,Two Wheeler,30000,1,30000,No,Public,Article
+P 259,K.DINAKARAN,9.8337E+11,No,"CHENDIVAKKAM, CHENGLEPATTU",8489210220,Two Wheeler,121500,1,121500,No,Public,Article
+P 260,MOORTHY,4.58457E+11,Yes,"NUKUMBHAL, CHENGLAPATTU",9789745373,Two Wheeler,40000,1,40000,No,Public,Article
+P 261,E.Vinayagam,5.87883E+11,no,Saligramam Sakthi Peedam,9841818372,Hearing Aid,18000,1,18000,No,Public,Article
+P 262,M.Mohan,7.32721E+11,No,"Onambakkam, Chenglepattu",9626645808,Hearing Aid,18000,1,18000,No,Public,Article
+P 263,M.Raja,2.32668E+11,No,"Pammal, Chennai",9884274885,Medical Aid,0,0,0,2021 beneficiary,Public,Aid
+P 264,V.Bharathirajan,4.64485E+11,No,"Sothupakkam, Melmaruvathur",7373963996,Tea & Milk Steamer,12500,1,12500,No,Public,Article
+P 265,V.Kalaiyarasi,2.66036E+11,No,"Mecheri, Vellore",9442316825,Laptop,34000,1,34000,No,Public,Article
+P 266,R.Natarajan,5.82805E+11,No,Melmaruvathur,9791444828,Canon Printer 6030B (USB),13900,1,13900,No,Public,Article
+P 267,S.Sudha,9.94802E+11,No,"Puthirankottai, Kanchipuram",7448786238,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 268,V.Adhilakshmi,5.09912E+11,No,"Karattai, Villupuram",9344384107,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 269,D.Prema,2.37453E+11,No,"Tholupedu, Chengalpattu
+",9043982008,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 270,B.Saraswathi,2.36909E+11,No,"Murungai Village, Chengalpattu",6381761755,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 271,E.Elumalai,2.57479E+11,No,"Salavedu, Thiruvannamalai",7639585783,Gents Cycle,5500,1,5500,No,Public,Article
+P 272,E.Jansi,3.78491E+11,No,"Salavedu, Thiruvannamalai",9344920278,Table Top Wet Grinder 2 Ltr,3304,1,3304,No,Public,Article
+P 273,S.Jayasri,8.75737E+11,No,"Acharapakkam, Chengalpattu",9159921440,Girls Cycle,5200,1,5200,No,Public,Article
+P 274,D.Ramesh,9.99499E+11,No,"Vasur, Thiruvannamalai",7395843049,Medical Aid,20000,1,20000,No,Public,Aid
+P 275,S.Isai Karthick,2.66496E+11,No,"Enjampakkam, Chennai",9345260980,Laptop,34000,1,34000,No,Public,Article
+P 276,M.Saranya,9.8479E+11,No,"Old Pallavaram, Chennai",8124948910,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 277,M.Sharmili,4.92969E+11,No,"V.Sathanur, Villupuram",8072603053,Education Aid,32000,1,32000,Cheque to Institution only,Public,Aid
+P 278,R.Veeramani,5.45218E+11,No,"Irulakurichy, Cuddalore",9094131409,Renovation Aid,15000,1,15000,"No
+",Public,Aid
+P 279,D.Murugesan,3.33772E+11,No,"Gudiyatham, Vellore",9443270049,Two Wheeler,61351,1,61351,TVS XL100,Public,Article
+P 280,G.Siva Sakthi,3.10571E+11,No,"Irumbuliyur, Chengalpattu",9003923712,Girls Cycle,5200,1,5200,No,Public,Article
+P 281,M.Vinayagam,4.98102E+11,Yes,"Ambethkar Nagar, Chengalpattu",7418582069,Medical Aid,20000,1,20000,No,Public,Aid
+P 282,N.Manibalan,4.42348E+11,No,"Irulakurichy, Cuddalore",8754860532,Bosch Electrician Kit 13 Re,5428,1,5428,No,Public,Article
+P 283,M.Raghu,8.58846E+11,No,"Enjambakkam, Chennai",8939740637,Fishing net,20475,1,20475,No,Public,Article
+P 284,Natarajan,4.62686E+11,No,"Pudaiyur, Cuddalore",9626111875,Gents Cycle,5500,1,5500,No,Public,Article
+P 285,R.B.Ramya,9.63944E+11,No,Lakshmi Bangaru Arts College,9715939407,Laptop,34000,1,34000,No,Public,Article
+P 286,M.Boomika,8.32022E+11,No,"Anbu nagar, Acharapakkam",6381922120,Girls Cycle,5200,1,5200,No,Public,Article
+P 287,Soniya M,8.10012E+11,No,Acharapakkam,7695808755,Girls Cycle,5200,1,5200,No,Public,Article
+P 288,Vidya J,9.3976E+11,No,"Sothupakkam, Melmaruvathur",9994453123,Table Top Wet Grinder 2 Ltr,3304,1,3304,No,Public,Article
+P 289,P.Vignesh,6.37939E+11,No,"Irumbuli, Chengalpattu",8098536854,Junior Cycle,5000,1,5000,No,Public,Article
+P 290,Dhanalakshmi K,2.68977E+11,No,"Kesavarayanpettai, Melmaruvathur",6383311057,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 291,Rajendran,6.20723E+11,No,"Parukkal, Chengalpattu",8098536854,Junior Cycle,5000,1,5000,No,Public,Article
+P 292,S.Suguna,9.13011E+11,No,Acharapakkam,7812890434,Girls Cycle,5200,1,5200,No,Public,Article
+P 293,Manivasagam Villupuram SS48,9999,No,Villupuram SS48,9443224594,Gents Cycle,5500,1,5500,No,Public,Article
+P 294,Muniyammal M,6.91545E+11,No,Acharapakkam,9942796797,Sewing Machine ORD / Motor,6300,1,6300,no,Public,Article
+P 295,C.Jayamalini,3.6305E+11,No,"Seethapuram, Chengalpattu",7845063588,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 296,A.Kalaivani,6.62501E+11,No,"Ongur, Villupuram",9345150738,Table Top Wet Grinder 2 Ltr,3304,1,3304,No,Public,Article
+P 297,P. Uma,4.41457E+11,No,"Pakkam Village, Chengalpattu",9942539840,Table Top Wet Grinder 2 Ltr,3304,1,3304,No,Public,Article
+P 298,Yuvanidhi R,9.82291E+11,No,"Sothupakkam, Melmaruvathur",8056846768,Education Aid,26000,1,26000,No,Public,Aid
+P 299,Kasiammal,4.50442E+11,No,"Acharapakkam, Chengalpattu",9345825969,Gravy Grinder 3 Ltr,30000,1,30000,No,Public,Article
+P 300,"E.Sangeethaneivantham, Thiruvannmalai",6.06639E+11,No,"Neivantham, Thiruvannmalai",9626807410,Table Top Wet Grinder 2 Ltr,3304,1,3304,No,Public,Article
+P 301,D.Chandrika,55888311171,No,"Kolathur, Chengalpattu",9344921393,Table Top Wet Grinder 2 Ltr,3304,1,3304,No,Public,Article
+P 302,B.Nadhiya,6.03568E+11,No,"Cheyyur, Chengalpattu",9789771990,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 303,M.Latha,5.26505E+11,No,"Acharapakkam, Chengalpattu",7639920783,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 304,S.Jayavani,3.40975E+11,No,"Uthamanallur, Chengalpattu",9845794998,Girls Cycle,5200,1,5200,No,Public,Article
+P 305,S.Eswari,5.98964E+11,No,"N.K.Nagar, Thindivanam",9345338370,Laptop,34000,1,34000,No,Public,Article
+P 306,V.Lopus,3.69134E+11,No,"Lakshmi Nagar, Melmaruvathur",7358299322,Laptop,34000,1,34000,No,Public,Article
+P 307,K.Sandhya,7.40945E+11,No,"Onambakkam, Chengalpattu",9384163802,Laptop,34000,1,34000,No,Public,Article
+P 308,Soundarya,7.51909E+11,No,"Sothupakkam, Melmaruvathur",6369428386,Medical Aid,500000,1,500000,No,Public,Aid
+P 309,P.K.A.Siva Prasanna,11111110,No,"Vada Madhurai, Dindugal",999999990,Sandalwood tree Sapling,66.66,300,20000,No,Public,Article
+P 310,A.DEEPA,5.94921E+11,No,"PUTHIRAN KOTTAI, KANCHEEPURAM",7418231367,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 311,V.JAYALAKSHMI,6.07373E+11,No,"CR NAGAR, CHENGALPATTU",9080540093,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 312,M.ANANTHI,5.26689E+11,No,"SIRUNAGALUR, CHENGALPATTU",7397702607,Two Wheeler,21812,1,21812,25 %COST OF TWO WHEELER,Public,Article
+P 313,S.SRIMATHI,8.17138E+11,No,MADHURANTHAKAM,8825423701,Medical Aid,75000,1,75000,NO,Public,Aid
+P 314,R.JOTHI,2.46179E+11,No,"SIRUNAGALUR, CHENGALPATTU",9361764674,Agri Power Sprayer (2 STK),11760,1,11760,No,Public,Article
+P 315,B. Gopika,7.49847E+11,No,"pazhavoor, Chengalpattu",9361088956,Girls Cycle,5200,1,5200,No,Public,Article
+P 316,Sarala. S,9.9714E+11,No,"Vengaikaal PO, Thiruvannamalai",8525966180,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 317,J. Dinesh Kumar,5.78591E+11,No,"Thozhupedu, Chengalpattu",9952888588,Laptop,34000,1,34000,No,Public,Article
+P 318,P. Malliga,9.16489E+11,No,"Accharapakkam, Chengalpattu",9790523588,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 319,B. Uma Maheswari,4.06135E+11,No,Madhuranthagam,8940095667,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 320,C. Sakthi Mahalakshmi,4.35284E+11,No,Melmaruvathur,9952366003,Laptop,34000,1,34000,No,Public,Article
+P 321,U. Anitha,3.7955E+11,No,"Keelmaruvathur, Kanchipuram",9566971129,Sewing Machine ORD / Motor,6300,1,6300,No,Public,Article
+P 322,Talari Pradheepa,2.54385E+11,No,"Padiri, Chittoor",9347634283,Laptop,34000,1,34000,No,Public,Article
+P 323,S. Govarthini,9.28754E+11,No,"Keelchembedu, Thiruvannamalai",9003984791,Laptop,34000,1,34000,No,Public,Article
+P 324,S. Visali,2.96827E+11,No,"Cheyyur, Chengalpattu",9444226041,Girls Cycle,5200,1,5200,No,Public,Article
+P 325,SUREKA,8.62445E+11,No,"KOOTHAPAKKAM, CUDDALORE",9443746594,Education Aid,28298,1,28298,No,Public,Aid
+P 326,J.NARAYANAN,4.70217E+11,No,"GINGEE, VILLUPURAM",9898460485,Medical Aid,20000,1,20000,No,Public,Aid
+P 327,D.DHANALAKSHMI,9.22319E+11,No,"IDAYATHUR, CHENGLEPATTU",9944048100,Medical Aid,10000,1,10000,No,Public,Aid
+P 328,S.VASUDEVAN,7.87001E+11,No,"SRI RANGARAJAPURAM, THIRUVANNAMALI",9789102871,Medical Aid,500000,1,500000,No,Public,Aid
+P 329,K.R.GOPALAKRISHNAN,2.94427E+11,No,"OLUPAKKAM,CHENGALPATTU",979038824,Medical Aid,500000,1,500000,No,Public,Aid
+P 330,Brahmin Family,99999,No,Add,9999999999,Groceries,3000,5,15000,No,Public,Aid
+P 331,K.THANGAMANI,5.71571E+11,No,"MELMARUVATHUR, KANCHEEPURAM",9500406779,COW,40000,1,40000,No,Public,Article
+P 332,N.DHANASEKARAN,8.89907E+11,No,"MELMARUVATHUR, KANCHEEPURAM",9884032777,Medical Aid,70000,1,70000,NO,Public,Aid
+P 333,S.DEVAKI,8.88124E+11,No,"SALAVEDU, KANCHIPURAM",6381417124,Table Top Wet Grinder 2 Ltr,3304,1,3304,No,Public,Article
+P 334,EA.HARISH,4.19756E+11,No,"ORATHY, CHENGALPATTU",6385482136,Laptop,34000,1,34000,NO,Public,Article
+P 335,SAKTHI.E,6.09119E+11,NO,"ATHAIYUR, VILLUPURAM",9043267294,Gents Cycle,5060,1,5060,NO,Public,Article
+P 336,RANGAMMA,3.9006E+11,Yes,BANGALORE,9901240625,Financial Aid,0,1,0,NO,Public,Aid
+P 337,S.NARESH KUMAR,4.67483E+11,NO,"KENDIVAKKAM, CHENGALPATTU",9789489626,Medical Aid,100000,1,100000,,Public,Aid
+P 338,D.MANIKANDAN,9.64778E+11,Yes,"Sothupakkam, Melmaruvathur",7010018747,Motorized Wheel Chair,159145,1,159145,no,Public,Article
