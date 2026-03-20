@@ -45,6 +45,40 @@ def next_purchase_order_number() -> str:
         return f"{prefix}0001"
 
 
+def next_public_application_number() -> str:
+    prefix = "P"
+    latest = (
+        models.PublicBeneficiaryEntry.objects.filter(application_number__startswith=prefix)
+        .order_by("-application_number")
+        .values_list("application_number", flat=True)
+        .first()
+    )
+    if not latest:
+        return f"{prefix}001"
+    try:
+        seq = int(str(latest).replace(prefix, "", 1)) + 1
+    except (TypeError, ValueError):
+        seq = 1
+    return f"{prefix}{seq:03d}"
+
+
+def next_institution_application_number() -> str:
+    prefix = "I"
+    latest = (
+        models.InstitutionsBeneficiaryEntry.objects.filter(application_number__startswith=prefix)
+        .order_by("-application_number")
+        .values_list("application_number", flat=True)
+        .first()
+    )
+    if not latest:
+        return f"{prefix}001"
+    try:
+        seq = int(str(latest).replace(prefix, "", 1)) + 1
+    except (TypeError, ValueError):
+        seq = 1
+    return f"{prefix}{seq:03d}"
+
+
 def sync_fund_request_totals(fund_request: models.FundRequest) -> None:
     with transaction.atomic():
         total_value = models.FundRequestArticle.objects.filter(fund_request=fund_request).aggregate(

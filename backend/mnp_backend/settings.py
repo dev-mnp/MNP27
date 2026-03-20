@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -72,16 +72,21 @@ def _db_config():
         }
 
     parsed = urlparse(database_url)
-    return {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': parsed.path.lstrip('/'),
-            'USER': parsed.username,
-            'PASSWORD': parsed.password,
-            'HOST': parsed.hostname,
-            'PORT': parsed.port or '5432',
-        }
+    query = parse_qs(parsed.query)
+    config = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': parsed.path.lstrip('/'),
+        'USER': parsed.username,
+        'PASSWORD': parsed.password,
+        'HOST': parsed.hostname,
+        'PORT': parsed.port or '5432',
     }
+    options = {}
+    if query.get('sslmode'):
+        options['sslmode'] = query['sslmode'][-1]
+    if options:
+        config['OPTIONS'] = options
+    return {'default': config}
 
 DATABASES = _db_config()
 
@@ -97,9 +102,9 @@ TIME_ZONE = os.getenv('DJANGO_TIME_ZONE', 'Asia/Kolkata')
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-MEDIA_URL = 'media/'
+MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -116,6 +121,7 @@ AUTH_USER_MODEL = 'core.AppUser'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
@@ -129,6 +135,10 @@ REST_FRAMEWORK = {
         'user': '120/min',
     },
 }
+
+LOGIN_URL = '/ui/login/'
+LOGIN_REDIRECT_URL = '/ui/master-entry/'
+LOGOUT_REDIRECT_URL = '/ui/login/'
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=120),

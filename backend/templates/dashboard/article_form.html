@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="card">
+    <h2 style="margin-top: 0;">
+      {% if object %}Edit article{% else %}Create article{% endif %}
+    </h2>
+    <form method="post" {% if object %}data-confirm-message="Save changes to this article?"{% endif %}>
+      {% csrf_token %}
+      <div class="grid2">
+        <div>
+          <label>Article name</label>
+          {{ form.article_name }}
+        </div>
+        <div>
+          <label>Article name (local)</label>
+          {{ form.article_name_tk }}
+        </div>
+        <div>
+          <label>Cost per unit</label>
+          {{ form.cost_per_unit }}
+        </div>
+        <div>
+          <label>Item type</label>
+          {{ form.item_type }}
+        </div>
+        <div>
+          <label>Category</label>
+          {{ form.category }}
+        </div>
+        <div>
+          <label>Master category</label>
+          {{ form.master_category }}
+        </div>
+      </div>
+      <div class="small" style="margin-top: 10px;">
+        <label>Comments</label>
+        {{ form.comments }}
+      </div>
+      <div class="toolbar" style="margin-top: 12px; justify-content: flex-start;">
+        <label>{{ form.is_active }} Active</label>
+        <label>{{ form.combo }} Combo</label>
+      </div>
+      <div style="margin-top: 12px;">
+        <button class="btn" type="submit">Save</button>
+        <a class="btn" href="{% url 'ui:article-list' %}">Back</a>
+      </div>
+    </form>
+  </section>
+{% endblock %}

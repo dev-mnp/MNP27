@@ -1,0 +1,1003 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>மக்கள் நலப்பணி Admin</title>
+  {% load static %}
+  <style>
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #fff8ea;
+      --bg-tertiary: #fff1cc;
+      --text-primary: #111827;
+      --text-secondary: #6f6554;
+      --text-tertiary: #9ca3af;
+      --border-color: #eadfca;
+      --accent-primary: #f1b400;
+      --accent-hover: #d99a00;
+      --accent-strong: #ab2c1a;
+      --accent-strong-hover: #8e2416;
+      --error: #d43c2d;
+      --app-font: "Poppins", "Segoe UI", Roboto, Arial, sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; font-family: var(--app-font); background: var(--bg-secondary); color: var(--text-primary); overflow: hidden; }
+    body { min-height: 100vh; }
+    a { color: #1d4ed8; text-decoration: none; }
+    a:hover { color: #1e40af; text-decoration: underline; }
+    .app-shell { display: flex; height: 100vh; align-items: stretch; }
+    .sidebar {
+      width: 250px;
+      flex-shrink: 0;
+      background: linear-gradient(180deg, #fff8ec 0%, #fff3d8 100%);
+      border-right: 1px solid var(--border-color);
+      padding: 18px 14px;
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      align-self: stretch;
+      min-height: auto;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      z-index: 8;
+    }
+    .sidebar-header { margin-bottom: 14px; }
+    .sidebar-brand-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .sidebar-brand-copy { min-width: 0; }
+    .brand { font-size: 22px; font-weight: 700; line-height: 1.1; letter-spacing: 0.4px; margin-bottom: 8px; }
+    .pill-home { display: inline-flex; padding: 6px 10px; border: 1px solid #f0d68b; border-radius: 999px; background: #fff5d8; color: #6f4b00; font-size: 12px; }
+    .sidebar-toggle {
+      width: 34px;
+      min-width: 34px;
+      height: 34px;
+      padding: 0;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: #fff7e6;
+      color: var(--text-primary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+    .sidebar-toggle svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .menu { display: grid; gap: 6px; }
+    .menu-divider {
+      margin: 8px 0 2px;
+      border-top: 1px solid var(--border-color);
+      opacity: 0.9;
+    }
+    .sidebar-footer {
+      margin-top: auto;
+      padding-top: 18px;
+    }
+    .sidebar-footer .btn-subtle {
+      width: auto;
+      min-height: 34px;
+      padding: 6px 12px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+    }
+    .menu-item {
+      display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid transparent;
+      background: transparent; color: var(--text-primary); font-weight: 500;
+    }
+    .menu-item:hover { background: var(--bg-primary); border-color: var(--border-color); text-decoration: none; }
+    .menu-item.active { background: #fff0c2; border-color: #efc85d; color: #8a2d12; }
+    .menu-dot { width: 8px; height: 8px; border-radius: 999px; background: #cbd5e1; }
+    .menu-item.active .menu-dot { background: #ab2c1a; }
+    .app-main { flex: 1; display: flex; flex-direction: column; min-width: 0; margin-left: 250px; height: 100vh; overflow-y: auto; transition: margin-left 0.22s ease; }
+    body.sidebar-collapsed .sidebar { transform: translateX(-100%); }
+    body.sidebar-collapsed .app-main { margin-left: 0; }
+    body.sidebar-collapsed .menu-toggle { display: inline-flex; }
+    .topbar {
+      height: 64px; padding: 12px 18px; border-bottom: 1px solid var(--border-color);
+      display: flex; justify-content: space-between; align-items: center; background: rgba(255, 251, 242, 0.96);
+      position: sticky; top: 0; z-index: 5;
+    }
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+    .topbar-title { font-weight: 700; }
+    .topbar-actions { display: flex; align-items: center; gap: 12px; }
+    .menu-toggle {
+      display: none;
+      width: 40px;
+      min-width: 40px;
+      height: 40px;
+      padding: 0;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: #fff7e6;
+      color: var(--text-primary);
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .menu-toggle svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .sidebar-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(17, 24, 39, 0.35);
+      backdrop-filter: blur(2px);
+      z-index: 9;
+    }
+    .user-pill {
+      font-size: 13px; color: #6a5740; background: #fff8e8; border: 1px solid var(--border-color);
+      border-radius: 999px; padding: 8px 12px; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .btn-subtle {
+      border: 1px solid #efc85d; background: #fff4c8; border-radius: 999px; padding: 8px 14px; text-decoration: none; color: #6f4b00;
+    }
+    .btn-subtle:hover { background: #ffe9a2; color: #573500; }
+    .app-content { padding: 22px 24px; min-width: 0; }
+    .wrap { width: 100%; max-width: none; margin: 0; }
+
+    .card { background: rgba(255, 255, 255, 0.96); border: 1px solid var(--border-color); border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: 0 12px 32px rgba(171, 44, 26, 0.08); }
+    .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .row { display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 16px; }
+    .btn {
+      appearance: none;
+      -webkit-appearance: none;
+      border: 1px solid var(--border-color);
+      background: linear-gradient(180deg, #f7c646 0%, #eeaf00 100%);
+      color: #522f00;
+      border-radius: 12px;
+      padding: 9px 14px;
+      font-weight: 500;
+      font-size: 0.95rem;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1.2;
+      min-height: 40px;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    .btn:hover { background: linear-gradient(180deg, #f4bd28 0%, #df9e00 100%); border-color: var(--accent-hover); color: #432600; }
+    .btn:not(.icon-btn),
+    .btn-subtle:not(.icon-btn) {
+      gap: 8px;
+    }
+    .btn:not(.icon-btn) svg,
+    .btn-subtle:not(.icon-btn) svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex: 0 0 auto;
+    }
+    .btn-danger { background: rgba(212, 60, 45, 0.12); border-color: var(--error); color: #b0271a; }
+    .btn-danger:hover { background: rgba(212, 60, 45, 0.18); border-color: #c53020; color: #8f2015; }
+    .btn-edit {
+      background: linear-gradient(180deg, #f7c646 0%, #eeaf00 100%);
+      border-color: #efc85d;
+      color: #6f4b00;
+    }
+    .btn-edit:hover {
+      background: linear-gradient(180deg, #f4bd28 0%, #df9e00 100%);
+      border-color: var(--accent-hover);
+      color: #573500;
+    }
+    .btn-reopen {
+      background: #ecfdf5;
+      border-color: rgba(34, 197, 94, 0.4);
+      color: #166534;
+    }
+    .btn-reopen:hover {
+      background: #dcfce7;
+      border-color: rgba(22, 163, 74, 0.5);
+      color: #14532d;
+    }
+    .icon-btn {
+      width: 40px;
+      min-width: 40px;
+      padding: 0;
+      border-radius: 12px;
+    }
+    .icon-btn svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .actions-inline {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .input,.textarea, form input, form select, form textarea {
+      width: 100%;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: #fff;
+      padding: 10px;
+      color: var(--text-primary);
+      font-size: 0.95rem;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    label { display: inline-block; margin-bottom: 6px; color: var(--text-secondary); }
+    .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid var(--border-color); text-align: left; padding: 10px; font-size: 14px; vertical-align: top; }
+    th { background: #fff4d2; font-weight: 700; }
+    .messages {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 10px;
+    }
+    .messages-floating {
+      position: fixed;
+      top: 78px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(560px, calc(100vw - 32px));
+      z-index: 26;
+      pointer-events: none;
+    }
+    .messages li {
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 12px 16px;
+      background: #fff7ed;
+      color: #9a3412;
+      opacity: 1;
+    }
+    .messages-floating li {
+      pointer-events: auto;
+      box-shadow: 0 14px 34px rgba(17, 24, 39, 0.18);
+      background: #fff7ed;
+      color: #9a3412;
+      border-color: rgba(245, 158, 11, 0.35);
+      backdrop-filter: none;
+      opacity: 1;
+    }
+    .messages .success,
+    .messages-floating li.success {
+      background: #dcfce7;
+      color: #166534;
+      border-color: rgba(34, 197, 94, 0.45);
+    }
+    .messages .error,
+    .messages-floating li.error {
+      background: #fee2e2;
+      color: #991b1b;
+      border-color: rgba(239, 68, 68, 0.45);
+    }
+    .messages .warning,
+    .messages-floating li.warning,
+    .messages .info,
+    .messages-floating li.info {
+      background: #fef3c7;
+      color: #92400e;
+      border-color: rgba(245, 158, 11, 0.45);
+    }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(17, 24, 39, 0.48);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 30;
+    }
+    .modal-backdrop.is-open {
+      display: flex;
+    }
+    .modal-card {
+      width: min(1100px, 96vw);
+      height: min(84vh, 760px);
+      background: #fffdf7;
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      box-shadow: 0 20px 48px rgba(17, 24, 39, 0.22);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-color);
+      background: #fff8ea;
+    }
+    .modal-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+    .modal-title {
+      font-weight: 600;
+      color: var(--text-primary);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .modal-close {
+      width: 36px;
+      min-width: 36px;
+      height: 36px;
+      padding: 0;
+      border-radius: 10px;
+    }
+    .modal-body {
+      flex: 1;
+      min-height: 0;
+      background: #fff;
+    }
+    .modal-frame {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #fff;
+      display: none;
+    }
+    .modal-image {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: none;
+      background: #fff;
+    }
+    .modal-fallback {
+      padding: 18px;
+      color: var(--text-secondary);
+      display: none;
+    }
+    .modal-fallback .btn {
+      margin-top: 12px;
+    }
+
+    .mnp-login .app-shell { display: block; }
+    .mnp-login .sidebar,
+    .mnp-login .topbar { display: none; }
+    .mnp-login .app-content { min-height: 100vh; background: linear-gradient(135deg, #fff7df 0%, #fdecc8 35%, #f6f0ff 70%, #eaf6ff 100%); padding: 22px 0; }
+    .mnp-login .wrap { max-width: none; margin: 0; padding: 0; width: 100%; }
+
+    @media (max-width: 1200px) {
+      .sidebar {
+        width: 220px;
+        padding: 16px 12px;
+      }
+      .app-content {
+        padding: 18px;
+      }
+    }
+
+    @media (max-width: 900px) {
+      html, body {
+        overflow: auto;
+      }
+      .app-shell { display: block; height: auto; }
+      body.sidebar-collapsed .sidebar {
+        transform: translateX(-100%);
+      }
+      .sidebar {
+        display: block;
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: min(82vw, 300px);
+        transform: translateX(-100%);
+        transition: transform 0.22s ease;
+        z-index: 10;
+        box-shadow: 0 14px 34px rgba(17, 24, 39, 0.18);
+      }
+      .app-main {
+        margin-left: 0;
+        height: auto;
+        overflow-y: visible;
+      }
+      body.sidebar-open .sidebar {
+        transform: translateX(0);
+      }
+      body.sidebar-open .sidebar-backdrop {
+        display: block;
+      }
+      .topbar { position: static; }
+      .topbar-left {
+        width: 100%;
+      }
+      .menu-toggle {
+        display: inline-flex;
+      }
+      .sidebar-toggle {
+        display: inline-flex;
+      }
+      .row { grid-template-columns: 1fr; }
+      .grid2 { grid-template-columns: 1fr; }
+      .app-content { padding: 16px; }
+      .app-main { min-height: auto; }
+      .topbar {
+        height: auto;
+        padding: 14px 16px;
+        align-items: flex-start;
+        gap: 12px;
+        flex-direction: column;
+      }
+      .topbar-actions {
+        width: 100%;
+        justify-content: space-between;
+        flex-wrap: wrap;
+      }
+      .messages-floating {
+        top: 14px;
+        width: min(520px, calc(100vw - 24px));
+      }
+      .user-pill {
+        max-width: 100%;
+      }
+      .card {
+        padding: 14px;
+        border-radius: 14px;
+      }
+      .toolbar {
+        align-items: stretch;
+      }
+      .toolbar > * {
+        width: 100%;
+      }
+      .toolbar .btn,
+      .toolbar .btn-subtle {
+        width: 100%;
+      }
+      .btn,
+      .btn-subtle {
+        width: 100%;
+      }
+      .actions-inline .btn,
+      .actions-inline .icon-btn {
+        width: auto;
+      }
+      .table-responsive table {
+        min-width: 760px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .app-content {
+        padding: 12px;
+      }
+      .card {
+        padding: 12px;
+        border-radius: 12px;
+      }
+      th, td {
+        padding: 8px;
+        font-size: 13px;
+      }
+      .btn,
+      .btn-subtle {
+        min-height: 38px;
+        padding: 8px 12px;
+      }
+      .icon-btn {
+        width: 38px;
+        min-width: 38px;
+      }
+      .messages-floating {
+        top: 12px;
+      }
+      .table-responsive table {
+        min-width: 680px;
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="{% static 'core/styles/mnp-theme.css' %}">
+</head>
+<body class="light {% if 'login' in request.path %}mnp-login{% endif %}">
+  <div class="app-shell">
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+    <aside class="sidebar" id="app-sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-brand-row">
+          <div class="sidebar-brand-copy">
+            <div class="brand">MNP27</div>
+            <a class="pill-home" href="/">Admin Portal</a>
+          </div>
+          {% if request.user.is_authenticated %}
+            <button class="sidebar-toggle" id="sidebar-close-toggle" type="button" aria-label="Close sidebar">
+              <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+          {% endif %}
+        </div>
+      </div>
+
+      <nav class="menu">
+        {% if request.user.is_authenticated %}
+          <a href="{% url 'ui:master-entry' %}" class="menu-item {% if request.path == '/ui/' or 'master-entry' in request.path %}active{% endif %}">
+            <span class="menu-dot"></span>Applications
+          </a>
+          <a href="{% url 'ui:article-list' %}" class="menu-item {% if 'article' in request.path %}active{% endif %}">
+            <span class="menu-dot"></span>Articles
+          </a>
+          <a href="{% url 'ui:master-data-districts' %}" class="menu-item {% if 'master-data' in request.path %}active{% endif %}">
+            <span class="menu-dot"></span>Master Data
+          </a>
+          <a href="{% url 'ui:fund-request-list' %}" class="menu-item {% if 'fund-request' in request.path %}active{% endif %}">
+            <span class="menu-dot"></span>Fund Requests
+          </a>
+          {% if request.user.role == 'admin' %}
+            <div class="menu-divider"></div>
+            <a href="{% url 'ui:application-audit-logs' %}" class="menu-item {% if 'applications/audit-logs' in request.path %}active{% endif %}">
+              <span class="menu-dot"></span>Audit Logs
+            </a>
+          {% endif %}
+        {% else %}
+          <a href="{% url 'ui-login' %}" class="menu-item">Login</a>
+        {% endif %}
+      </nav>
+
+      <div class="sidebar-footer">
+        {% if request.user.is_authenticated %}
+          <a class="btn btn-subtle" href="{% url 'ui-logout' %}">Logout</a>
+        {% else %}
+          <a class="btn btn-subtle" href="{% url 'ui-login' %}">Sign in</a>
+        {% endif %}
+      </div>
+    </aside>
+
+    <div class="app-main">
+      <header class="topbar">
+        <div class="topbar-left">
+          {% if request.user.is_authenticated %}
+            <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Toggle sidebar" aria-expanded="true" aria-controls="app-sidebar">
+              <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+          {% endif %}
+          <div class="topbar-title">Makkal Nalapani Operations</div>
+        </div>
+        <div class="topbar-actions">
+          <div class="user-pill">
+            {% if request.user.is_authenticated %}
+              {{ request.user.get_full_name|default:request.user.email }}
+            {% else %}
+              Not signed in
+            {% endif %}
+          </div>
+        </div>
+      </header>
+
+      <main class="app-content">
+        <div class="wrap">
+          {% if messages %}
+            <ul class="messages messages-floating">
+              {% for message in messages %}
+                <li class="{% if message.tags %}{{ message.tags }}{% endif %}">{{ message }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+          {% block content %}{% endblock %}
+        </div>
+      </main>
+    </div>
+  </div>
+  <div class="modal-backdrop" id="attachment-preview-modal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="attachment-preview-title">
+      <div class="modal-header">
+        <div class="modal-title" id="attachment-preview-title">File preview</div>
+        <div class="modal-header-actions">
+          <button class="btn icon-btn" type="button" id="attachment-preview-print" aria-label="Print file" title="Print file">
+            <svg viewBox="0 0 24 24"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>
+          </button>
+          <a class="btn icon-btn" href="#" id="attachment-preview-open-link" target="_blank" rel="noopener" aria-label="Open file in new tab" title="Open file in new tab">
+            <svg viewBox="0 0 24 24"><path d="M14 3h7v7"/><path d="M10 14 21 3"/><path d="M21 14v7H3V3h7"/></svg>
+          </a>
+          <a class="btn icon-btn" href="#" id="attachment-preview-download-link-inline" aria-label="Download file" title="Download file">
+            <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+          </a>
+        </div>
+        <button class="btn icon-btn modal-close" type="button" id="attachment-preview-close" aria-label="Close preview">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <embed class="modal-frame" id="attachment-preview-frame" type="application/pdf">
+        <img class="modal-image" id="attachment-preview-image" alt="Attachment preview">
+        <div class="modal-fallback" id="attachment-preview-fallback">
+          <div>Preview is not available for this file in the browser. Use the download button instead.</div>
+          <a class="btn" href="#" id="attachment-preview-download-link">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+            <span>Download</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+<script>
+  (function() {
+    document.querySelectorAll("form[data-confirm-message]").forEach(function(form) {
+      form.addEventListener("submit", function(event) {
+        var message = form.getAttribute("data-confirm-message") || "Are you sure?";
+        if (!window.confirm(message)) {
+          event.preventDefault();
+        }
+      });
+    });
+
+    var menuToggle = document.getElementById("menu-toggle");
+    var sidebarCloseToggle = document.getElementById("sidebar-close-toggle");
+    var sidebarBackdrop = document.getElementById("sidebar-backdrop");
+    var COLLAPSE_KEY = "mnp.sidebar.collapsed";
+
+    function isMobileSidebar() {
+      return window.innerWidth <= 900;
+    }
+
+    function setToggleIcon(target, direction) {
+      if (!target) return;
+      target.innerHTML = direction === "right"
+        ? '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>'
+        : '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>';
+    }
+
+    function syncSidebarState() {
+      var mobileOpen = document.body.classList.contains("sidebar-open");
+      var collapsed = document.body.classList.contains("sidebar-collapsed");
+      if (menuToggle) {
+        var expanded = isMobileSidebar() ? mobileOpen : !collapsed;
+        menuToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+        setToggleIcon(menuToggle, expanded ? "left" : "right");
+      }
+      if (sidebarCloseToggle) {
+        setToggleIcon(sidebarCloseToggle, "left");
+      }
+    }
+
+    var previewModal = document.getElementById("attachment-preview-modal");
+    var previewFrame = document.getElementById("attachment-preview-frame");
+    var previewImage = document.getElementById("attachment-preview-image");
+    var previewTitle = document.getElementById("attachment-preview-title");
+    var previewClose = document.getElementById("attachment-preview-close");
+    var previewPrint = document.getElementById("attachment-preview-print");
+    var previewOpenLink = document.getElementById("attachment-preview-open-link");
+    var previewDownloadLinkInline = document.getElementById("attachment-preview-download-link-inline");
+    var previewFallback = document.getElementById("attachment-preview-fallback");
+    var previewDownloadLink = document.getElementById("attachment-preview-download-link");
+    var appMain = document.querySelector(".app-main");
+    var RESTORE_SCROLL_KEY = "mnp.restore-scroll";
+    var currentPreviewUrl = "";
+    var currentDownloadUrl = "";
+
+    function previewKindFromSource(source) {
+      var lower = String(source || "").toLowerCase();
+      if (lower.endsWith(".pdf")) return "pdf";
+      if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp") || lower.endsWith(".gif")) return "image";
+      return "unsupported";
+    }
+
+    function closePreviewModal() {
+      if (!previewModal) return;
+      previewModal.classList.remove("is-open");
+      previewModal.setAttribute("aria-hidden", "true");
+      if (previewFrame) {
+        previewFrame.removeAttribute("src");
+        previewFrame.style.display = "none";
+      }
+      if (previewImage) {
+        previewImage.removeAttribute("src");
+        previewImage.style.display = "none";
+      }
+      if (previewFallback) {
+        previewFallback.style.display = "none";
+      }
+      if (previewDownloadLink) {
+        previewDownloadLink.setAttribute("href", "#");
+      }
+      if (previewOpenLink) {
+        previewOpenLink.setAttribute("href", "#");
+      }
+      if (previewDownloadLinkInline) {
+        previewDownloadLinkInline.setAttribute("href", "#");
+      }
+      currentPreviewUrl = "";
+      currentDownloadUrl = "";
+    }
+
+    function openPreviewModal(url, title, sourceName, downloadUrl) {
+      if (!previewModal || !previewFrame) return;
+      var kind = previewKindFromSource(sourceName);
+      previewTitle.textContent = title || "File preview";
+      previewFrame.style.display = "none";
+      previewFrame.removeAttribute("src");
+      if (previewImage) {
+        previewImage.style.display = "none";
+        previewImage.removeAttribute("src");
+      }
+      if (previewFallback) {
+        previewFallback.style.display = "none";
+      }
+      if (previewDownloadLink) {
+        previewDownloadLink.setAttribute("href", downloadUrl || "#");
+      }
+      if (previewOpenLink) {
+        previewOpenLink.setAttribute("href", url || "#");
+      }
+      if (previewDownloadLinkInline) {
+        previewDownloadLinkInline.setAttribute("href", downloadUrl || "#");
+      }
+      currentPreviewUrl = url || "";
+      currentDownloadUrl = downloadUrl || "";
+      if (kind === "pdf") {
+        previewFrame.src = url;
+        previewFrame.style.display = "block";
+      } else if (kind === "image" && previewImage) {
+        previewImage.src = url;
+        previewImage.style.display = "block";
+      } else if (previewFallback) {
+        previewFallback.style.display = "block";
+      }
+      previewModal.classList.add("is-open");
+      previewModal.setAttribute("aria-hidden", "false");
+    }
+
+    document.addEventListener("click", function(event) {
+      var trigger = event.target.closest(".js-attachment-preview");
+      if (trigger) {
+        event.preventDefault();
+        openPreviewModal(
+          trigger.getAttribute("data-preview-url"),
+          trigger.getAttribute("data-preview-title"),
+          trigger.getAttribute("data-preview-source"),
+          trigger.getAttribute("data-download-url")
+        );
+        return;
+      }
+      var printTrigger = event.target.closest(".js-attachment-print");
+      if (printTrigger) {
+        event.preventDefault();
+        var printUrl = printTrigger.getAttribute("data-print-url");
+        if (!printUrl) return;
+        var printWindow = window.open(printUrl, "_blank", "noopener");
+        if (printWindow) {
+          printWindow.onload = function() {
+            try {
+              printWindow.focus();
+              printWindow.print();
+            } catch (error) {}
+          };
+        }
+        return;
+      }
+      if (event.target === previewModal) {
+        closePreviewModal();
+      }
+    });
+
+    if (previewClose) {
+      previewClose.addEventListener("click", closePreviewModal);
+    }
+
+    if (previewPrint) {
+      previewPrint.addEventListener("click", function() {
+        if (!currentPreviewUrl) return;
+        var printWindow = window.open(currentPreviewUrl, "_blank", "noopener");
+        if (printWindow) {
+          printWindow.onload = function() {
+            try {
+              printWindow.focus();
+              printWindow.print();
+            } catch (error) {}
+          };
+        }
+      });
+    }
+
+    document.addEventListener("keydown", function(event) {
+      if (event.key === "Escape" && previewModal && previewModal.classList.contains("is-open")) {
+        closePreviewModal();
+      }
+    });
+
+    if (previewFrame) {
+      previewFrame.addEventListener("error", function() {
+        previewFrame.style.display = "none";
+        if (previewFallback) {
+          previewFallback.style.display = "block";
+        }
+      });
+    }
+
+    document.addEventListener("submit", function() {
+      try {
+        var payload = {
+          path: window.location.pathname,
+          search: window.location.search,
+          scrollTop: appMain ? appMain.scrollTop : window.scrollY
+        };
+        window.sessionStorage.setItem(RESTORE_SCROLL_KEY, JSON.stringify(payload));
+      } catch (error) {}
+    }, true);
+
+    try {
+      var restorePayload = window.sessionStorage.getItem(RESTORE_SCROLL_KEY);
+      if (restorePayload) {
+        var restoreData = JSON.parse(restorePayload);
+        if (restoreData.path === window.location.pathname && restoreData.search === window.location.search) {
+          window.setTimeout(function() {
+            if (appMain) {
+              appMain.scrollTop = restoreData.scrollTop || 0;
+            } else {
+              window.scrollTo(0, restoreData.scrollTop || 0);
+            }
+          }, 0);
+        }
+        window.sessionStorage.removeItem(RESTORE_SCROLL_KEY);
+      }
+    } catch (error) {}
+
+    document.querySelectorAll(".messages-floating li").forEach(function(message) {
+      window.setTimeout(function() {
+        message.style.transition = "opacity 0.25s ease, transform 0.25s ease";
+        message.style.opacity = "0";
+        message.style.transform = "translateY(-6px)";
+        window.setTimeout(function() {
+          if (message.parentNode) {
+            message.parentNode.removeChild(message);
+          }
+        }, 260);
+      }, 3000);
+    });
+
+    function setSidebarOpen(isOpen) {
+      document.body.classList.toggle("sidebar-open", isOpen);
+      syncSidebarState();
+    }
+
+    function setSidebarCollapsed(isCollapsed) {
+      document.body.classList.toggle("sidebar-collapsed", isCollapsed);
+      try {
+        window.localStorage.setItem(COLLAPSE_KEY, isCollapsed ? "1" : "0");
+      } catch (error) {}
+      syncSidebarState();
+    }
+
+    try {
+      if (!isMobileSidebar() && window.localStorage.getItem(COLLAPSE_KEY) === "1") {
+        document.body.classList.add("sidebar-collapsed");
+      }
+    } catch (error) {}
+
+    if (menuToggle) {
+      menuToggle.addEventListener("click", function() {
+        if (isMobileSidebar()) {
+          setSidebarOpen(!document.body.classList.contains("sidebar-open"));
+        } else {
+          setSidebarCollapsed(!document.body.classList.contains("sidebar-collapsed"));
+        }
+      });
+    }
+    if (sidebarCloseToggle) {
+      sidebarCloseToggle.addEventListener("click", function() {
+        if (isMobileSidebar()) {
+          setSidebarOpen(false);
+        } else {
+          setSidebarCollapsed(true);
+        }
+      });
+    }
+    if (sidebarBackdrop) {
+      sidebarBackdrop.addEventListener("click", function() {
+        setSidebarOpen(false);
+      });
+    }
+    window.addEventListener("resize", function() {
+      if (window.innerWidth > 900) {
+        setSidebarOpen(false);
+      }
+      syncSidebarState();
+    });
+    syncSidebarState();
+
+    function iconMarkup(kind) {
+      var icons = {
+        back: '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/><path d="M21 12H9"/></svg>',
+        cancel: '<svg viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>',
+        save: '<svg viewBox="0 0 24 24"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v6h6V3"/><path d="M9 17h6"/></svg>',
+        submit: '<svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>',
+        verify: '<svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7H3V5h11"/></svg>',
+        add: '<svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>',
+        apply: '<svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>',
+        reset: '<svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>',
+        export: '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>',
+        search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+        upload: '<svg viewBox="0 0 24 24"><path d="M12 16V4"/><path d="M8 8l4-4 4 4"/><path d="M4 20h16"/></svg>',
+        logout: '<svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>',
+        signin: '<svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>',
+        edit: '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>'
+      };
+      return icons[kind] || "";
+    }
+
+    function buttonKind(label) {
+      var text = (label || "").trim().toLowerCase();
+      if (!text) return "";
+      if (text.startsWith("back")) return "back";
+      if (text.startsWith("cancel")) return "cancel";
+      if (text.startsWith("save as draft") || text.startsWith("save draft") || text === "save") return "save";
+      if (text.startsWith("submit") || text.includes("submit")) return "submit";
+      if (text.startsWith("verify")) return "verify";
+      if (text.startsWith("add") || text.startsWith("new") || text.startsWith("create")) return "add";
+      if (text.startsWith("apply")) return "apply";
+      if (text.startsWith("reset")) return "reset";
+      if (text.startsWith("export")) return "export";
+      if (text.startsWith("search")) return "search";
+      if (text.startsWith("upload")) return "upload";
+      if (text.startsWith("logout")) return "logout";
+      if (text.startsWith("sign in")) return "signin";
+      if (text.startsWith("modify") || text.startsWith("edit")) return "edit";
+      return "";
+    }
+
+    document.querySelectorAll(".btn:not(.icon-btn), .btn-subtle:not(.icon-btn)").forEach(function(button) {
+      if (button.querySelector("svg")) return;
+      var label = (button.textContent || "").trim();
+      var kind = buttonKind(label);
+      if (!kind) return;
+      button.innerHTML = iconMarkup(kind) + '<span>' + label + '</span>';
+    });
+
+    document.querySelectorAll("table").forEach(function(table) {
+      if (table.closest(".table-responsive")) return;
+      var wrapper = document.createElement("div");
+      wrapper.className = "table-responsive";
+      table.parentNode.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+    });
+  })();
+</script>
+</html>

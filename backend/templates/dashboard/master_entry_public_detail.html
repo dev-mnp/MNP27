@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% load currency %}
+
+{% block content %}
+  <section class="card">
+    <div class="toolbar" style="justify-content: space-between;">
+      <div>
+        <h2 style="margin: 0 0 6px;">Public Entry Summary</h2>
+        <p style="margin: 0; color: var(--text-secondary);">
+          {{ entry.application_number }} · {{ entry.name }}
+        </p>
+      </div>
+      <div class="toolbar" style="margin-bottom: 0;">
+        <a class="btn" href="{% url 'ui:master-entry-public-edit' entry.id %}">Modify</a>
+        <a class="btn" href="{% url 'ui:master-entry' %}?type=public">Back</a>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div><label>Aadhaar Number</label><input class="input" value="{{ entry.aadhar_number }}" readonly></div>
+      <div><label>Application Number</label><input class="input" value="{{ entry.application_number }}" readonly></div>
+      <div><label>Name</label><input class="input" value="{{ entry.name }}" readonly></div>
+      <div><label>Mobile Number</label><input class="input" value="{{ entry.mobile|default:'-' }}" readonly></div>
+      <div><label>Gender</label><input class="input" value="{{ entry.gender|default:'-' }}" readonly></div>
+      <div><label>Handicapped</label><input class="input" value="{{ entry.is_handicapped|yesno:'Yes,No' }}" readonly></div>
+      <div style="grid-column: span 2;"><label>Address</label><textarea class="textarea" rows="3" readonly>{{ entry.address|default:"" }}</textarea></div>
+      <div><label>Article</label><input class="input" value="{{ entry.article.article_name }}" readonly></div>
+      <div><label>Quantity</label><input class="input" value="{{ entry.quantity }}" readonly></div>
+      <div><label>Cost Per Unit</label><input class="input" value="Rs.{{ entry.article_cost_per_unit|rupees }}" readonly></div>
+      <div><label>Total Value</label><input class="input" value="Rs.{{ entry.total_amount|rupees }}" readonly></div>
+      <div style="grid-column: span 2;"><label>Comments</label><textarea class="textarea" rows="3" readonly>{{ entry.notes|default:"" }}</textarea></div>
+    </div>
+
+    {% if history_matches %}
+      <section class="card" style="margin-top: 16px; margin-bottom: 0;">
+        <h3 style="margin-top: 0;">Past beneficiary history</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th>Name</th>
+              <th>Article</th>
+              <th>Application</th>
+              <th>Category</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in history_matches %}
+              <tr>
+                <td>{{ row.year }}</td>
+                <td>{{ row.name }}</td>
+                <td>{{ row.article_name|default:"-" }}</td>
+                <td>{{ row.application_number|default:"-" }}</td>
+                <td>{{ row.category|default:"-" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    {% endif %}
+  </section>
+{% endblock %}

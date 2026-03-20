@@ -38,6 +38,16 @@ python manage.py runserver
   - `POST /api/fund-requests/{id}/submit/`
   - `POST /api/fund-requests/{id}/set-status/`
   - `POST /api/fund-requests/{id}/allocate-po/`
+- Python UI (Django templates):
+  - `GET /ui/` master entry landing page
+  - `GET /ui/articles/` manage articles
+  - `GET /ui/articles/new/` create article
+  - `GET /ui/login/` sign in with Django session
+  - `GET /ui/fund-requests/` list fund requests
+  - `GET /ui/fund-requests/new/` create draft fund request
+  - `GET /ui/fund-requests/{id}/` view fund request
+  - `POST /ui/fund-requests/{id}/submit/` submit draft
+  - `GET /ui/fund-requests/{id}/documents/new/` upload fund request documents
 
 ## Migration notes from Supabase
 
@@ -48,3 +58,18 @@ python manage.py runserver
 5. Backfill `app_users` with role/status for your team users and mark existing users as active.
 6. Keep this API as the single backend source so only one stack runs from now on.
 
+## CSV import commands
+
+Load your admin-prepared master data into `MNP27` with:
+
+```bash
+python manage.py import_districts --file "/Users/aswathshakthi/Desktop/district_president.csv"
+python manage.py import_articles --file "/Users/aswathshakthi/Desktop/ Aswath Files/App_Databases_Codes/Files/article_list-2026-03-09.csv"
+python manage.py import_public_history --file "/Users/aswathshakthi/Desktop/Past_Dist_Public_beneficiary.csv"
+```
+
+If you want to replace all old beneficiary history before importing:
+
+```bash
+python manage.py import_public_history --file "/Users/aswathshakthi/Desktop/Past_Dist_Public_beneficiary.csv" --replace
+```

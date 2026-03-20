@@ -1,0 +1,935 @@
+{% extends "base.html" %}
+{% load currency %}
+
+{% block content %}
+  {% if public_submit_popup %}
+    <div class="submit-popup" id="public-submit-popup" role="status" aria-live="polite">
+      <div class="submit-popup-card">
+        <button class="submit-popup-close" type="button" aria-label="Close popup">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+        </button>
+        <div class="submit-popup-label">Public application submitted</div>
+        <div class="submit-popup-number">{{ public_submit_popup.application_number }}</div>
+        <div class="submit-popup-name">{{ public_submit_popup.name }}</div>
+      </div>
+    </div>
+  {% endif %}
+  {% if institution_submit_popup %}
+    <div class="submit-popup" id="institution-submit-popup" role="status" aria-live="polite">
+      <div class="submit-popup-card">
+        <button class="submit-popup-close" type="button" aria-label="Close popup">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+        </button>
+        <div class="submit-popup-label">Institution application submitted</div>
+        <div class="submit-popup-number">{{ institution_submit_popup.application_number }}</div>
+        <div class="submit-popup-name">{{ institution_submit_popup.name }}</div>
+      </div>
+    </div>
+  {% endif %}
+  <section class="card">
+    <div class="master-entry-head">
+      <div>
+        <h2 style="margin: 0 0 6px;">Applications Management</h2>
+        <p style="margin: 0; color: var(--text-secondary);">
+          District applications, Public applications, and Institution applications
+        </p>
+      </div>
+      <div class="small master-count-pill">
+        District: {{ district_count }} | Public: {{ public_count }} | Institutions: {{ institution_count }}
+      </div>
+    </div>
+
+    <form method="get" class="master-filter-card">
+      <div class="beneficiary-switch-row">
+        <div class="beneficiary-switch-capsule">
+          <label for="beneficiary-type" style="margin-bottom: 0;">Beneficiary Type</label>
+          <select id="beneficiary-type" class="input" name="type" onchange="this.form.submit()">
+            <option value="district" {% if beneficiary_type == "district" %}selected{% endif %}>District</option>
+            <option value="public" {% if beneficiary_type == "public" %}selected{% endif %}>Public</option>
+            <option value="institutions" {% if beneficiary_type == "institutions" %}selected{% endif %}>Institutions</option>
+          </select>
+        </div>
+        <details class="export-menu export-menu-inline">
+          <summary class="btn compact-btn compact-btn-primary">Export</summary>
+          <div class="export-menu-panel">
+            <a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort={{ sort_by|urlencode }}&dir={{ sort_dir|urlencode }}&export_scope=all">All Beneficiaries</a>
+            <a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort={{ sort_by|urlencode }}&dir={{ sort_dir|urlencode }}&export_scope=district">District</a>
+            <a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort={{ sort_by|urlencode }}&dir={{ sort_dir|urlencode }}&export_scope=public">Public</a>
+            <a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort={{ sort_by|urlencode }}&dir={{ sort_dir|urlencode }}&export_scope=institutions">Institutions</a>
+          </div>
+        </details>
+      </div>
+      <div class="master-filter-grid">
+        <div class="filter-field filter-search">
+          <label style="margin-bottom: 0;">Search</label>
+          <input class="input" type="text" name="q" value="{{ search_query }}" placeholder="Search application, name, district, Aadhaar, or article...">
+        </div>
+        <div class="filter-field">
+          <label style="margin-bottom: 0;">From</label>
+          <input class="input" type="date" name="date_from" value="{{ date_from }}">
+        </div>
+        <div class="filter-field">
+          <label style="margin-bottom: 0;">To</label>
+          <input class="input" type="date" name="date_to" value="{{ date_to }}">
+        </div>
+        <div class="filter-field">
+          <label style="margin-bottom: 0;">Status</label>
+          <select class="input" name="status">
+            {% for value, label in status_choices %}
+              <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="filter-actions">
+          <button class="btn compact-btn compact-btn-primary" type="submit">Apply</button>
+          <a class="btn btn-subtle compact-btn master-reset-btn" href="?type={{ beneficiary_type }}">Reset</a>
+        </div>
+      </div>
+      <div class="filter-hint">
+        Click a table header to sort. Click the application number to expand its summary.
+      </div>
+    </form>
+
+    {% if beneficiary_type == "district" %}
+      <div class="toolbar" style="justify-content: space-between;">
+        <div class="toolbar" style="margin-bottom: 0;">
+          <div class="list-view-controls" aria-label="District expand controls">
+            <button class="icon-btn list-icon-btn" type="button" data-expand-all="district" title="Expand all" aria-label="Expand all">
+              <svg viewBox="0 0 24 24"><path d="M7 3H3v4"/><path d="M17 3h4v4"/><path d="M21 17v4h-4"/><path d="M3 17v4h4"/><path d="M8 8l-5-5"/><path d="M16 8l5-5"/><path d="M8 16l-5 5"/><path d="M16 16l5 5"/></svg>
+            </button>
+            <button class="icon-btn list-icon-btn" type="button" data-collapse-all="district" title="Collapse all" aria-label="Collapse all">
+              <svg viewBox="0 0 24 24"><path d="M9 3H3v6"/><path d="M15 3h6v6"/><path d="M21 15v6h-6"/><path d="M3 15v6h6"/><path d="M3 9l6-6"/><path d="M21 9l-6-6"/><path d="M3 15l6 6"/><path d="M21 15l-6 6"/></svg>
+            </button>
+          </div>
+        </div>
+        <a class="btn compact-btn compact-btn-primary add-entry-btn" href="{% url 'ui:master-entry-district-create' %}">Create</a>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=application_number&dir={% if sort_by == 'application_number' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">APP NUMBER {% if sort_by == "application_number" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=district_name&dir={% if sort_by == 'district_name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">DISTRICT NAME {% if sort_by == "district_name" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th>ARTICLES</th>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=total_accrued&dir={% if sort_by == 'total_accrued' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">TOTAL ACCRUED {% if sort_by == "total_accrued" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=remaining_fund&dir={% if sort_by == 'remaining_fund' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">REMAINING FUND {% if sort_by == "remaining_fund" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=status&dir={% if sort_by == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">STATUS {% if sort_by == "status" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=created_at&dir={% if sort_by == 'created_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">CREATED AT {% if sort_by == "created_at" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th>ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in district_groups %}
+            <tr class="summary-parent-row" data-target="district-{{ row.district_id }}">
+              <td>
+                <button class="summary-toggle" type="button" data-target="district-{{ row.district_id }}">
+                  <span class="summary-arrow">▸</span>
+                  <span>{% if row.application_number and row.application_number|slice:":10" == "DRAFT-INS-" %}-{% else %}{{ row.application_number|default:"-" }}{% endif %}</span>
+                </button>
+              </td>
+              <td>{{ row.district_name }}</td>
+              <td>{{ row.article_count }} item(s), {{ row.total_quantity }} quantity</td>
+              <td>Rs.{{ row.total_accrued|rupees }}</td>
+              <td style="color: {% if row.remaining_fund < 0 %}#dc2626{% else %}#16a34a{% endif %};">
+                Rs.{{ row.remaining_fund|rupees }}
+              </td>
+              <td><span class="status-pill status-{{ row.status }}">{{ row.status|title }}</span></td>
+              <td>{{ row.created_at|date:"d/m/Y" }}</td>
+              <td>
+                <div class="actions-inline">
+                {% if row.attachment_id %}
+                <button
+                  class="btn icon-btn js-attachment-preview"
+                  type="button"
+                  title="Preview attachment"
+                  aria-label="Preview attachment"
+                  data-preview-url="{{ row.attachment_preview_url }}"
+                  data-preview-title="{{ row.attachment_title }}"
+                  data-preview-source="{{ row.attachment_source }}"
+                  data-download-url="{{ row.attachment_preview_url }}?download=1"
+                >
+                  <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                <button
+                  class="btn icon-btn js-attachment-print"
+                  type="button"
+                  title="Print file"
+                  aria-label="Print file"
+                  data-print-url="{{ row.attachment_preview_url }}"
+                >
+                  <svg viewBox="0 0 24 24"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>
+                </button>
+                {% endif %}
+                {% if row.status != "submitted" %}
+                <a class="btn btn-edit icon-btn" title="Modify" aria-label="Modify" href="{% url 'ui:master-entry-district-edit' row.district_id %}">
+                  <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </a>
+                {% elif request.user.role == "admin" %}
+                  <form method="post" action="{% url 'ui:master-entry-district-reopen' row.district_id %}" style="display: inline;" data-confirm-message="Reopen this district application as draft?">
+                    {% csrf_token %}
+                    <button class="btn btn-reopen icon-btn" type="submit" title="Reopen" aria-label="Reopen">
+                      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>
+                    </button>
+                  </form>
+                {% endif %}
+                {% if request.user.role == "admin" %}
+                  <form method="post" action="{% url 'ui:master-entry-district-delete' row.district_id %}" style="display: inline;" data-confirm-message="Delete this district entry?">
+                    {% csrf_token %}
+                    <button class="btn btn-danger icon-btn" type="submit" title="Delete" aria-label="Delete">
+                      <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                    </button>
+                  </form>
+                {% endif %}
+                </div>
+              </td>
+            </tr>
+            <tr id="district-{{ row.district_id }}" class="summary-row" hidden>
+              <td colspan="8">
+                <div class="summary-card">
+                  <table class="summary-detail-table">
+                    <thead>
+                      <tr>
+                        <th>Article</th>
+                        <th>Qty</th>
+                        <th>Unit Cost</th>
+                        <th>Total</th>
+                        <th>Comments</th>
+                        <th>Added / Modified On</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for item in row.detail_items %}
+                        <tr>
+                          <td>{{ item.article_name }}</td>
+                          <td>{{ item.quantity }}</td>
+                          <td>Rs.{{ item.unit_cost|rupees }}</td>
+                          <td>Rs.{{ item.total_amount|rupees }}</td>
+                          <td>{{ item.notes|default:"-" }}</td>
+                          <td>{{ item.changed_at|date:"d/m/Y H:i" }}</td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="8">No district entries created yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% elif beneficiary_type == "public" %}
+      <div class="toolbar" style="justify-content: space-between;">
+        <div class="toolbar" style="margin-bottom: 0;">
+          <div class="list-view-controls" aria-label="Public expand controls">
+            <button class="icon-btn list-icon-btn" type="button" data-expand-all="public" title="Expand all" aria-label="Expand all">
+              <svg viewBox="0 0 24 24"><path d="M7 3H3v4"/><path d="M17 3h4v4"/><path d="M21 17v4h-4"/><path d="M3 17v4h4"/><path d="M8 8l-5-5"/><path d="M16 8l5-5"/><path d="M8 16l-5 5"/><path d="M16 16l5 5"/></svg>
+            </button>
+            <button class="icon-btn list-icon-btn" type="button" data-collapse-all="public" title="Collapse all" aria-label="Collapse all">
+              <svg viewBox="0 0 24 24"><path d="M9 3H3v6"/><path d="M15 3h6v6"/><path d="M21 15v6h-6"/><path d="M3 15v6h6"/><path d="M3 9l6-6"/><path d="M21 9l-6-6"/><path d="M3 15l6 6"/><path d="M21 15l-6 6"/></svg>
+            </button>
+          </div>
+        </div>
+        <a class="btn compact-btn compact-btn-primary add-entry-btn" href="{% url 'ui:master-entry-public-create' %}">Create</a>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=application_number&dir={% if sort_by == 'application_number' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">APP NUMBER {% if sort_by == "application_number" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=name&dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">NAME {% if sort_by == "name" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=aadhar_number&dir={% if sort_by == 'aadhar_number' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">AADHAAR {% if sort_by == "aadhar_number" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th>ARTICLE</th>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=total_amount&dir={% if sort_by == 'total_amount' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">TOTAL VALUE {% if sort_by == "total_amount" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=status&dir={% if sort_by == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">STATUS {% if sort_by == "status" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=created_at&dir={% if sort_by == 'created_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">CREATED AT {% if sort_by == "created_at" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th>ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in public_entries %}
+            <tr class="summary-parent-row" data-target="public-{{ entry.id }}">
+              <td>
+                <button class="summary-toggle" type="button" data-target="public-{{ entry.id }}">
+                  <span class="summary-arrow">▸</span>
+                  <span>{% if entry.application_number and entry.application_number|slice:":10" == "DRAFT-PUB-" %}-{% else %}{{ entry.application_number|default:"-" }}{% endif %}</span>
+                </button>
+              </td>
+              <td>{{ entry.name }}</td>
+              <td>{{ entry.aadhar_number }}</td>
+              <td>{{ entry.article.article_name }}</td>
+              <td>Rs.{{ entry.total_amount|rupees }}</td>
+              <td><span class="status-pill status-{{ entry.status }}">{{ entry.status|title }}</span></td>
+              <td>{{ entry.created_at|date:"d/m/Y" }}</td>
+              <td>
+                <div class="actions-inline">
+                {% if entry.attachment_id %}
+                <button
+                  class="btn icon-btn js-attachment-preview"
+                  type="button"
+                  title="Preview attachment"
+                  aria-label="Preview attachment"
+                  data-preview-url="{{ entry.attachment_preview_url }}"
+                  data-preview-title="{{ entry.attachment_title }}"
+                  data-preview-source="{{ entry.attachment_source }}"
+                  data-download-url="{{ entry.attachment_preview_url }}?download=1"
+                >
+                  <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                <button
+                  class="btn icon-btn js-attachment-print"
+                  type="button"
+                  title="Print file"
+                  aria-label="Print file"
+                  data-print-url="{{ entry.attachment_preview_url }}"
+                >
+                  <svg viewBox="0 0 24 24"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>
+                </button>
+                {% endif %}
+                {% if entry.status != "submitted" %}
+                <a class="btn btn-edit icon-btn" title="Modify" aria-label="Modify" href="{% url 'ui:master-entry-public-edit' entry.id %}">
+                  <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </a>
+                {% elif request.user.role == "admin" %}
+                  <form method="post" action="{% url 'ui:master-entry-public-reopen' entry.id %}" style="display: inline;" data-confirm-message="Reopen this public application as draft?">
+                    {% csrf_token %}
+                    <button class="btn btn-reopen icon-btn" type="submit" title="Reopen" aria-label="Reopen">
+                      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>
+                    </button>
+                  </form>
+                {% endif %}
+                {% if request.user.role == "admin" %}
+                  <form method="post" action="{% url 'ui:master-entry-public-delete' entry.id %}" style="display: inline;" data-confirm-message="Delete this public entry?">
+                    {% csrf_token %}
+                    <button class="btn btn-danger icon-btn" type="submit" title="Delete" aria-label="Delete">
+                      <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                    </button>
+                  </form>
+                {% endif %}
+                </div>
+              </td>
+            </tr>
+            <tr id="public-{{ entry.id }}" class="summary-row" hidden>
+              <td colspan="8">
+                <div class="summary-card">
+                  <div class="grid2">
+                    <div><strong>Mobile:</strong> {{ entry.mobile|default:"-" }}</div>
+                    <div><strong>Gender:</strong> {{ entry.gender|default:"-" }}</div>
+                    {% if entry.female_status %}
+                      <div><strong>Female Status:</strong> {{ entry.get_female_status_display }}</div>
+                      <div></div>
+                    {% endif %}
+                    <div><strong>Added On:</strong> {{ entry.created_at|date:"d/m/Y H:i" }}</div>
+                    <div><strong>Modified On:</strong> {{ entry.updated_at|date:"d/m/Y H:i" }}</div>
+                    <div style="grid-column: span 2;"><strong>Address:</strong> {{ entry.address|default:"-" }}</div>
+                    <div style="grid-column: span 2;"><strong>Comments:</strong> {{ entry.notes|default:"-" }}</div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="8">No public entries created yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="toolbar" style="justify-content: flex-end; margin-top: 12px;">
+        <div class="small"><strong>Total Accrued:</strong> Rs.{{ public_total_accrued|rupees }}</div>
+      </div>
+    {% else %}
+      <div class="toolbar" style="justify-content: space-between;">
+        <div class="toolbar" style="margin-bottom: 0;">
+          <div class="list-view-controls" aria-label="Institution expand controls">
+            <button class="icon-btn list-icon-btn" type="button" data-expand-all="institutions" title="Expand all" aria-label="Expand all">
+              <svg viewBox="0 0 24 24"><path d="M7 3H3v4"/><path d="M17 3h4v4"/><path d="M21 17v4h-4"/><path d="M3 17v4h4"/><path d="M8 8l-5-5"/><path d="M16 8l5-5"/><path d="M8 16l-5 5"/><path d="M16 16l5 5"/></svg>
+            </button>
+            <button class="icon-btn list-icon-btn" type="button" data-collapse-all="institutions" title="Collapse all" aria-label="Collapse all">
+              <svg viewBox="0 0 24 24"><path d="M9 3H3v6"/><path d="M15 3h6v6"/><path d="M21 15v6h-6"/><path d="M3 15v6h6"/><path d="M3 9l6-6"/><path d="M21 9l-6-6"/><path d="M3 15l6 6"/><path d="M21 15l-6 6"/></svg>
+            </button>
+          </div>
+        </div>
+        <a class="btn compact-btn compact-btn-primary add-entry-btn" href="{% url 'ui:master-entry-institution-create' %}">Create</a>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=application_number&dir={% if sort_by == 'application_number' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">APP NUMBER {% if sort_by == "application_number" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=institution_name&dir={% if sort_by == 'institution_name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">INSTITUTION NAME {% if sort_by == "institution_name" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th>TYPE</th>
+            <th>ARTICLES</th>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=total_value&dir={% if sort_by == 'total_value' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">TOTAL VALUE {% if sort_by == "total_value" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=status&dir={% if sort_by == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">STATUS {% if sort_by == "status" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=created_at&dir={% if sort_by == 'created_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">CREATED AT {% if sort_by == "created_at" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th>ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in institution_groups %}
+            <tr class="summary-parent-row" data-target="institution-{{ row.application_number }}">
+              <td>
+                <button class="summary-toggle" type="button" data-target="institution-{{ row.application_number }}">
+                  <span class="summary-arrow">▸</span>
+                  <span>{% if row.application_number and row.application_number|slice:":10" == "DRAFT-INS-" %}-{% else %}{{ row.application_number|default:"-" }}{% endif %}</span>
+                </button>
+              </td>
+              <td>{{ row.institution_name }}</td>
+              <td>{{ row.institution_type }}</td>
+              <td>{{ row.article_count }} item(s), {{ row.total_quantity }} quantity</td>
+              <td>Rs.{{ row.total_value|rupees }}</td>
+              <td><span class="status-pill status-{{ row.status }}">{{ row.status|title }}</span></td>
+              <td>{{ row.created_at|date:"d/m/Y" }}</td>
+              <td>
+                <div class="actions-inline">
+                {% if row.attachment_id %}
+                <button
+                  class="btn icon-btn js-attachment-preview"
+                  type="button"
+                  title="Preview attachment"
+                  aria-label="Preview attachment"
+                  data-preview-url="{{ row.attachment_preview_url }}"
+                  data-preview-title="{{ row.attachment_title }}"
+                  data-preview-source="{{ row.attachment_source }}"
+                  data-download-url="{{ row.attachment_preview_url }}?download=1"
+                >
+                  <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                <button
+                  class="btn icon-btn js-attachment-print"
+                  type="button"
+                  title="Print file"
+                  aria-label="Print file"
+                  data-print-url="{{ row.attachment_preview_url }}"
+                >
+                  <svg viewBox="0 0 24 24"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>
+                </button>
+                {% endif %}
+                {% if row.status != "submitted" %}
+                <a class="btn btn-edit icon-btn" title="Modify" aria-label="Modify" href="{% url 'ui:master-entry-institution-edit' row.application_number %}">
+                  <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </a>
+                {% elif request.user.role == "admin" %}
+                  <form method="post" action="{% url 'ui:master-entry-institution-reopen' row.application_number %}" style="display: inline;" data-confirm-message="Reopen this institution application as draft?">
+                    {% csrf_token %}
+                    <button class="btn btn-reopen icon-btn" type="submit" title="Reopen" aria-label="Reopen">
+                      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>
+                    </button>
+                  </form>
+                {% endif %}
+                {% if request.user.role == "admin" %}
+                  <form method="post" action="{% url 'ui:master-entry-institution-delete' row.application_number %}" style="display: inline;" data-confirm-message="Delete this institution entry?">
+                    {% csrf_token %}
+                    <button class="btn btn-danger icon-btn" type="submit" title="Delete" aria-label="Delete">
+                      <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                    </button>
+                  </form>
+                {% endif %}
+                </div>
+              </td>
+            </tr>
+            <tr id="institution-{{ row.application_number }}" class="summary-row" hidden>
+              <td colspan="8">
+                <div class="summary-card">
+                  <div class="grid2" style="margin-bottom: 14px;">
+                    <div><strong>Mobile:</strong> {{ row.mobile|default:"-" }}</div>
+                    <div></div>
+                    <div style="grid-column: span 2;"><strong>Address:</strong> {{ row.address|default:"-" }}</div>
+                  </div>
+                  <table class="summary-detail-table">
+                    <thead>
+                      <tr>
+                        <th>Article</th>
+                        <th>Qty</th>
+                        <th>Unit Cost</th>
+                        <th>Total</th>
+                        <th>Comments</th>
+                        <th>Added / Modified On</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for item in row.detail_items %}
+                        <tr>
+                          <td>{{ item.article_name }}</td>
+                          <td>{{ item.quantity }}</td>
+                          <td>Rs.{{ item.unit_cost|rupees }}</td>
+                          <td>Rs.{{ item.total_amount|rupees }}</td>
+                          <td>{{ item.notes|default:"-" }}</td>
+                          <td>{{ item.changed_at|date:"d/m/Y H:i" }}</td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="8">No institution entries created yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="toolbar" style="justify-content: flex-end; margin-top: 12px;">
+        <div class="small"><strong>Total Accrued:</strong> Rs.{{ institution_total_accrued|rupees }}</div>
+      </div>
+    {% endif %}
+  </section>
+
+  <style>
+    .master-entry-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .master-count-pill {
+      background: #fffaf0;
+      border-color: #ead9ac;
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 0.95rem;
+    }
+    .submit-popup-card {
+      position: relative;
+    }
+    .submit-popup-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 28px;
+      height: 28px;
+      border: 0;
+      background: transparent;
+      color: #8a7555;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .submit-popup-close:hover {
+      background: rgba(138, 117, 85, 0.08);
+      color: #5f4c2c;
+    }
+    .submit-popup-close svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .master-filter-card {
+      margin-bottom: 18px;
+      padding: 12px 14px;
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      background: linear-gradient(180deg, #fffef8 0%, #fff9ef 100%);
+    }
+    .beneficiary-switch-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .beneficiary-switch-capsule {
+      display: grid;
+      gap: 5px;
+      min-width: 220px;
+      max-width: 260px;
+      padding: 10px 12px;
+      border: 1px solid #eddcb8;
+      border-radius: 16px;
+      background: #fffdfa;
+    }
+    .beneficiary-switch-capsule label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #8a7555;
+      letter-spacing: 0.01em;
+    }
+    .beneficiary-switch-capsule .input {
+      min-height: 36px;
+      padding: 6px 10px;
+      background: #ffffff;
+    }
+    .export-menu-inline {
+      flex-shrink: 0;
+      align-self: flex-end;
+    }
+    .master-filter-grid {
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) 150px 150px 160px auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .filter-field {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+    .filter-field label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #8a7555;
+      letter-spacing: 0.01em;
+    }
+    .filter-search {
+      min-width: 0;
+    }
+    .master-filter-card .input {
+      min-height: 40px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: #fffdfa;
+      border-color: #eddcb8;
+      box-shadow: none;
+      font-size: 0.95rem;
+    }
+    .master-filter-card .input:focus {
+      border-color: #dfc88b;
+      box-shadow: 0 0 0 3px rgba(241, 180, 0, 0.12);
+      outline: none;
+    }
+    .filter-actions {
+      display: inline-flex;
+      gap: 8px;
+      align-items: end;
+      justify-content: flex-end;
+      flex-wrap: nowrap;
+      white-space: nowrap;
+    }
+    .compact-btn {
+      min-height: 34px;
+      padding: 6px 11px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      box-shadow: none;
+    }
+    .compact-btn svg {
+      width: 15px;
+      height: 15px;
+    }
+    .compact-btn-primary {
+      background: linear-gradient(180deg, #f8c73f 0%, #efb20a 100%);
+      border-color: #e8c368;
+    }
+    .master-reset-btn {
+      background: #fffdf7;
+      border-color: #eddcb8;
+      color: #7a5a13;
+    }
+    .master-reset-btn:hover {
+      background: #fff6df;
+      color: #6a4c0f;
+    }
+    .filter-hint {
+      margin-top: 8px;
+      color: #9a845f;
+      font-size: 0.83rem;
+    }
+    .list-view-controls {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .list-icon-btn {
+      width: 28px;
+      min-width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      border-color: #eed7a0;
+      background: #fffaf0;
+      color: #8a7555;
+    }
+    .list-icon-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+    .list-icon-btn:hover {
+      background: #fff4d2;
+      color: #6f4b00;
+    }
+    .add-entry-btn {
+      min-height: 36px;
+      padding: 8px 14px;
+      border-radius: 13px;
+      font-size: 0.95rem;
+    }
+    .export-menu {
+      position: relative;
+    }
+    .export-menu summary {
+      list-style: none;
+    }
+    .export-menu summary::-webkit-details-marker {
+      display: none;
+    }
+    .export-menu-panel {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 8px);
+      min-width: 210px;
+      display: grid;
+      gap: 2px;
+      padding: 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: #fffdf7;
+      box-shadow: 0 14px 28px rgba(17, 24, 39, 0.12);
+      z-index: 3;
+    }
+    .export-menu-panel a {
+      padding: 8px 10px;
+      border-radius: 10px;
+      color: var(--text-primary);
+    }
+    .export-menu-panel a:hover {
+      background: #fff4d2;
+      text-decoration: none;
+    }
+    table thead th a {
+      color: inherit;
+      text-decoration: none;
+      font-weight: inherit;
+    }
+    table thead th a:hover {
+      color: inherit;
+      text-decoration: none;
+    }
+    .submit-popup {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(17, 24, 39, 0.18);
+      z-index: 80;
+    }
+    .submit-popup-card {
+      min-width: 280px;
+      max-width: 420px;
+      padding: 22px 28px;
+      border-radius: 18px;
+      background: #fffdf7;
+      border: 1px solid #ead9ac;
+      box-shadow: 0 20px 60px rgba(82, 47, 0, 0.18);
+      text-align: center;
+    }
+    .submit-popup-label {
+      font-size: 0.95rem;
+      color: #8a7555;
+      margin-bottom: 8px;
+    }
+    .submit-popup-number {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #6f4b00;
+      margin-bottom: 6px;
+    }
+    .submit-popup-name {
+      font-size: 1.05rem;
+      color: var(--text-primary);
+    }
+    .summary-parent-row {
+      cursor: pointer;
+    }
+    .summary-parent-row:hover td {
+      background: rgba(241, 180, 0, 0.06);
+    }
+    .summary-toggle {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      color: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font: inherit;
+      pointer-events: none;
+    }
+    .summary-arrow {
+      display: inline-block;
+      transition: transform 0.18s ease;
+      color: #6f6554;
+    }
+    .summary-toggle[aria-expanded="true"] .summary-arrow {
+      transform: rotate(90deg);
+    }
+    .summary-row td {
+      background: #fffaf0;
+      padding: 0;
+    }
+    .summary-card {
+      padding: 16px;
+      border-top: 1px solid #f1e0b8;
+    }
+    .summary-detail-table {
+      width: 100%;
+    }
+    .summary-detail-table th,
+    .summary-detail-table td {
+      vertical-align: top;
+      padding-top: 8px;
+      padding-bottom: 8px;
+    }
+    .summary-detail-table th {
+      white-space: nowrap;
+    }
+    .summary-detail-table th:not(:first-child),
+    .summary-detail-table td:not(:first-child) {
+      text-align: center;
+    }
+    .summary-detail-table th:first-child,
+    .summary-detail-table td:first-child {
+      text-align: left;
+    }
+    .summary-detail-table td:nth-child(6) {
+      white-space: nowrap;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      border: 1px solid var(--border-color);
+      background: #fff7e6;
+      color: #6f4b00;
+    }
+    .status-pill.status-submitted {
+      background: #dcfce7;
+      color: #166534;
+      border-color: #86efac;
+    }
+    .status-pill.status-draft {
+      background: #ffedd5;
+      color: #9a3412;
+      border-color: #fdba74;
+    }
+    @media (max-width: 1000px) {
+      .master-filter-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .filter-actions {
+        grid-column: 1 / -1;
+        justify-content: flex-start;
+      }
+    }
+    @media (max-width: 640px) {
+      .master-filter-grid {
+        grid-template-columns: 1fr;
+      }
+      .beneficiary-switch-capsule {
+        min-width: 0;
+        max-width: 100%;
+        width: 100%;
+      }
+      .filter-actions {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+      }
+      .filter-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .summary-card {
+        padding: 12px;
+      }
+    }
+  </style>
+  <script>
+    (function() {
+      var submitPopups = Array.from(document.querySelectorAll(".submit-popup"));
+      submitPopups.forEach(function(popup) {
+        var closeButton = popup.querySelector(".submit-popup-close");
+        if (closeButton) {
+          closeButton.addEventListener("click", function() {
+            popup.remove();
+          });
+        }
+        window.setTimeout(function() {
+          if (popup.isConnected) popup.remove();
+        }, 3000);
+      });
+
+      var toggles = Array.from(document.querySelectorAll(".summary-toggle"));
+      var parentRows = Array.from(document.querySelectorAll(".summary-parent-row"));
+
+      function setExpanded(button, expanded) {
+        var target = document.getElementById(button.dataset.target);
+        if (!target) return;
+        if (expanded) {
+          target.removeAttribute("hidden");
+          button.setAttribute("aria-expanded", "true");
+        } else {
+          target.setAttribute("hidden", "");
+          button.setAttribute("aria-expanded", "false");
+        }
+      }
+
+      function collapseOtherRows(activeButton) {
+        toggles.forEach(function(button) {
+          if (button !== activeButton) {
+            setExpanded(button, false);
+          }
+        });
+      }
+
+      function toggleFromButton(button) {
+        var isExpanded = button.getAttribute("aria-expanded") === "true";
+        if (!isExpanded) {
+          collapseOtherRows(button);
+        }
+        setExpanded(button, !isExpanded);
+      }
+
+      toggles.forEach(function(button) {
+        button.setAttribute("aria-expanded", "false");
+        button.addEventListener("click", function(event) {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleFromButton(button);
+        });
+      });
+
+      parentRows.forEach(function(row) {
+        row.setAttribute("tabindex", "0");
+        row.setAttribute("role", "button");
+        row.setAttribute("aria-label", "Toggle application summary");
+        row.addEventListener("click", function(event) {
+          if (event.target.closest("a, button, input, select, textarea, label, form, summary")) return;
+          var toggle = row.querySelector(".summary-toggle");
+          if (!toggle) return;
+          toggleFromButton(toggle);
+        });
+        row.addEventListener("keydown", function(event) {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          if (event.target.closest("a, button, input, select, textarea, label, form, summary")) return;
+          event.preventDefault();
+          var toggle = row.querySelector(".summary-toggle");
+          if (!toggle) return;
+          toggleFromButton(toggle);
+        });
+      });
+
+      document.querySelectorAll("[data-expand-all]").forEach(function(button) {
+        button.addEventListener("click", function() {
+          toggles.forEach(function(toggle) {
+            setExpanded(toggle, true);
+          });
+        });
+      });
+
+      document.querySelectorAll("[data-collapse-all]").forEach(function(button) {
+        button.addEventListener("click", function() {
+          toggles.forEach(function(toggle) {
+            setExpanded(toggle, false);
+          });
+        });
+      });
+    })();
+  </script>
+{% endblock %}

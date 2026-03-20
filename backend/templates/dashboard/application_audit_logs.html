@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="card">
+    <div class="toolbar" style="justify-content: space-between;">
+      <div>
+        <h2 style="margin: 0 0 6px;">Applications Audit Logs</h2>
+        <p style="margin: 0; color: var(--text-secondary);">
+          Track create, update, and delete activity for district, public, and institution applications.
+        </p>
+      </div>
+    </div>
+
+    <form method="get" class="card" style="margin-bottom: 16px; background: linear-gradient(180deg, #fffef9 0%, #fff9ef 100%);">
+      <div class="toolbar" style="margin-bottom: 0; align-items: end;">
+        <div style="flex: 1;">
+          <label>Search</label>
+          <input class="input" type="text" name="q" value="{{ search_query }}" placeholder="Search by application, action, or user">
+        </div>
+        <div>
+          <label>Application Type</label>
+          <select class="input" name="application_type">
+            <option value="">All</option>
+            {% for value, label in application_type_choices %}
+              <option value="{{ value }}" {% if application_type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>User</label>
+          <select class="input" name="user_id">
+            <option value="">All</option>
+            {% for user in audit_users %}
+              <option value="{{ user.id }}" {% if selected_user_id == user.id|stringformat:"s" %}selected{% endif %}>
+                {% if user.first_name %}{{ user.first_name }}{% else %}{{ user.email }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>From</label>
+          <input class="input" type="date" name="date_from" value="{{ date_from }}">
+        </div>
+        <div>
+          <label>To</label>
+          <input class="input" type="date" name="date_to" value="{{ date_to }}">
+        </div>
+        <button class="btn" type="submit">Apply</button>
+        {% if search_query or application_type or selected_user_id or date_from or date_to %}
+          <a class="btn" href="{% url 'ui:application-audit-logs' %}">Reset</a>
+        {% endif %}
+      </div>
+    </form>
+
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Action</th>
+            <th>Application Type</th>
+            <th>Application</th>
+            <th>User</th>
+            <th>What Changed</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in audit_rows %}
+            <tr>
+              <td>{{ row.log.created_at|date:"d/m/Y H:i" }}</td>
+              <td>{{ row.log.get_action_type_display }}</td>
+              <td>{{ row.log.entity_type|cut:"_application"|title }} Application</td>
+              <td>{{ row.application_label }}</td>
+              <td>{{ row.user_label }}</td>
+              <td>
+                {% for line in row.change_lines %}
+                  <div style="margin-bottom: 4px;">{{ line }}</div>
+                {% endfor %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6">No application audit logs yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if is_paginated %}
+      <div class="toolbar" style="justify-content: flex-end; margin-top: 16px;">
+        {% if page_obj.has_previous %}
+          <a class="btn" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if application_type %}&application_type={{ application_type|urlencode }}{% endif %}{% if selected_user_id %}&user_id={{ selected_user_id|urlencode }}{% endif %}{% if date_from %}&date_from={{ date_from|urlencode }}{% endif %}{% if date_to %}&date_to={{ date_to|urlencode }}{% endif %}">Previous</a>
+        {% endif %}
+        <div class="user-pill">Page {{ page_obj.number }} of {{ paginator.num_pages }}</div>
+        {% if page_obj.has_next %}
+          <a class="btn" href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}{% if application_type %}&application_type={{ application_type|urlencode }}{% endif %}{% if selected_user_id %}&user_id={{ selected_user_id|urlencode }}{% endif %}{% if date_from %}&date_from={{ date_from|urlencode }}{% endif %}{% if date_to %}&date_to={{ date_to|urlencode }}{% endif %}">Next</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

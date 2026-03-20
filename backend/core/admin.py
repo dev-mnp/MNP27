@@ -94,4 +94,3 @@ class PublicBeneficiaryHistoryAdmin(admin.ModelAdmin):
     list_display = ("application_number", "aadhar_number", "name", "year", "is_handicapped", "is_selected")
     list_filter = ("year", "is_handicapped", "is_selected")
     search_fields = ("application_number", "aadhar_number", "name")
-

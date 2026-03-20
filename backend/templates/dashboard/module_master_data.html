@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% load currency %}
+
+{% block content %}
+  <section class="card">
+    <div class="toolbar" style="justify-content: space-between; margin-bottom: 20px;">
+      <div>
+        <h2 style="margin: 0 0 6px;">Master Data</h2>
+        <p style="margin: 0; color: var(--text-secondary);">
+          Yearly source files are uploaded here and stored in the database for the rest of the app to use.
+        </p>
+      </div>
+      <div class="small">
+        Districts: {{ summary.districts }} | Articles: {{ summary.articles }} | Past records: {{ summary.history }}
+      </div>
+    </div>
+
+    <div class="toolbar" style="margin-bottom: 20px;">
+      <a class="btn" {% if active_data_key == 'districts' %}style="background: #eff6ff; border-color: #93c5fd; color: #1d4ed8;"{% endif %} href="{% url 'ui:master-data-districts' %}">District Master</a>
+      <a class="btn" {% if active_data_key == 'articles' %}style="background: #eff6ff; border-color: #93c5fd; color: #1d4ed8;"{% endif %} href="{% url 'ui:master-data-articles' %}">Article Price List</a>
+      <a class="btn" {% if active_data_key == 'history' %}style="background: #eff6ff; border-color: #93c5fd; color: #1d4ed8;"{% endif %} href="{% url 'ui:master-data-history' %}">Past History</a>
+    </div>
+
+    <div class="card" style="background: #f8fafc;">
+      <div class="toolbar" style="justify-content: space-between; align-items: flex-start;">
+        <div>
+          <h3 style="margin: 0 0 8px;">{{ page_title }}</h3>
+          <p style="margin: 0; color: var(--text-secondary); max-width: 780px;">{{ upload_help }}</p>
+        </div>
+      </div>
+      <form method="post" enctype="multipart/form-data" class="toolbar" style="align-items: end; margin-top: 16px;">
+        {% csrf_token %}
+        <div style="min-width: 320px; flex: 1;">
+          <label for="id_file">CSV file</label>
+          {{ upload_form.file }}
+        </div>
+        {% if replace_supported %}
+          <label style="display: flex; align-items: center; color: var(--text-primary); margin-bottom: 8px;">
+            {{ upload_form.replace_existing }} Replace existing history rows first
+          </label>
+        {% endif %}
+        <button class="btn" type="submit">Upload and import</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="toolbar" style="justify-content: space-between;">
+        <h3 style="margin: 0;">Stored records</h3>
+        <div class="small">Showing up to 100 rows</div>
+      </div>
+
+      {% if active_data_key == 'districts' %}
+        <table>
+          <thead>
+            <tr>
+              <th>APP NUMBER</th>
+              <th>DISTRICT NAME</th>
+              <th>PRESIDENT NAME</th>
+              <th>MOBILE</th>
+              <th>ALLOTTED BUDGET</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in records %}
+              <tr>
+                <td>{{ row.application_number }}</td>
+                <td>{{ row.district_name }}</td>
+                <td>{{ row.president_name }}</td>
+                <td>{{ row.mobile_number }}</td>
+                <td>Rs.{{ row.allotted_budget|rupees }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5">No district master data imported yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% elif active_data_key == 'articles' %}
+        <table>
+          <thead>
+            <tr>
+              <th>ARTICLE</th>
+              <th>TYPE</th>
+              <th>CATEGORY</th>
+              <th>MASTER CATEGORY</th>
+              <th>COST</th>
+              <th>ACTIVE</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in records %}
+              <tr>
+                <td>{{ row.article_name }}</td>
+                <td>{{ row.item_type }}</td>
+                <td>{{ row.category|default:'-' }}</td>
+                <td>{{ row.master_category|default:'-' }}</td>
+                <td>Rs.{{ row.cost_per_unit|rupees }}</td>
+                <td>{{ row.is_active|yesno:'Yes,No' }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="6">No article price list imported yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <table>
+          <thead>
+            <tr>
+              <th>YEAR</th>
+              <th>NAME</th>
+              <th>AADHAAR</th>
+              <th>ARTICLE</th>
+              <th>APP NUMBER</th>
+              <th>CATEGORY</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in records %}
+              <tr>
+                <td>{{ row.year }}</td>
+                <td>{{ row.name }}</td>
+                <td>{{ row.aadhar_number }}</td>
+                <td>{{ row.article_name|default:'-' }}</td>
+                <td>{{ row.application_number|default:'-' }}</td>
+                <td>{{ row.category|default:'-' }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="6">No past history imported yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}

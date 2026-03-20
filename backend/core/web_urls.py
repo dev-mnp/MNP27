@@ -1,0 +1,49 @@
+from __future__ import annotations
+
+from django.urls import path
+
+from . import web_views
+
+app_name = "ui"
+
+urlpatterns = [
+    path("", web_views.MasterEntryView.as_view(), name="landing"),
+    path("master-entry/", web_views.MasterEntryView.as_view(), name="master-entry"),
+    path("master-entry/district/new/", web_views.DistrictMasterEntryCreateView.as_view(), name="master-entry-district-create"),
+    path("master-entry/district/<int:district_id>/", web_views.DistrictMasterEntryDetailView.as_view(), name="master-entry-district-detail"),
+    path("master-entry/district/<int:district_id>/edit/", web_views.DistrictMasterEntryUpdateView.as_view(), name="master-entry-district-edit"),
+    path("master-entry/district/<int:district_id>/delete/", web_views.DistrictMasterEntryDeleteView.as_view(), name="master-entry-district-delete"),
+    path("master-entry/district/<int:district_id>/reopen/", web_views.DistrictMasterEntryReopenView.as_view(), name="master-entry-district-reopen"),
+    path("master-entry/district/<int:district_id>/attachments/upload/", web_views.DistrictApplicationAttachmentUploadView.as_view(), name="district-attachment-upload"),
+    path("master-entry/district/<int:district_id>/attachments/<int:attachment_id>/delete/", web_views.DistrictApplicationAttachmentDeleteView.as_view(), name="district-attachment-delete"),
+    path("master-entry/public/new/", web_views.PublicMasterEntryCreateView.as_view(), name="master-entry-public-create"),
+    path("master-entry/public/<int:pk>/", web_views.PublicMasterEntryDetailView.as_view(), name="master-entry-public-detail"),
+    path("master-entry/public/<int:pk>/edit/", web_views.PublicMasterEntryUpdateView.as_view(), name="master-entry-public-edit"),
+    path("master-entry/public/<int:pk>/delete/", web_views.PublicMasterEntryDeleteView.as_view(), name="master-entry-public-delete"),
+    path("master-entry/public/<int:pk>/reopen/", web_views.PublicMasterEntryReopenView.as_view(), name="master-entry-public-reopen"),
+    path("master-entry/public/<int:pk>/attachments/upload/", web_views.PublicApplicationAttachmentUploadView.as_view(), name="public-attachment-upload"),
+    path("master-entry/public/<int:pk>/attachments/<int:attachment_id>/delete/", web_views.PublicApplicationAttachmentDeleteView.as_view(), name="public-attachment-delete"),
+    path("master-entry/institutions/new/", web_views.InstitutionsMasterEntryCreateView.as_view(), name="master-entry-institution-create"),
+    path("master-entry/institutions/<str:application_number>/", web_views.InstitutionsMasterEntryDetailView.as_view(), name="master-entry-institution-detail"),
+    path("master-entry/institutions/<str:application_number>/edit/", web_views.InstitutionsMasterEntryUpdateView.as_view(), name="master-entry-institution-edit"),
+    path("master-entry/institutions/<str:application_number>/delete/", web_views.InstitutionsMasterEntryDeleteView.as_view(), name="master-entry-institution-delete"),
+    path("master-entry/institutions/<str:application_number>/reopen/", web_views.InstitutionsMasterEntryReopenView.as_view(), name="master-entry-institution-reopen"),
+    path("master-entry/institutions/<str:application_number>/attachments/upload/", web_views.InstitutionApplicationAttachmentUploadView.as_view(), name="institution-attachment-upload"),
+    path("master-entry/institutions/<str:application_number>/attachments/<int:attachment_id>/delete/", web_views.InstitutionApplicationAttachmentDeleteView.as_view(), name="institution-attachment-delete"),
+    path("applications/attachments/<int:attachment_id>/download/", web_views.ApplicationAttachmentDownloadView.as_view(), name="application-attachment-download"),
+    path("master-data/districts/", web_views.MasterDataDistrictView.as_view(), name="master-data-districts"),
+    path("master-data/articles/", web_views.MasterDataArticleView.as_view(), name="master-data-articles"),
+    path("master-data/history/", web_views.MasterDataHistoryView.as_view(), name="master-data-history"),
+    path("applications/audit-logs/", web_views.ApplicationAuditLogListView.as_view(), name="application-audit-logs"),
+    path("articles/", web_views.ArticleListView.as_view(), name="article-list"),
+    path("articles/new/", web_views.ArticleCreateView.as_view(), name="article-create"),
+    path("articles/<int:pk>/edit/", web_views.ArticleUpdateView.as_view(), name="article-edit"),
+    path("articles/<int:pk>/delete/", web_views.ArticleDeleteView.as_view(), name="article-delete"),
+    path("fund-requests/", web_views.FundRequestListView.as_view(), name="fund-request-list"),
+    path("fund-requests/new/", web_views.FundRequestCreateView.as_view(), name="fund-request-create"),
+    path("fund-requests/<int:pk>/", web_views.FundRequestDetailView.as_view(), name="fund-request-detail"),
+    path("fund-requests/<int:pk>/edit/", web_views.FundRequestUpdateView.as_view(), name="fund-request-edit"),
+    path("fund-requests/<int:pk>/delete/", web_views.FundRequestDeleteView.as_view(), name="fund-request-delete"),
+    path("fund-requests/<int:pk>/submit/", web_views.FundRequestSubmitView.as_view(), name="fund-request-submit"),
+    path("fund-requests/<int:pk>/documents/new/", web_views.FundRequestDocumentUploadView.as_view(), name="fund-request-upload"),
+]

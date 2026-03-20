@@ -1,0 +1,607 @@
+{% extends "base.html" %}
+{% load currency %}
+
+{% block content %}
+  <section class="card">
+    <div class="toolbar" style="justify-content: space-between;">
+      <div>
+        <h2 style="margin: 0 0 6px;">Public Application</h2>
+        <p style="margin: 0; color: var(--text-secondary);">
+          One beneficiary can have one article or aid in a single public application.
+        </p>
+        {% if application_status %}
+          <div class="status-pill status-{{ application_status }}" style="margin-top: 10px;">{{ application_status|title }}</div>
+        {% endif %}
+      </div>
+      <a class="btn" href="{% url 'ui:master-entry' %}?type=public"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/><path d="M21 12H9"/></svg><span>Back</span></a>
+    </div>
+
+    {% if form_errors %}
+      <ul class="messages inline-feedback-group">
+        {% for error in form_errors %}
+          <li class="error">{{ error }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if form_successes %}
+      <ul class="messages inline-feedback-group">
+        {% for success in form_successes %}
+          <li class="success">{{ success }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if form_warnings %}
+      <ul class="messages inline-feedback-group">
+        {% for warning in form_warnings %}
+          <li class="warning">{{ warning }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    <form method="post" id="public-entry-form" data-unsaved-guard="true" {% if request.resolver_match.url_name == 'master-entry-public-edit' %}data-edit-mode="true" data-confirm-message="Save changes to this public entry?"{% else %}data-edit-mode="false"{% endif %}>
+      {% csrf_token %}
+      <div class="form-section-card">
+      <div class="section-title-row">
+        <div>
+          <h3 class="section-title">Beneficiary check</h3>
+          <div class="section-note">Verify Aadhaar first so matching history and current records are shown clearly.</div>
+        </div>
+      </div>
+      <div class="toolbar" style="align-items: end; margin-bottom: 0;">
+        <div style="flex: 1;">
+          <label>Aadhar Number</label>
+          <input class="input" type="text" name="aadhar_number" value="{{ public_form_data.aadhar_number }}" placeholder="Enter 12-digit Aadhaar number" maxlength="12" inputmode="numeric" pattern="[0-9]{12}">
+        </div>
+        <button class="btn" type="submit" name="action" value="verify"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7H3V5h11"/></svg><span>Verify</span></button>
+      </div>
+      </div>
+
+      {% if history_matches %}
+        <div class="card warning-panel">
+          <h3 style="margin-top: 0;">Past beneficiary matches</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Year</th>
+                <th>Name</th>
+                <th>Article</th>
+                <th>Application</th>
+                <th>Category</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in history_matches %}
+                <tr>
+                  <td>{{ row.year }}</td>
+                  <td>{{ row.name }}</td>
+                  <td>{{ row.article_name|default:"-" }}</td>
+                  <td>{{ row.application_number|default:"-" }}</td>
+                  <td>{{ row.category|default:"-" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+
+      {% if current_match %}
+        <div class="card warning-panel current-match-panel">
+          <div class="toolbar" style="justify-content: space-between;">
+            <div><h3 style="margin: 0 0 4px;">Current public record match</h3><div class="section-note">This Aadhaar already exists in the current records.</div></div>
+            <a class="btn" href="{% url 'ui:master-entry-public-edit' current_match.id %}">Modify existing record</a>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Application</th>
+                <th>Name</th>
+                <th>Aadhaar</th>
+                <th>Article</th>
+                <th>Quantity</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>{% if current_match.application_number and current_match.application_number|slice:":10" == "DRAFT-PUB-" %}Draft{% else %}{{ current_match.application_number|default:"-" }}{% endif %}</td>
+                <td>{{ current_match.name }}</td>
+                <td>{{ current_match.aadhar_number }}</td>
+                <td>{{ current_match.article.article_name }}</td>
+                <td>{{ current_match.quantity }}</td>
+                <td>Rs.{{ current_match.total_amount|rupees }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="field-hint" style="margin-top: 10px; color: #9a3412;">This form is locked because this Aadhaar already exists in current applications. Use Modify existing record.</div>
+      {% endif %}
+
+      <fieldset class="duplicate-lock-zone" {% if current_match %}disabled{% endif %}>
+      <div class="form-section-card">
+      <div class="section-title-row">
+        <div>
+          <h3 class="section-title">Beneficiary details</h3>
+          <div class="section-note">Core personal information for this public beneficiary.</div>
+        </div>
+      </div>
+      <div class="grid2">
+        <div style="grid-column: span 2;">
+          <label>Name</label>
+          <input class="input" type="text" name="name" value="{{ public_form_data.name }}">
+        </div>
+
+        <div>
+          <label>Handicapped</label>
+          <div class="toolbar" style="margin-bottom: 0;">
+            <label><input type="radio" name="is_handicapped" value="true" {% if public_form_data.is_handicapped == "true" %}checked{% endif %}> Yes</label>
+            <label><input type="radio" name="is_handicapped" value="false" {% if public_form_data.is_handicapped == "false" %}checked{% endif %}> No</label>
+          </div>
+        </div>
+
+        <div>
+          <label>Gender</label>
+          <div class="toolbar" style="margin-bottom: 0;">
+            {% for value, label in gender_choices %}
+              <label><input type="radio" name="gender" value="{{ value }}" {% if public_form_data.gender == value %}checked{% endif %}> {{ label }}</label>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div style="grid-column: span 2;" id="female-status-wrap">
+          <label>Gender Category</label>
+          <select class="input" name="female_status" id="female-status-select">
+            <option value="">Select Category</option>
+            {% for value, label in female_status_choices %}
+              <option value="{{ value }}" {% if public_form_data.female_status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <div class="field-hint" id="female-status-description">Choose the category that best describes the beneficiary's present situation.</div>
+        </div>
+
+        <div style="grid-column: span 2;">
+          <label>Address</label>
+          <textarea class="textarea" name="address" rows="4">{{ public_form_data.address }}</textarea>
+        </div>
+
+        <div style="grid-column: span 2;">
+          <label>Mobile Number</label>
+          <input class="input" type="text" name="mobile" value="{{ public_form_data.mobile }}" placeholder="Enter mobile number">
+          <div class="field-hint">Use `&` if you need to store more than one mobile number.</div>
+        </div>
+      </div>
+      </div>
+
+      <div class="form-section-card">
+      <div class="section-title-row">
+        <div>
+          <h3 class="section-title">Article / aid details</h3>
+          <div class="section-note">Public entries can contain only one article or aid.</div>
+        </div>
+      </div>
+      <div class="grid2">
+
+        <div style="grid-column: span 2;">
+          <label>Select Article</label>
+          <select class="input" name="article_id" id="public-article-select">
+            <option value="">Select Article</option>
+            {% for article in articles_master_list %}
+              <option value="{{ article.id }}" data-cost="{{ article.cost_per_unit }}" {% if public_form_data.article_id == article.id|stringformat:"s" %}selected{% endif %}>
+                {{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div style="grid-column: span 2;">
+          <div class="public-metrics-row">
+            <div class="public-metric-block public-metric-cost">
+              <label>Cost Per Unit</label>
+              <input class="input" type="number" min="0" step="0.01" name="article_cost_per_unit" id="public-unit-cost" value="{{ public_form_data.article_cost_per_unit|default:'0'|floatformat:'-2' }}">
+              <div class="field-hint">Auto-filled from article master. Editable only when the stored cost is 0.</div>
+            </div>
+            <div class="public-metric-block public-metric-qty">
+              <label>Quantity</label>
+              <div class="qty-control">
+                <button class="qty-btn" type="button" id="public-qty-minus" aria-label="Decrease quantity">-</button>
+                <input class="input qty-input" type="number" min="1" name="quantity" id="public-quantity" value="{{ public_form_data.quantity|default:'1' }}">
+                <button class="qty-btn" type="button" id="public-qty-plus" aria-label="Increase quantity">+</button>
+              </div>
+            </div>
+            <div class="public-metric-block public-metric-total">
+              <label>Total Value</label>
+              <div class="info-field" id="public-total-value">Rs.0</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="grid-column: span 2;">
+          <label>Comments</label>
+          <input class="input" type="text" name="notes" value="{{ public_form_data.notes }}">
+        </div>
+      </div>
+      </div>
+
+      </fieldset>
+
+      <div class="toolbar" style="justify-content: flex-end; margin-top: 20px;">
+        <a class="btn" href="{% url 'ui:master-entry' %}?type=public"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg><span>Cancel</span></a>
+        <button class="btn js-save-button{% if request.resolver_match.url_name == 'master-entry-public-edit' or current_match %} btn-disabled{% endif %}" type="submit" name="action" value="draft" {% if request.resolver_match.url_name == 'master-entry-public-edit' or current_match %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v6h6V3"/><path d="M9 17h6"/></svg><span>Save as Draft</span></button>
+        <button class="btn js-submit-button{% if current_match %} btn-disabled{% endif %}" type="submit" name="action" value="submit" {% if current_match %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Submit</span></button>
+      </div>
+    </form>
+
+    <div class="form-section-card" style="margin-top: 20px;">
+      <div class="section-title-row">
+        <div>
+          <h3 class="section-title">Attachments</h3>
+          <div class="section-note">{{ attachment_helper_text }}</div>
+          <div class="field-hint" style="margin-top: 6px;">{{ attachment_constraints_text }}</div>
+        </div>
+      </div>
+      {% if attachments_enabled %}
+        <form method="post" action="{{ attachment_upload_url }}" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="toolbar" style="align-items: end;">
+            <div style="flex: 1;">
+              <label>Upload file</label>
+              {{ attachment_upload_form.file }}
+            </div>
+            <div style="flex: 1;">
+              <label>File name</label>
+              {{ attachment_upload_form.file_name }}
+            </div>
+            <button class="btn" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg><span>Upload</span></button>
+          </div>
+        </form>
+        {% if application_attachments %}
+          <table style="margin-top: 14px;">
+            <thead>
+              <tr>
+                <th>File Name</th>
+                <th>Uploaded By</th>
+                <th>Uploaded On</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for attachment in application_attachments %}
+                <tr>
+                  <td>{{ attachment.file_name }}</td>
+                  <td>{{ attachment.uploaded_by.first_name|default:attachment.uploaded_by.email }}</td>
+                  <td>{{ attachment.created_at|date:"d/m/Y H:i" }}</td>
+                  <td>
+                    <div class="actions-inline">
+                      <button class="btn icon-btn js-attachment-preview" type="button" data-preview-url="{% url 'ui:application-attachment-download' attachment.id %}" data-preview-title="{{ attachment.file_name }}" data-preview-source="{{ attachment.file.name|lower }}" data-download-url="{% url 'ui:application-attachment-download' attachment.id %}?download=1" title="Preview file" aria-label="Preview file">
+                        <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
+                      <a class="btn icon-btn" href="{% url 'ui:application-attachment-download' attachment.id %}" target="_blank" rel="noopener" title="Open file in new tab" aria-label="Open file in new tab">
+                        <svg viewBox="0 0 24 24"><path d="M14 3h7v7"/><path d="M10 14L21 3"/><path d="M21 14v6H3V2h6"/></svg>
+                      </a>
+                      <a class="btn icon-btn" href="{% url 'ui:application-attachment-download' attachment.id %}?download=1" title="Download file" aria-label="Download file">
+                        <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+                      </a>
+                      <form method="post" action="{% url 'ui:public-attachment-delete' entry_id attachment.id %}" style="display: inline;">
+                        {% csrf_token %}
+                        <button class="btn btn-danger icon-btn" type="submit" title="Delete file" aria-label="Delete file" onclick="return window.confirm('Delete this attachment?');">
+                          <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="field-hint" style="margin-top: 10px;">No attachments uploaded yet.</div>
+        {% endif %}
+      {% endif %}
+    </div>
+  </section>
+
+  <style>
+    .duplicate-lock-zone {
+      border: 0;
+      padding: 0;
+      margin: 0;
+      min-inline-size: 0;
+    }
+    .duplicate-lock-zone[disabled] {
+      opacity: 0.62;
+    }
+    .duplicate-lock-zone[disabled] .form-section-card {
+      pointer-events: none;
+    }
+    .public-metrics-row {
+      display: grid;
+      grid-template-columns: minmax(220px, 1.2fr) minmax(220px, 0.8fr) minmax(220px, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .public-metric-block {
+      min-width: 0;
+    }
+    @media (max-width: 980px) {
+      .public-metrics-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+
+  {{ female_status_descriptions|json_script:"female-status-descriptions-data" }}
+  <script>
+    (function() {
+      const form = document.getElementById("public-entry-form");
+      const saveButtons = Array.from(form.querySelectorAll(".js-save-button"));
+      const submitButton = form.querySelector(".js-submit-button");
+      const articleSelect = document.getElementById("public-article-select");
+      const unitCostInput = document.getElementById("public-unit-cost");
+      const quantityInput = document.getElementById("public-quantity");
+      const qtyMinusBtn = document.getElementById("public-qty-minus");
+      const qtyPlusBtn = document.getElementById("public-qty-plus");
+      const totalValueInput = document.getElementById("public-total-value");
+      const genderInputs = document.querySelectorAll('input[name="gender"]');
+      const femaleStatusWrap = document.getElementById("female-status-wrap");
+      const femaleStatusSelect = document.getElementById("female-status-select");
+      const femaleStatusDescription = document.getElementById("female-status-description");
+      const femaleStatusDescriptions = JSON.parse(document.getElementById("female-status-descriptions-data").textContent);
+      const isEditMode = form.dataset.editMode === "true";
+      let lastArticleId = articleSelect.value;
+      let initialSnapshot = "";
+      let allowNavigation = false;
+
+      function formSnapshot() {
+        const formData = new FormData(form);
+        formData.delete("csrfmiddlewaretoken");
+        formData.delete("action");
+        formData.delete("confirm_duplicate");
+        return Array.from(formData.entries()).map(function(entry) {
+          return entry[0] + "=" + entry[1];
+        }).join("&");
+      }
+
+      function updateSaveState() {
+        const hasChanges = formSnapshot() !== initialSnapshot;
+        form.dataset.isDirty = hasChanges ? "true" : "false";
+        if (!isEditMode || !saveButtons.length) return;
+        saveButtons.forEach(function(button) {
+          button.disabled = !hasChanges;
+          button.classList.toggle("btn-disabled", !hasChanges);
+        });
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.classList.remove("btn-disabled");
+        }
+      }
+
+      function confirmLeave() {
+        return window.confirm("You have unsaved changes. Leave this page without saving?");
+      }
+
+      function formatInputNumber(value) {
+        const numeric = Number(value || 0);
+        if (Number.isNaN(numeric)) return "0";
+        return Number.isInteger(numeric) ? String(numeric) : String(Number(numeric.toFixed(2)));
+      }
+
+      function recalc() {
+        const selected = articleSelect.options[articleSelect.selectedIndex];
+        const articleCost = Number(selected?.dataset.cost || 0);
+        const selectedArticleId = selected?.value || "";
+        const articleChanged = selectedArticleId !== lastArticleId;
+        if (articleCost > 0) {
+          unitCostInput.value = formatInputNumber(articleCost);
+          unitCostInput.readOnly = true;
+        } else {
+          if (articleChanged && !unitCostInput.value) {
+            unitCostInput.value = "0";
+          }
+          unitCostInput.readOnly = false;
+        }
+        const quantity = Number(quantityInput.value || 0);
+        const cost = Number(unitCostInput.value || 0);
+        totalValueInput.textContent = "Rs." + (quantity * cost).toLocaleString("en-IN", {
+          maximumFractionDigits: 2,
+          minimumFractionDigits: 0
+        });
+        lastArticleId = selectedArticleId;
+      }
+
+      function updateFemaleStatusUI() {
+        const selectedGender = Array.from(genderInputs).find(function(input) { return input.checked; })?.value || "";
+        const showFemaleStatus = selectedGender === "Female";
+        femaleStatusWrap.hidden = !showFemaleStatus;
+        femaleStatusSelect.required = showFemaleStatus;
+        if (!showFemaleStatus) {
+          femaleStatusSelect.value = "";
+          femaleStatusDescription.textContent = "Choose the category that best describes the beneficiary's present situation.";
+          return;
+        }
+        femaleStatusDescription.textContent = femaleStatusDescriptions[femaleStatusSelect.value] || "Choose the category that best describes the beneficiary's present situation.";
+        updateSaveState();
+      }
+
+      articleSelect.addEventListener("change", recalc);
+      quantityInput.addEventListener("input", recalc);
+      unitCostInput.addEventListener("input", recalc);
+      genderInputs.forEach(function(input) {
+        input.addEventListener("change", updateFemaleStatusUI);
+      });
+      femaleStatusSelect.addEventListener("change", updateFemaleStatusUI);
+      qtyMinusBtn.addEventListener("click", function() {
+        const current = Math.max(1, Number(quantityInput.value || 1));
+        quantityInput.value = Math.max(1, current - 1);
+        recalc();
+        updateSaveState();
+      });
+      qtyPlusBtn.addEventListener("click", function() {
+        const current = Math.max(1, Number(quantityInput.value || 1));
+        quantityInput.value = current + 1;
+        recalc();
+        updateSaveState();
+      });
+      window.addEventListener("beforeunload", function(event) {
+        if (allowNavigation || form.dataset.isDirty !== "true") return;
+        event.preventDefault();
+        event.returnValue = "";
+      });
+      document.addEventListener("click", function(event) {
+        const link = event.target.closest("a[href]");
+        if (!link || allowNavigation || form.dataset.isDirty !== "true") return;
+        const href = link.getAttribute("href") || "";
+        if (!href || href.startsWith("#") || href.startsWith("javascript:") || link.target === "_blank" || link.hasAttribute("download")) return;
+        if (!confirmLeave()) {
+          event.preventDefault();
+          return;
+        }
+        allowNavigation = true;
+      }, true);
+      form.addEventListener("submit", function(event) {
+        const submitter = event.submitter;
+        if (submitter && submitter.value === "submit") {
+          const confirmed = window.confirm("Once submitted, this application can't be changed and will be treated as final. Do you want to continue?");
+          if (!confirmed) {
+            event.preventDefault();
+            return;
+          }
+        }
+        allowNavigation = true;
+      });
+      form.addEventListener("input", updateSaveState);
+      form.addEventListener("change", updateSaveState);
+      updateFemaleStatusUI();
+      recalc();
+      initialSnapshot = formSnapshot();
+      updateSaveState();
+    })();
+  </script>
+  <style>
+    .btn:not(.icon-btn) {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn:not(.icon-btn) svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex: 0 0 auto;
+    }
+    .btn.btn-disabled {
+      opacity: 0.45;
+      filter: saturate(0.45);
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 0.84rem;
+      font-weight: 600;
+      border: 1px solid var(--border-color);
+      background: #fff7e6;
+      color: #6f4b00;
+    }
+    .status-pill.status-submitted {
+      background: #dcfce7;
+      color: #166534;
+      border-color: #86efac;
+    }
+    .status-pill.status-draft {
+      background: #ffedd5;
+      color: #9a3412;
+      border-color: #fdba74;
+    }
+    .form-section-card {
+      margin-bottom: 16px;
+      padding: 16px;
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      background: linear-gradient(180deg, #fffef9 0%, #fff9ef 100%);
+    }
+    .section-title-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .section-title {
+      margin: 0 0 4px;
+    }
+    .section-note {
+      color: #8a7555;
+      font-size: 0.92rem;
+    }
+    .field-hint {
+      margin-top: 6px;
+      color: #8a7555;
+      font-size: 0.86rem;
+    }
+    .warning-panel {
+      background: #fff7ed;
+      border-color: #fdba74;
+    }
+    .current-match-panel {
+      border-color: #f59e0b;
+    }
+    .inline-feedback-group {
+      margin-bottom: 14px;
+    }
+    .warning-message {
+      background: rgba(245, 158, 11, 0.12);
+      color: #92400e;
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+    .info-field {
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: #fffaf0;
+      color: var(--text-primary);
+    }
+    .qty-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .qty-btn {
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: #fff9eb;
+      color: var(--text-primary);
+      font-size: 1.15rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .qty-btn:hover {
+      background: #fef0c7;
+    }
+    .qty-input {
+      width: 90px;
+      text-align: center;
+    }
+    @media (max-width: 640px) {
+      .form-section-card {
+        padding: 12px;
+      }
+      .qty-input {
+        width: 72px;
+      }
+    }
+  </style>
+{% endblock %}

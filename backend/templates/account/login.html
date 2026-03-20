@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+  <style>
+    .login-stage {
+      min-height: calc(100vh - 44px);
+      margin: -22px 0 0;
+      background:
+        radial-gradient(circle at 18% 28%, rgba(255, 214, 102, 0.34), transparent 34%),
+        radial-gradient(circle at 62% 45%, rgba(255, 243, 199, 0.72), transparent 28%),
+        linear-gradient(115deg, #fff8df 0%, #fff3cd 32%, #f9f2ee 58%, #edf1ff 100%);
+    }
+
+    .login-header {
+      background: #f8be34;
+      border-bottom: 1px solid rgba(123, 74, 8, 0.12);
+      box-shadow: 0 2px 10px rgba(84, 55, 0, 0.06);
+    }
+
+    .login-header-inner {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+      padding: 10px 28px;
+      min-height: 82px;
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .login-brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      color: #17233b;
+      min-width: 0;
+      width: 100%;
+      align-self: center;
+    }
+
+    .login-brand img {
+      width: 38px;
+      height: 58px;
+      flex: 0 0 auto;
+      object-fit: contain;
+    }
+
+    .login-brand-copy {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+    }
+
+    .login-brand-title {
+      font-size: 22px;
+      font-weight: 800;
+      line-height: 1.05;
+      white-space: nowrap;
+    }
+
+    .login-brand-subtitle {
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+
+    .login-nav {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+      align-self: center;
+    }
+
+    .login-nav a {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      justify-content: center;
+      min-width: 116px;
+      padding: 12px 22px;
+      border-radius: 999px;
+      background: #f5b400;
+      color: #17233b;
+      font-size: 16px;
+      font-weight: 700;
+      box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+      text-decoration: none;
+    }
+
+    .login-nav-icon {
+      width: 18px;
+      height: 18px;
+      display: inline-block;
+      flex: 0 0 auto;
+    }
+
+    .login-nav a:hover {
+      background: #e6aa00;
+      color: #17233b;
+      text-decoration: none;
+    }
+
+    .login-shell {
+      min-height: calc(100vh - 120px);
+      display: grid;
+      place-items: center;
+      padding: 44px 20px 72px;
+    }
+
+    .login-panel {
+      width: min(100%, 478px);
+    }
+
+    .login-panel-title {
+      text-align: center;
+      margin: 0 0 16px;
+      color: #2c2b2b;
+      font-size: 30px;
+      font-weight: 800;
+    }
+
+    .login-card {
+      background: rgba(255, 255, 255, 0.96);
+      border: 1px solid rgba(208, 212, 220, 0.92);
+      border-radius: 22px;
+      padding: 36px 34px 28px;
+      box-shadow: 0 24px 54px rgba(80, 64, 31, 0.16);
+      backdrop-filter: blur(6px);
+    }
+
+    .login-field {
+      margin-bottom: 22px;
+    }
+
+    .login-field label {
+      display: block;
+      margin-bottom: 10px;
+      color: #44403c;
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .login-field input {
+      width: 100%;
+      height: 54px;
+      border: 1px solid #d0d5dd;
+      border-radius: 12px;
+      padding: 0 18px;
+      font-size: 17px;
+      background: #ffffff;
+      color: #111827;
+    }
+
+    .login-field input::placeholder {
+      color: #98a2b3;
+    }
+
+    .login-submit {
+      width: 100%;
+      height: 50px;
+      margin-top: 4px;
+      border: 0;
+      border-radius: 999px;
+      background: #a92a18;
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 10px 22px rgba(169, 42, 24, 0.2);
+    }
+
+    .login-submit:hover {
+      background: #971f10;
+    }
+
+    .login-footnote {
+      text-align: center;
+      margin-top: 26px;
+      font-size: 15px;
+    }
+
+    .login-footnote a {
+      color: #a92a18;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .login-error {
+      margin: 0 0 16px;
+      padding: 12px 14px;
+      border: 1px solid rgba(185, 28, 28, 0.18);
+      border-radius: 12px;
+      background: rgba(254, 226, 226, 0.82);
+      color: #991b1b;
+      font-size: 14px;
+    }
+
+    @media (max-width: 720px) {
+      .login-header-inner {
+        padding: 10px 16px;
+        min-height: auto;
+        align-items: flex-start;
+        grid-template-columns: 1fr;
+      }
+
+      .login-brand-title {
+        font-size: 18px;
+      }
+
+      .login-brand-subtitle {
+        font-size: 13px;
+      }
+
+      .login-nav a {
+        min-width: 96px;
+        padding: 10px 16px;
+        font-size: 14px;
+      }
+
+      .login-card {
+        padding: 26px 22px 22px;
+      }
+
+      .login-panel-title {
+        font-size: 24px;
+      }
+    }
+  </style>
+
+  <section class="login-stage">
+    <header class="login-header">
+      <div class="login-header-inner">
+        <div class="login-brand">
+          <img src="{% static 'core/images/login-logo.webp' %}" alt="Makkal Nala Pani logo">
+          <div class="login-brand-copy">
+            <div class="login-brand-title">Makkal NalaPani</div>
+            <div class="login-brand-subtitle">Melmaruvathur</div>
+          </div>
+        </div>
+        <nav class="login-nav" aria-label="Login page links">
+          <a href="{% url 'ui-login' %}">
+            <svg class="login-nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3 10.5L12 3l9 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M5.25 9.75V21h13.5V9.75" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M9.75 21v-6h4.5v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>Home</span>
+          </a>
+          <a href="{% url 'ui-login' %}">
+            <svg class="login-nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+              <path d="M12 10v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="12" cy="7.25" r="1.25" fill="currentColor"/>
+            </svg>
+            <span>About</span>
+          </a>
+        </nav>
+      </div>
+    </header>
+
+    <div class="login-shell">
+      <div class="login-panel">
+        <h1 class="login-panel-title">Admin Portal</h1>
+        <div class="login-card">
+          {% if form.errors %}
+            <div class="login-error">Invalid email or password.</div>
+          {% endif %}
+
+          {% if form.non_field_errors %}
+            <div class="login-error">{{ form.non_field_errors }}</div>
+          {% endif %}
+
+          <form method="post">
+            {% csrf_token %}
+            <div class="login-field">
+              <label for="{{ form.username.id_for_label }}">Email</label>
+              {{ form.username }}
+            </div>
+            <div class="login-field">
+              <label for="{{ form.password.id_for_label }}">Password</label>
+              {{ form.password }}
+            </div>
+            <button class="login-submit" type="submit">Login</button>
+          </form>
+
+          <div class="login-footnote">
+            <a href="#">Forgot password?</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    (function() {
+      const emailInput = document.getElementById("id_username");
+      const passwordInput = document.getElementById("id_password");
+      if (emailInput) {
+        emailInput.setAttribute("placeholder", "Enter your email");
+      }
+      if (passwordInput) {
+        passwordInput.setAttribute("placeholder", "Enter your password");
+      }
+    })();
+  </script>
+{% endblock %}

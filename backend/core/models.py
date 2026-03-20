@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import uuid4
 
+from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MinLengthValidator, MinValueValidator
 from django.db import models
@@ -39,6 +40,8 @@ class RecipientTypeChoices(models.TextChoices):
 
 
 class BeneficiaryStatusChoices(models.TextChoices):
+    DRAFT = "draft", "Draft"
+    SUBMITTED = "submitted", "Submitted"
     PENDING = "pending", "Pending"
     APPROVED = "approved", "Approved"
     REJECTED = "rejected", "Rejected"
@@ -82,10 +85,26 @@ class GenderChoices(models.TextChoices):
 
 
 class FemaleStatusChoices(models.TextChoices):
-    SINGLE_MOTHER = "Single Mother", "Single Mother"
-    WIDOW = "Widow", "Widow"
+    SINGLE = "Single", "Single"
     MARRIED = "Married", "Married"
-    UNMARRIED = "Unmarried", "Unmarried"
+    WIDOWED = "Widowed", "Widowed"
+    DIVORCED = "Divorced", "Divorced"
+    SEPARATED = "Separated", "Separated"
+    DESERTED = "Deserted", "Deserted"
+    SINGLE_MOTHER = "Single Mother", "Single Mother"
+    DESTITUTE_WOMAN = "Destitute Woman (no income/support)", "Destitute Woman (no income/support)"
+    FEMALE_HEAD = "Female Head of Household", "Female Head of Household"
+    DOMESTIC_VIOLENCE = "Victim of Domestic Violence", "Victim of Domestic Violence"
+    ABUSE_SURVIVOR = "Survivor of Abuse", "Survivor of Abuse"
+    ELDERLY_WOMAN = "Elderly Woman (60+)", "Elderly Woman (60+)"
+    HOMELESS = "Homeless", "Homeless"
+    ORPHAN = "Orphan / No Family Support", "Orphan / No Family Support"
+    MIGRANT_WOMAN = "Migrant Woman", "Migrant Woman"
+    CAREGIVER = "Caregiver (children / elderly / disabled)", "Caregiver (children / elderly / disabled)"
+    EMPLOYED = "Employed", "Employed"
+    SELF_EMPLOYED = "Self-employed", "Self-employed"
+    UNEMPLOYED = "Unemployed", "Unemployed"
+    STUDENT = "Student", "Student"
 
 
 class InstitutionTypeChoices(models.TextChoices):
@@ -108,6 +127,35 @@ def non_negative_decimal(value: Decimal | int | float) -> Decimal:
     return value
 
 
+class AppUserManager(BaseUserManager):
+    """Manager tuned for email-based custom user model."""
+
+    use_in_migrations = True
+
+    def _create_user(self, email: str, password: str | None, **extra_fields):
+        if not email:
+            raise ValueError("The Email field must be set.")
+        email = self.normalize_email(email)
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_user(self, email: str, password: str | None = None, **extra_fields):
+        extra_fields.setdefault("is_staff", False)
+        extra_fields.setdefault("is_superuser", False)
+        return self._create_user(email, password, **extra_fields)
+
+    def create_superuser(self, email: str, password: str | None = None, **extra_fields):
+        extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_superuser", True)
+        if extra_fields.get("is_staff") is not True:
+            raise ValueError("Superuser must have is_staff=True.")
+        if extra_fields.get("is_superuser") is not True:
+            raise ValueError("Superuser must have is_superuser=True.")
+        return self._create_user(email, password, **extra_fields)
+
+
 class AppUser(AbstractUser):
     """
     Role-aware user model used by all app modules.
@@ -120,6 +168,7 @@ class AppUser(AbstractUser):
     status = models.CharField(max_length=9, choices=StatusChoices.choices, default=StatusChoices.ACTIVE)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
+    objects = AppUserManager()
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS: list[str] = []
@@ -186,7 +235,7 @@ class DistrictMaster(BaseTimestampedModel):
 
 class FundRequest(BaseTimestampedModel):
     fund_request_type = models.CharField(max_length=20, choices=FundRequestTypeChoices.choices)
-    fund_request_number = models.CharField(max_length=80, unique=True)
+    fund_request_number = models.CharField(max_length=80, unique=True, blank=True, null=True)
     status = models.CharField(max_length=12, choices=FundRequestStatusChoices.choices, default=FundRequestStatusChoices.DRAFT)
     total_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
     aid_type = models.CharField(max_length=255, blank=True, null=True)
@@ -352,12 +401,12 @@ class DistrictBeneficiaryEntry(BaseTimestampedModel):
 
 
 class PublicBeneficiaryEntry(BaseTimestampedModel):
-    application_number = models.CharField(max_length=120, unique=True)
+    application_number = models.CharField(max_length=120, unique=True, blank=True, null=True)
     name = models.CharField(max_length=255)
     aadhar_number = models.CharField(max_length=20, validators=[MinLengthValidator(12)])
     is_handicapped = models.BooleanField(default=False)
     gender = models.CharField(max_length=15, choices=GenderChoices.choices, blank=True, null=True)
-    female_status = models.CharField(max_length=20, choices=FemaleStatusChoices.choices, blank=True, null=True)
+    female_status = models.CharField(max_length=80, choices=FemaleStatusChoices.choices, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
     mobile = models.CharField(max_length=20, blank=True, null=True)
     article = models.ForeignKey(Article, on_delete=models.RESTRICT, related_name="public_entries")
@@ -440,6 +489,54 @@ class InstitutionsBeneficiaryEntry(BaseTimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.institution_name} - {self.application_number or 'pending'}"
+
+
+class ApplicationAttachmentTypeChoices(models.TextChoices):
+    DISTRICT = "district", "District"
+    PUBLIC = "public", "Public"
+    INSTITUTION = "institution", "Institution"
+
+
+class ApplicationAttachment(BaseTimestampedModel):
+    application_type = models.CharField(max_length=20, choices=ApplicationAttachmentTypeChoices.choices)
+    district = models.ForeignKey(
+        DistrictMaster,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="application_attachments",
+    )
+    public_entry = models.ForeignKey(
+        "core.PublicBeneficiaryEntry",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="application_attachments",
+    )
+    institution_application_number = models.CharField(max_length=120, blank=True, null=True)
+    file = models.FileField(upload_to="application_attachments/%Y/%m/%d")
+    file_name = models.CharField(max_length=255)
+    uploaded_by = models.ForeignKey(
+        AppUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="application_attachments",
+    )
+
+    class Meta:
+        db_table = "application_attachments"
+        verbose_name = "Application Attachment"
+        verbose_name_plural = "Application Attachments"
+        indexes = [
+            models.Index(fields=["application_type"]),
+            models.Index(fields=["district"]),
+            models.Index(fields=["public_entry"]),
+            models.Index(fields=["institution_application_number"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.file_name
 
 
 class OrderEntry(BaseTimestampedModel):

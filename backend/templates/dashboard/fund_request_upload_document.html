@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="card" style="max-width: 640px;">
+    <h2 style="margin-top: 0;">Upload document</h2>
+    <p><strong>Fund request:</strong> {{ fund_request.fund_request_number|default:"Draft" }}</p>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="grid2">
+        <div>
+          <label>Document type</label>
+          {{ form.document_type }}
+        </div>
+        <div>
+          <label>File</label>
+          {{ form.file }}
+        </div>
+      </div>
+      <div style="margin-top: 14px;">
+        <button class="btn" type="submit">Upload</button>
+        <a class="btn" href="{% url 'ui:fund-request-detail' fund_request.id %}">Back</a>
+      </div>
+    </form>
+  </section>
+{% endblock %}

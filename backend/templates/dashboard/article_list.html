@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% load currency %}
+
+{% block content %}
+  <section class="card">
+    <div class="toolbar">
+      <h2 style="margin: 0;">Articles</h2>
+      {% if request.user.role == "admin" or request.user.role == "editor" %}
+        <a class="btn" href="{% url 'ui:article-create' %}">Add article</a>
+      {% endif %}
+    </div>
+    <form method="get" class="toolbar" style="margin-bottom: 16px;">
+      <input class="input" type="text" name="q" value="{{ request.GET.q }}" placeholder="Search by article name" />
+      <button class="btn" type="submit">Search</button>
+    </form>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Category</th>
+          <th>Cost</th>
+          <th>Active</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for article in articles %}
+          <tr>
+            <td>{{ article.article_name }}</td>
+            <td>{{ article.item_type }}</td>
+            <td>{{ article.category|default:"-" }}</td>
+            <td>Rs.{{ article.cost_per_unit|rupees }}</td>
+            <td>{{ article.is_active|yesno:"Yes,No" }}</td>
+            <td>
+              <div class="actions-inline">
+              {% if request.user.role == "admin" or request.user.role == "editor" %}
+                <a class="btn icon-btn" title="Edit" aria-label="Edit" href="{% url 'ui:article-edit' article.id %}">
+                  <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </a>
+              {% endif %}
+              {% if request.user.role == "admin" %}
+                <a class="btn btn-danger icon-btn" title="Delete" aria-label="Delete" href="{% url 'ui:article-delete' article.id %}">
+                  <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                </a>
+              {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6">No articles found.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if is_paginated %}
+      <div class="toolbar" style="margin-top: 12px;">
+        {% if page_obj.has_previous %}
+          <a class="btn" href="?q={{ request.GET.q }}&page={{ page_obj.previous_page_number }}">Prev</a>
+        {% endif %}
+        <span class="small">Page {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+          <a class="btn" href="?q={{ request.GET.q }}&page={{ page_obj.next_page_number }}">Next</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

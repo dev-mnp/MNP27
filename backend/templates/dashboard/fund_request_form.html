@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="card">
+    <h2 style="margin-top: 0;">
+      {% if object %}Edit Fund Request{% else %}New Fund Request{% endif %}
+    </h2>
+
+    <form method="post" enctype="multipart/form-data" {% if object %}data-confirm-message="Save changes to this fund request?"{% endif %}>
+      {% csrf_token %}
+      {% if form.errors %}
+        <div class="small" style="margin-bottom: 10px; color: #fecaca;">Please fix errors below.</div>
+      {% endif %}
+
+      <div class="grid2">
+        <div>
+          <label>Request type</label>
+          {{ form.fund_request_type }}
+        </div>
+        <div>
+          <label>Fund request number</label>
+          {{ form.fund_request_number }}
+          <div class="small">{{ form.fund_request_number.help_text }}</div>
+        </div>
+        <div>
+          <label>Aid type</label>
+          {{ form.aid_type }}
+        </div>
+        <div>
+          <label>GST number</label>
+          {{ form.gst_number }}
+        </div>
+        <div>
+          <label>Supplier</label>
+          {{ form.supplier_name }}
+        </div>
+        <div style="grid-column: 1 / -1;">
+          <label>Supplier address</label>
+          {{ form.supplier_address }}
+        </div>
+        <div>
+          <label>Supplier city</label>
+          {{ form.supplier_city }}
+        </div>
+        <div>
+          <label>Supplier state</label>
+          {{ form.supplier_state }}
+        </div>
+        <div>
+          <label>Pincode</label>
+          {{ form.supplier_pincode }}
+        </div>
+        <div>
+          <label>Purchase order number</label>
+          {{ form.purchase_order_number }}
+        </div>
+        <div style="grid-column: 1 / -1;">
+          <label>Notes</label>
+          {{ form.notes }}
+        </div>
+      </div>
+
+      <h3 style="margin: 16px 0 8px 0;">Recipients</h3>
+      {{ recipient_formset.management_form }}
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Name</th>
+            <th>Who</th>
+            <th>Fund requested</th>
+            <th>Aadhar / Cheque</th>
+            <th>District</th>
+            <th>Delete</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in recipient_formset %}
+            <tr>
+              <td>{{ row.beneficiary_type }}</td>
+              <td>{{ row.recipient_name }}</td>
+              <td>{{ row.beneficiary }}</td>
+              <td>{{ row.fund_requested }}</td>
+              <td>{{ row.aadhar_number }} {{ row.cheque_no }}</td>
+              <td>{{ row.district_name }}</td>
+              <td>{{ row.DELETE }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <h3 style="margin: 16px 0 8px 0;">Articles</h3>
+      {{ article_formset.management_form }}
+      <table>
+        <thead>
+          <tr>
+            <th>Article</th>
+            <th>Beneficiary</th>
+            <th>Qty</th>
+            <th>Unit Price</th>
+            <th>Line Total</th>
+            <th>Chequeno</th>
+            <th>Delete</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in article_formset %}
+            <tr>
+              <td>
+                {{ row.article }}
+                <div>{{ row.article_name }}</div>
+              </td>
+              <td>{{ row.beneficiary }}</td>
+              <td>{{ row.quantity }}</td>
+              <td>{{ row.unit_price }}</td>
+              <td>{{ row.value }}</td>
+              <td>{{ row.cheque_no }}</td>
+              <td>{{ row.DELETE }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="toolbar" style="margin-top: 12px;">
+        <button class="btn" type="submit" name="action" value="draft">Save Draft</button>
+        <button class="btn" type="submit" name="action" value="submit">Save &amp; Submit</button>
+        <a class="btn" href="{% url 'ui:fund-request-list' %}">Back</a>
+      </div>
+    </form>
+  </section>
+{% endblock %}

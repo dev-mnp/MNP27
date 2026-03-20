@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% load currency %}
+
+{% block content %}
+  <section class="card">
+    <div class="toolbar">
+      <h2 style="margin: 0;">Fund request {{ fund_request.fund_request_number|default:"Draft" }}</h2>
+      {% if can_edit %}
+        <a class="btn" href="{% url 'ui:fund-request-edit' fund_request.id %}">Edit</a>
+      {% endif %}
+      <a class="btn" href="{% url 'ui:fund-request-upload' fund_request.id %}">Upload document</a>
+    </div>
+
+    <p><strong>Type:</strong> {{ fund_request.get_fund_request_type_display }}</p>
+    <p><strong>Status:</strong> {{ fund_request.get_status_display }}</p>
+    <p><strong>Total:</strong> Rs.{{ fund_request.total_amount|rupees }}</p>
+    <p><strong>Created by:</strong> {{ fund_request.created_by.email|default:"system" }}</p>
+    {% if fund_request.supplier_name %}
+      <p><strong>Supplier:</strong> {{ fund_request.supplier_name }}</p>
+    {% endif %}
+
+    {% if fund_request.status == "draft" and request.user.role != "viewer" %}
+      <form method="post" action="{% url 'ui:fund-request-submit' fund_request.id %}">
+        {% csrf_token %}
+        <button class="btn" type="submit">Submit</button>
+      </form>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h3 style="margin-top: 0;">Recipients</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Fund requested</th>
+          <th>Beneficiary / Cheque</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rec in fund_request.recipients.all %}
+          <tr>
+            <td>{{ rec.recipient_name }}</td>
+            <td>{{ rec.beneficiary_type }}</td>
+            <td>{{ rec.fund_requested }}</td>
+            <td>{{ rec.name_of_beneficiary|default:rec.aadhar_number }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4">No recipients added.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h3 style="margin-top: 0;">Articles</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Article</th>
+          <th>Beneficiary</th>
+          <th>Qty</th>
+          <th>Unit</th>
+          <th>Line value</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in fund_request.articles.all %}
+          <tr>
+            <td>{{ item.article_name }}</td>
+            <td>{{ item.beneficiary }}</td>
+            <td>{{ item.quantity }}</td>
+            <td>{{ item.unit_price }}</td>
+            <td>{{ item.value }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5">No articles added.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h3 style="margin-top: 0;">Documents</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>File</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for doc in fund_request.documents.all %}
+          <tr>
+            <td>{{ doc.get_document_type_display }}</td>
+            <td>
+              <a href="{{ media_url }}{{ doc.file_path }}">{{ doc.file_name }}</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="2">No documents uploaded.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endblock %}

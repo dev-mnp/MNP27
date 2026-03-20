@@ -1,0 +1,704 @@
+{% extends "base.html" %}
+{% load currency %}
+
+{% block content %}
+  <section class="card">
+    <div class="toolbar" style="justify-content: space-between;">
+      <div>
+        <h2 style="margin: 0 0 6px;">Institution Application</h2>
+        <p style="margin: 0; color: var(--text-secondary);">
+          Institution applications can contain multiple articles or aids and do not require Aadhaar verification.
+        </p>
+        {% if application_status %}
+          <div class="status-pill status-{{ application_status }}" style="margin-top: 10px;">{{ application_status|title }}</div>
+        {% endif %}
+      </div>
+      <a class="btn" href="{% url 'ui:master-entry' %}?type=institutions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/><path d="M21 12H9"/></svg><span>Back</span></a>
+    </div>
+
+    {% if form_errors %}
+      <ul class="messages inline-feedback-group">
+        {% for error in form_errors %}
+          <li class="error">{{ error }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    <form method="post" id="institution-entry-form" data-unsaved-guard="true" {% if request.resolver_match.url_name == 'master-entry-institution-edit' %}data-edit-mode="true" data-confirm-message="Save changes to this institution entry?"{% else %}data-edit-mode="false"{% endif %}>
+      {% csrf_token %}
+      <div class="form-section-card">
+      <div class="section-title-row">
+        <div>
+          <h3 class="section-title">Institution details</h3>
+          <div class="section-note">Application number is generated on submit. Add the institution details first, then its items.</div>
+        </div>
+      </div>
+      <div class="grid2">
+        <div>
+          <label>Application Number</label>
+          <div class="info-field">{% if institution_application_number and institution_application_number|slice:':10' == 'DRAFT-INS-' %}Draft{% else %}{{ institution_application_number|default:'Auto on submit' }}{% endif %}</div>
+        </div>
+        <div>
+          <label>Institution Name</label>
+          <input class="input" type="text" name="institution_name" value="{{ institution_form_data.institution_name }}">
+        </div>
+        <div>
+          <label>Institution Type</label>
+          <select class="input" name="institution_type">
+            <option value="">Select Type</option>
+            {% for value, label in institution_type_choices %}
+              <option value="{{ value }}" {% if institution_form_data.institution_type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Mobile Number</label>
+          <input class="input" type="text" name="mobile" value="{{ institution_form_data.mobile }}">
+        </div>
+        <div style="grid-column: span 2;">
+          <label>Address</label>
+          <textarea class="textarea" name="address" rows="3">{{ institution_form_data.address }}</textarea>
+        </div>
+      </div>
+      </div>
+
+      <div class="form-section-card">
+      <div class="toolbar" style="margin-top: 0; justify-content: space-between;">
+        <div>
+          <h3 class="section-title" style="margin: 0 0 4px;">Items</h3>
+          <div class="section-note">Use the headers to sort the current rows. Institutions can have multiple articles or aids.</div>
+        </div>
+      </div>
+
+      <table id="institution-items-table">
+        <colgroup>
+          <col style="width: 31%;">
+          <col style="width: 10%;">
+          <col style="width: 15%;">
+          <col style="width: 12%;">
+          <col style="width: 12%;">
+          <col style="width: 14%;">
+          <col style="width: 6%;">
+        </colgroup>
+        <thead>
+          <tr>
+            <th><button class="table-sort-btn" type="button" data-sort-key="item">Item <span class="sort-indicator">⇅</span></button></th>
+            <th><button class="table-sort-btn" type="button" data-sort-key="type">Type <span class="sort-indicator">⇅</span></button></th>
+            <th><button class="table-sort-btn" type="button" data-sort-key="quantity">Quantity <span class="sort-indicator">⇅</span></button></th>
+            <th><button class="table-sort-btn" type="button" data-sort-key="unit_cost">Unit Price <span class="sort-indicator">⇅</span></button></th>
+            <th><button class="table-sort-btn" type="button" data-sort-key="total">Total <span class="sort-indicator">⇅</span></button></th>
+            <th><button class="table-sort-btn" type="button" data-sort-key="comment">Comment <span class="sort-indicator">⇅</span></button></th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="institution-items-body">
+          {% for row in institution_rows %}
+            <tr class="institution-item-row">
+              <td>
+                <select class="input article-select" name="article_id">
+                  <option value="">Select Item</option>
+                  {% for article in articles_master_list %}
+                    <option value="{{ article.id }}" data-type="{{ article.item_type }}" data-cost="{{ article.cost_per_unit }}" {% if row.article_id == article.id|stringformat:"s" %}selected{% endif %}>
+                      {{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <div class="duplicate-indicator" hidden>Duplicate item</div>
+              </td>
+              <td><div class="info-field item-type-display item-type-fit">{{ row.item_type|default:"-" }}</div></td>
+              <td>
+                <div class="qty-control">
+                  <button class="qty-btn qty-minus" type="button" aria-label="Decrease quantity">-</button>
+                  <input class="input quantity-input qty-input" type="number" min="1" name="quantity" value="{{ row.quantity }}">
+                  <button class="qty-btn qty-plus" type="button" aria-label="Increase quantity">+</button>
+                </div>
+              </td>
+              <td><input class="input unit-cost-input" type="number" min="0" step="0.01" name="unit_cost" value="{{ row.unit_cost|floatformat:'-2' }}"></td>
+              <td>
+                <div class="info-field line-total-display">Rs.0</div>
+                <input class="line-total" type="hidden" value="0">
+              </td>
+              <td><input class="input notes-input item-notes" name="notes" value="{{ row.notes }}"></td>
+              <td>
+                <button class="btn btn-danger icon-btn remove-row-btn" type="button" title="Remove item" aria-label="Remove item">
+                  <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                </button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="item-actions-row">
+        <div class="multi-aid-summary" id="institution-multi-aid-summary" hidden></div>
+        <button class="btn" type="button" id="add-row-btn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg><span>Add Item</span></button>
+      </div>
+
+      <template id="institution-item-row-template">
+        <tr class="institution-item-row">
+          <td>
+            <select class="input article-select" name="article_id">
+              <option value="">Select Item</option>
+              {% for article in articles_master_list %}
+                <option value="{{ article.id }}" data-type="{{ article.item_type }}" data-cost="{{ article.cost_per_unit }}">
+                  {{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}
+                </option>
+              {% endfor %}
+            </select>
+            <div class="duplicate-indicator" hidden>Duplicate item</div>
+          </td>
+          <td><div class="info-field item-type-display item-type-fit">-</div></td>
+          <td>
+            <div class="qty-control">
+              <button class="qty-btn qty-minus" type="button" aria-label="Decrease quantity">-</button>
+              <input class="input quantity-input qty-input" type="number" min="1" name="quantity" value="1">
+              <button class="qty-btn qty-plus" type="button" aria-label="Increase quantity">+</button>
+            </div>
+          </td>
+          <td><input class="input unit-cost-input" type="number" min="0" step="0.01" name="unit_cost" value="0"></td>
+          <td>
+            <div class="info-field line-total-display">Rs.0</div>
+            <input class="line-total" type="hidden" value="0">
+          </td>
+          <td><input class="input notes-input item-notes" name="notes" value=""></td>
+          <td>
+            <button class="btn btn-danger icon-btn remove-row-btn" type="button" title="Remove item" aria-label="Remove item">
+              <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+            </button>
+          </td>
+        </tr>
+      </template>
+      </div>
+
+      <div class="toolbar" style="justify-content: flex-end; margin-top: 20px;">
+        <a class="btn" href="{% url 'ui:master-entry' %}?type=institutions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg><span>Cancel</span></a>
+        <button class="btn js-save-button{% if request.resolver_match.url_name == 'master-entry-institution-edit' %} btn-disabled{% endif %}" type="submit" name="action" value="draft" {% if request.resolver_match.url_name == 'master-entry-institution-edit' %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v6h6V3"/><path d="M9 17h6"/></svg><span>Save as Draft</span></button>
+        <button class="btn js-submit-button" type="submit" name="action" value="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Submit</span></button>
+      </div>
+    </form>
+
+    <div class="form-section-card" style="margin-top: 20px;">
+      <div class="section-title-row">
+        <div>
+          <h3 class="section-title">Attachments</h3>
+          <div class="section-note">{{ attachment_helper_text }}</div>
+          <div class="field-hint" style="margin-top: 6px;">{{ attachment_constraints_text }}</div>
+        </div>
+      </div>
+      {% if attachments_enabled %}
+        <form method="post" action="{{ attachment_upload_url }}" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="toolbar" style="align-items: end;">
+            <div style="flex: 1;">
+              <label>Upload file</label>
+              {{ attachment_upload_form.file }}
+            </div>
+            <div style="flex: 1;">
+              <label>File name</label>
+              {{ attachment_upload_form.file_name }}
+            </div>
+            <button class="btn" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg><span>Upload</span></button>
+          </div>
+        </form>
+        {% if application_attachments %}
+          <table style="margin-top: 14px;">
+            <thead>
+              <tr>
+                <th>File Name</th>
+                <th>Uploaded By</th>
+                <th>Uploaded On</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for attachment in application_attachments %}
+                <tr>
+                  <td>{{ attachment.file_name }}</td>
+                  <td>{{ attachment.uploaded_by.first_name|default:attachment.uploaded_by.email }}</td>
+                  <td>{{ attachment.created_at|date:"d/m/Y H:i" }}</td>
+                  <td>
+                    <div class="actions-inline">
+                      <button class="btn icon-btn js-attachment-preview" type="button" data-preview-url="{% url 'ui:application-attachment-download' attachment.id %}" data-preview-title="{{ attachment.file_name }}" data-preview-source="{{ attachment.file.name|lower }}" data-download-url="{% url 'ui:application-attachment-download' attachment.id %}?download=1" title="Preview file" aria-label="Preview file">
+                        <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
+                      <a class="btn icon-btn" href="{% url 'ui:application-attachment-download' attachment.id %}" target="_blank" rel="noopener" title="Open file in new tab" aria-label="Open file in new tab">
+                        <svg viewBox="0 0 24 24"><path d="M14 3h7v7"/><path d="M10 14L21 3"/><path d="M21 14v6H3V2h6"/></svg>
+                      </a>
+                      <a class="btn icon-btn" href="{% url 'ui:application-attachment-download' attachment.id %}?download=1" title="Download file" aria-label="Download file">
+                        <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+                      </a>
+                      <form method="post" action="{% url 'ui:institution-attachment-delete' institution_application_number attachment.id %}" style="display: inline;">
+                        {% csrf_token %}
+                        <button class="btn btn-danger icon-btn" type="submit" title="Delete file" aria-label="Delete file" onclick="return window.confirm('Delete this attachment?');">
+                          <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="field-hint" style="margin-top: 10px;">No attachments uploaded yet.</div>
+        {% endif %}
+      {% endif %}
+    </div>
+  </section>
+
+  <script>
+    (function() {
+      const form = document.getElementById("institution-entry-form");
+      const saveButtons = Array.from(form.querySelectorAll(".js-save-button"));
+      const submitButton = form.querySelector(".js-submit-button");
+      const itemsBody = document.getElementById("institution-items-body");
+      const rowTemplate = document.getElementById("institution-item-row-template");
+      const addRowBtn = document.getElementById("add-row-btn");
+      const sortButtons = document.querySelectorAll("#institution-items-table .table-sort-btn");
+      const isEditMode = form.dataset.editMode === "true";
+      let currentSortKey = "";
+      let currentSortDir = "asc";
+      let initialSnapshot = "";
+      let allowNavigation = false;
+
+      function formSnapshot() {
+        const formData = new FormData(form);
+        formData.delete("csrfmiddlewaretoken");
+        return Array.from(formData.entries()).map(function(entry) {
+          return entry[0] + "=" + entry[1];
+        }).join("&");
+      }
+
+      function updateSaveState() {
+        const hasChanges = formSnapshot() !== initialSnapshot;
+        form.dataset.isDirty = hasChanges ? "true" : "false";
+        if (!isEditMode || !saveButtons.length) return;
+        saveButtons.forEach(function(button) {
+          button.disabled = !hasChanges;
+          button.classList.toggle("btn-disabled", !hasChanges);
+        });
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.classList.remove("btn-disabled");
+        }
+      }
+
+      function confirmLeave() {
+        return window.confirm("You have unsaved changes. Leave this page without saving?");
+      }
+
+      function formatInputNumber(value) {
+        const numeric = Number(value || 0);
+        if (Number.isNaN(numeric)) return "0";
+        return Number.isInteger(numeric) ? String(numeric) : String(Number(numeric.toFixed(2)));
+      }
+
+      function bindRow(row) {
+        const articleSelect = row.querySelector(".article-select");
+        const itemTypeDisplay = row.querySelector(".item-type-display");
+        const quantityInput = row.querySelector(".quantity-input");
+        const unitCostInput = row.querySelector(".unit-cost-input");
+        const lineTotalInput = row.querySelector(".line-total");
+        const lineTotalDisplay = row.querySelector(".line-total-display");
+        const duplicateIndicator = row.querySelector(".duplicate-indicator");
+        const qtyMinusBtn = row.querySelector(".qty-minus");
+        const qtyPlusBtn = row.querySelector(".qty-plus");
+        const removeBtn = row.querySelector(".remove-row-btn");
+        let lastArticleId = articleSelect.value;
+
+        function updateRow() {
+          const selected = articleSelect.options[articleSelect.selectedIndex];
+          const itemType = selected?.dataset.type || "";
+          const articleCost = Number(selected?.dataset.cost || 0);
+          const selectedArticleId = selected?.value || "";
+          const articleChanged = selectedArticleId !== lastArticleId;
+          const quantity = Number(quantityInput.value || 0);
+          itemTypeDisplay.textContent = itemType || "-";
+          if (articleCost > 0) {
+            unitCostInput.value = formatInputNumber(articleCost);
+            unitCostInput.readOnly = true;
+          } else {
+            if (articleChanged && !unitCostInput.value) {
+              unitCostInput.value = "0";
+            }
+            unitCostInput.readOnly = false;
+          }
+          const unitCost = Number(unitCostInput.value || 0);
+          const lineTotal = quantity * unitCost;
+          lineTotalInput.value = lineTotal.toFixed(2);
+          lineTotalDisplay.textContent = "Rs." + lineTotal.toLocaleString("en-IN", {
+            maximumFractionDigits: 2,
+            minimumFractionDigits: 0
+          });
+          lastArticleId = selectedArticleId;
+          markDuplicateItems();
+          updateSaveState();
+        }
+
+        articleSelect.addEventListener("change", updateRow);
+        quantityInput.addEventListener("input", updateRow);
+        unitCostInput.addEventListener("input", updateRow);
+        qtyMinusBtn.addEventListener("click", function() {
+          const current = Math.max(1, Number(quantityInput.value || 1));
+          quantityInput.value = Math.max(1, current - 1);
+          updateRow();
+        });
+        qtyPlusBtn.addEventListener("click", function() {
+          const current = Math.max(1, Number(quantityInput.value || 1));
+          quantityInput.value = current + 1;
+          updateRow();
+        });
+        removeBtn.addEventListener("click", function() {
+          row.remove();
+          markDuplicateItems();
+          updateSaveState();
+        });
+        updateRow();
+      }
+
+      function markDuplicateItems() {
+        const rows = Array.from(itemsBody.querySelectorAll(".institution-item-row"));
+        const counts = new Map();
+        const repeatedAidLabels = [];
+        rows.forEach(function(row) {
+          const articleSelect = row.querySelector(".article-select");
+          const articleId = articleSelect?.value || "";
+          const itemType = articleSelect?.selectedOptions[0]?.dataset.type || "";
+          if (!articleId) return;
+          if (itemType === "Aid") {
+            counts.set("aid:" + articleId, (counts.get("aid:" + articleId) || 0) + 1);
+            return;
+          }
+          counts.set(articleId, (counts.get(articleId) || 0) + 1);
+        });
+        rows.forEach(function(row) {
+          const articleSelect = row.querySelector(".article-select");
+          const articleId = articleSelect?.value || "";
+          const itemType = articleSelect?.selectedOptions[0]?.dataset.type || "";
+          const itemLabel = articleSelect?.selectedOptions[0]?.textContent.trim() || "";
+          const duplicate = !!articleId && itemType !== "Aid" && (counts.get(articleId) || 0) > 1;
+          const duplicateIndicator = row.querySelector(".duplicate-indicator");
+          row.classList.toggle("duplicate-row", duplicate);
+          if (articleSelect) {
+            articleSelect.classList.toggle("duplicate-input", duplicate);
+          }
+          if (duplicateIndicator) {
+            duplicateIndicator.hidden = !duplicate;
+          }
+          if (itemType === "Aid") {
+            const aidCount = counts.get("aid:" + articleId) || 0;
+            if (articleId && aidCount > 1 && itemLabel) {
+              repeatedAidLabels.push(aidCount + ' x "' + itemLabel + '"');
+            }
+          }
+        });
+        const multiAidSummary = document.getElementById("institution-multi-aid-summary");
+        const uniqueAidSummary = Array.from(new Set(repeatedAidLabels));
+        if (multiAidSummary) {
+          multiAidSummary.hidden = uniqueAidSummary.length === 0;
+          multiAidSummary.textContent = uniqueAidSummary.length ? "Multiple aids selected: " + uniqueAidSummary.join(", ") : "";
+        }
+      }
+
+      function sortValue(row, key) {
+        if (key === "item") return row.querySelector(".article-select")?.selectedOptions[0]?.textContent.trim().toLowerCase() || "";
+        if (key === "type") return row.querySelector(".item-type-display")?.textContent.trim().toLowerCase() || "";
+        if (key === "quantity") return Number(row.querySelector(".quantity-input")?.value || 0);
+        if (key === "unit_cost") return Number(row.querySelector(".unit-cost-input")?.value || 0);
+        if (key === "total") return Number(row.querySelector(".line-total")?.value || 0);
+        if (key === "comment") return row.querySelector(".notes-input")?.value.trim().toLowerCase() || "";
+        return "";
+      }
+
+      function updateSortIndicators() {
+        sortButtons.forEach(function(button) {
+          const indicator = button.querySelector(".sort-indicator");
+          if (!indicator) return;
+          if (button.dataset.sortKey !== currentSortKey) {
+            indicator.textContent = "⇅";
+          } else {
+            indicator.textContent = currentSortDir === "asc" ? "↑" : "↓";
+          }
+        });
+      }
+
+      function sortRows(key) {
+        if (currentSortKey === key) {
+          currentSortDir = currentSortDir === "asc" ? "desc" : "asc";
+        } else {
+          currentSortKey = key;
+          currentSortDir = "asc";
+        }
+        const rows = Array.from(itemsBody.querySelectorAll(".institution-item-row"));
+        rows.sort(function(a, b) {
+          const aValue = sortValue(a, key);
+          const bValue = sortValue(b, key);
+          if (aValue < bValue) return currentSortDir === "asc" ? -1 : 1;
+          if (aValue > bValue) return currentSortDir === "asc" ? 1 : -1;
+          return 0;
+        });
+        rows.forEach(function(row) { itemsBody.appendChild(row); });
+        updateSortIndicators();
+        markDuplicateItems();
+        updateSaveState();
+      }
+
+      addRowBtn.addEventListener("click", function() {
+        const fragment = rowTemplate.content.cloneNode(true);
+        itemsBody.appendChild(fragment);
+        bindRow(itemsBody.lastElementChild);
+        if (currentSortKey) sortRows(currentSortKey);
+        markDuplicateItems();
+        updateSaveState();
+      });
+
+      sortButtons.forEach(function(button) {
+        button.addEventListener("click", function() {
+          sortRows(button.dataset.sortKey);
+        });
+      });
+      window.addEventListener("beforeunload", function(event) {
+        if (allowNavigation || form.dataset.isDirty !== "true") return;
+        event.preventDefault();
+        event.returnValue = "";
+      });
+      document.addEventListener("click", function(event) {
+        const link = event.target.closest("a[href]");
+        if (!link || allowNavigation || form.dataset.isDirty !== "true") return;
+        const href = link.getAttribute("href") || "";
+        if (!href || href.startsWith("#") || href.startsWith("javascript:") || link.target === "_blank" || link.hasAttribute("download")) return;
+        if (!confirmLeave()) {
+          event.preventDefault();
+          return;
+        }
+        allowNavigation = true;
+      }, true);
+      form.addEventListener("submit", function(event) {
+        const submitter = event.submitter;
+        if (submitter && submitter.value === "submit") {
+          const confirmed = window.confirm("Once submitted, this application can't be changed and will be treated as final. Do you want to continue?");
+          if (!confirmed) {
+            event.preventDefault();
+            return;
+          }
+        }
+        allowNavigation = true;
+      });
+
+      itemsBody.querySelectorAll(".institution-item-row").forEach(bindRow);
+      if (!itemsBody.children.length) {
+        addRowBtn.click();
+      }
+      markDuplicateItems();
+      initialSnapshot = formSnapshot();
+      updateSaveState();
+    })();
+  </script>
+  <style>
+    .btn:not(.icon-btn) {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn:not(.icon-btn) svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex: 0 0 auto;
+    }
+    .btn.btn-disabled {
+      opacity: 0.45;
+      filter: saturate(0.45);
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 0.84rem;
+      font-weight: 600;
+      border: 1px solid var(--border-color);
+      background: #fff7e6;
+      color: #6f4b00;
+    }
+    .status-pill.status-submitted {
+      background: #dcfce7;
+      color: #166534;
+      border-color: #86efac;
+    }
+    .status-pill.status-draft {
+      background: #ffedd5;
+      color: #9a3412;
+      border-color: #fdba74;
+    }
+    .form-section-card {
+      margin-bottom: 16px;
+      padding: 16px;
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      background: linear-gradient(180deg, #fffef9 0%, #fff9ef 100%);
+    }
+    .section-title-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .section-title {
+      margin: 0 0 4px;
+    }
+    .section-note {
+      color: #8a7555;
+      font-size: 0.92rem;
+    }
+    .inline-feedback-group {
+      margin-bottom: 14px;
+    }
+    .info-field {
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: #fffaf0;
+      color: var(--text-primary);
+    }
+    .table-sort-btn {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      font: inherit;
+      color: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sort-indicator {
+      color: #8a7555;
+      font-size: 0.85rem;
+    }
+    .qty-control {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      min-width: 0;
+      flex-wrap: nowrap;
+    }
+    .qty-btn {
+      width: 32px;
+      min-width: 32px;
+      height: 32px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: #fff9eb;
+      color: var(--text-primary);
+      font-size: 1.1rem;
+      line-height: 1;
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+    .qty-btn:hover {
+      background: #fef0c7;
+    }
+    .qty-input {
+      width: 64px;
+      min-width: 64px;
+      text-align: center;
+      padding-left: 8px;
+      padding-right: 8px;
+    }
+    .item-type-fit {
+      min-width: 92px;
+      width: 100%;
+    }
+    .item-notes {
+      width: 100%;
+    }
+    .item-actions-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+    .multi-aid-summary {
+      margin-right: auto;
+      color: #8a5b00;
+      font-size: 0.88rem;
+      font-weight: 500;
+    }
+    .duplicate-indicator {
+      margin-top: 6px;
+      color: #dc2626;
+      font-size: 0.82rem;
+      font-weight: 500;
+    }
+    .duplicate-row td {
+      background: rgba(220, 38, 38, 0.05);
+    }
+    .duplicate-input {
+      border-color: #f87171;
+      background: #fff3f3;
+    }
+    @media (max-width: 900px) {
+      .item-actions-row {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+      }
+      .multi-aid-summary {
+        width: 100%;
+        margin-right: 0;
+      }
+    }
+    #institution-items-table th:last-child,
+    #institution-items-table td:last-child {
+      width: 90px;
+      min-width: 90px;
+      white-space: nowrap;
+      text-align: center;
+    }
+    #institution-items-table th {
+      text-align: center;
+      vertical-align: middle;
+    }
+    #institution-items-table th:first-child {
+      text-align: left;
+    }
+    #institution-items-table td {
+      vertical-align: middle;
+    }
+    #institution-items-table td:nth-child(2),
+    #institution-items-table td:nth-child(3),
+    #institution-items-table td:nth-child(4),
+    #institution-items-table td:nth-child(5),
+    #institution-items-table td:nth-child(7) {
+      text-align: center;
+    }
+    #institution-items-table td:nth-child(6) {
+      text-align: left;
+    }
+    @media (max-width: 640px) {
+      .form-section-card {
+        padding: 12px;
+      }
+      #institution-items-table {
+        min-width: 900px;
+      }
+      .qty-input {
+        width: 72px;
+      }
+    }
+  </style>
+{% endblock %}
