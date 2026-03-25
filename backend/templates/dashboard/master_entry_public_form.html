@@ -2,6 +2,13 @@
 {% load currency %}
 
 {% block content %}
+  <style>
+    .required-star {
+      color: #dc2626;
+      font-weight: 600;
+      margin-left: 2px;
+    }
+  </style>
   <section class="card">
     <div class="toolbar" style="justify-content: space-between;">
       <div>
@@ -42,6 +49,9 @@
 
     <form method="post" id="public-entry-form" data-unsaved-guard="true" {% if request.resolver_match.url_name == 'master-entry-public-edit' %}data-edit-mode="true" data-confirm-message="Save changes to this public entry?"{% else %}data-edit-mode="false"{% endif %}>
       {% csrf_token %}
+      {% if conflict_token %}
+        <input type="hidden" name="_conflict_token" value="{{ conflict_token }}">
+      {% endif %}
       <div class="form-section-card">
       <div class="section-title-row">
         <div>
@@ -51,8 +61,8 @@
       </div>
       <div class="toolbar" style="align-items: end; margin-bottom: 0;">
         <div style="flex: 1;">
-          <label>Aadhar Number</label>
-          <input class="input" type="text" name="aadhar_number" value="{{ public_form_data.aadhar_number }}" placeholder="Enter 12-digit Aadhaar number" maxlength="12" inputmode="numeric" pattern="[0-9]{12}">
+          <label>Aadhar Number<span class="required-star">*</span></label>
+          <input class="input" type="text" name="aadhar_number" value="{{ public_form_data.aadhar_number }}" placeholder="Enter 12-digit Aadhaar number" maxlength="12" inputmode="numeric" pattern="[0-9]{12}" data-submit-required="true">
         </div>
         <button class="btn" type="submit" name="action" value="verify"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7H3V5h11"/></svg><span>Verify</span></button>
       </div>
@@ -84,6 +94,10 @@
             </tbody>
           </table>
         </div>
+      {% endif %}
+
+      {% if history_summary %}
+        <div class="field-hint" style="margin: 10px 0 14px; color: #475467;"><strong>Previous beneficiary history:</strong> {{ history_summary }}</div>
       {% endif %}
 
       {% if current_match %}
@@ -128,30 +142,41 @@
       </div>
       <div class="grid2">
         <div style="grid-column: span 2;">
-          <label>Name</label>
-          <input class="input" type="text" name="name" value="{{ public_form_data.name }}">
+          <label>Name<span class="required-star">*</span></label>
+          <input class="input" type="text" name="name" value="{{ public_form_data.name }}" data-submit-required="true">
         </div>
 
         <div>
-          <label>Handicapped</label>
+          <label>Handicapped<span class="required-star">*</span></label>
           <div class="toolbar" style="margin-bottom: 0;">
-            <label><input type="radio" name="is_handicapped" value="true" {% if public_form_data.is_handicapped == "true" %}checked{% endif %}> Yes</label>
+            <label><input type="radio" name="is_handicapped" value="true" {% if public_form_data.is_handicapped == "true" %}checked{% endif %} data-submit-required="true"> Yes</label>
             <label><input type="radio" name="is_handicapped" value="false" {% if public_form_data.is_handicapped == "false" %}checked{% endif %}> No</label>
           </div>
         </div>
 
         <div>
-          <label>Gender</label>
+          <label>Gender<span class="required-star">*</span></label>
           <div class="toolbar" style="margin-bottom: 0;">
             {% for value, label in gender_choices %}
-              <label><input type="radio" name="gender" value="{{ value }}" {% if public_form_data.gender == value %}checked{% endif %}> {{ label }}</label>
+              <label><input type="radio" name="gender" value="{{ value }}" {% if public_form_data.gender == value %}checked{% endif %} data-submit-required="true"> {{ label }}</label>
             {% endfor %}
           </div>
         </div>
 
+
+        <div style="grid-column: span 2;" id="disability-category-wrap" hidden>
+          <label>Disability Category<span class="required-star">*</span></label>
+          <select class="input" name="disability_category" id="disability-category-select" data-submit-required="conditional-disability">
+            <option value="">Select Disability Category</option>
+            {% for value, label in disability_category_choices %}
+              <option value="{{ value }}" {% if public_form_data.disability_category == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
         <div style="grid-column: span 2;" id="female-status-wrap">
-          <label>Gender Category</label>
-          <select class="input" name="female_status" id="female-status-select">
+          <label>Gender Category<span class="required-star">*</span></label>
+          <select class="input" name="female_status" id="female-status-select" data-submit-required="conditional-female">
             <option value="">Select Category</option>
             {% for value, label in female_status_choices %}
               <option value="{{ value }}" {% if public_form_data.female_status == value %}selected{% endif %}>{{ label }}</option>
@@ -161,13 +186,13 @@
         </div>
 
         <div style="grid-column: span 2;">
-          <label>Address</label>
-          <textarea class="textarea" name="address" rows="4">{{ public_form_data.address }}</textarea>
+          <label>Address<span class="required-star">*</span></label>
+          <textarea class="textarea" name="address" rows="4" data-submit-required="true">{{ public_form_data.address }}</textarea>
         </div>
 
         <div style="grid-column: span 2;">
-          <label>Mobile Number</label>
-          <input class="input" type="text" name="mobile" value="{{ public_form_data.mobile }}" placeholder="Enter mobile number">
+          <label>Mobile Number<span class="required-star">*</span></label>
+          <input class="input" type="text" name="mobile" value="{{ public_form_data.mobile }}" placeholder="Enter mobile number" data-submit-required="true">
           <div class="field-hint">Use `&` if you need to store more than one mobile number.</div>
         </div>
       </div>
@@ -183,11 +208,12 @@
       <div class="grid2">
 
         <div style="grid-column: span 2;">
-          <label>Select Article</label>
-          <select class="input" name="article_id" id="public-article-select">
+          <label>Select Article<span class="required-star">*</span></label>
+          <select class="input article-select" name="article_id" id="public-article-select" data-submit-required="true">
             <option value="">Select Article</option>
+            <option value="__create_new__">+ Add New Article</option>
             {% for article in articles_master_list %}
-              <option value="{{ article.id }}" data-cost="{{ article.cost_per_unit }}" {% if public_form_data.article_id == article.id|stringformat:"s" %}selected{% endif %}>
+              <option value="{{ article.id }}" data-type="{{ article.item_type }}" data-cost="{{ article.cost_per_unit }}" data-short-label="{{ article.article_name }}" data-long-label="{{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}" {% if public_form_data.article_id == article.id|stringformat:"s" %}selected{% endif %}>
                 {{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}
               </option>
             {% endfor %}
@@ -197,15 +223,15 @@
         <div style="grid-column: span 2;">
           <div class="public-metrics-row">
             <div class="public-metric-block public-metric-cost">
-              <label>Cost Per Unit</label>
-              <input class="input" type="number" min="0" step="0.01" name="article_cost_per_unit" id="public-unit-cost" value="{{ public_form_data.article_cost_per_unit|default:'0'|floatformat:'-2' }}">
+              <label>Cost Per Unit<span class="required-star">*</span></label>
+              <input class="input" type="number" min="0" step="0.01" name="article_cost_per_unit" id="public-unit-cost" value="{{ public_form_data.article_cost_per_unit|default:'0'|floatformat:'-2' }}" data-submit-required="true">
               <div class="field-hint">Auto-filled from article master. Editable only when the stored cost is 0.</div>
             </div>
             <div class="public-metric-block public-metric-qty">
-              <label>Quantity</label>
+              <label>Quantity<span class="required-star">*</span></label>
               <div class="qty-control">
                 <button class="qty-btn" type="button" id="public-qty-minus" aria-label="Decrease quantity">-</button>
-                <input class="input qty-input" type="number" min="1" name="quantity" id="public-quantity" value="{{ public_form_data.quantity|default:'1' }}">
+                <input class="input qty-input" type="number" min="1" name="quantity" id="public-quantity" value="{{ public_form_data.quantity|default:'1' }}" data-submit-required="true">
                 <button class="qty-btn" type="button" id="public-qty-plus" aria-label="Increase quantity">+</button>
               </div>
             </div>
@@ -214,6 +240,11 @@
               <div class="info-field" id="public-total-value">Rs.0</div>
             </div>
           </div>
+        </div>
+
+        <div style="grid-column: span 2;" id="public-cheque-wrap" {% if public_entry.article.item_type != "Aid" and public_form_data.article_id %}hidden{% endif %}>
+          <label>Cheque / RTGS in Favour</label>
+          <textarea class="textarea" name="cheque_rtgs_in_favour" id="public-cheque-rtgs" rows="2">{{ public_form_data.cheque_rtgs_in_favour }}</textarea>
         </div>
 
         <div style="grid-column: span 2;">
@@ -252,6 +283,10 @@
               <label>File name</label>
               {{ attachment_upload_form.file_name }}
             </div>
+            <button class="btn js-camera-capture" type="button" data-camera-file-input="id_file" data-camera-name-input="id_file_name">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="14" r="4"/></svg>
+              <span>Camera</span>
+            </button>
             <button class="btn" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg><span>Upload</span></button>
           </div>
         </form>
@@ -273,7 +308,7 @@
                   <td>{{ attachment.created_at|date:"d/m/Y H:i" }}</td>
                   <td>
                     <div class="actions-inline">
-                      <button class="btn icon-btn js-attachment-preview" type="button" data-preview-url="{% url 'ui:application-attachment-download' attachment.id %}" data-preview-title="{{ attachment.file_name }}" data-preview-source="{{ attachment.file.name|lower }}" data-download-url="{% url 'ui:application-attachment-download' attachment.id %}?download=1" title="Preview file" aria-label="Preview file">
+                      <button class="btn icon-btn js-attachment-preview" type="button" onclick="return window.openAttachmentPreviewFromButton(this);" data-preview-url="{% url 'ui:application-attachment-download' attachment.id %}" data-preview-title="{{ attachment.file_name }}" data-preview-source="{{ attachment.file.name|lower }}" data-download-url="{% url 'ui:application-attachment-download' attachment.id %}?download=1" title="Preview file" aria-label="Preview file">
                         <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/></svg>
                       </button>
                       <a class="btn icon-btn" href="{% url 'ui:application-attachment-download' attachment.id %}" target="_blank" rel="noopener" title="Open file in new tab" aria-label="Open file in new tab">
@@ -333,24 +368,97 @@
   {{ female_status_descriptions|json_script:"female-status-descriptions-data" }}
   <script>
     (function() {
+      function syncSelectOptionLabels(select, mode) {
+        if (!select) return;
+        Array.from(select.options).forEach(function(option) {
+          const shortLabel = option.dataset.shortLabel;
+          const longLabel = option.dataset.longLabel;
+          if (!shortLabel || !longLabel) return;
+          option.textContent = mode === "long" ? longLabel : shortLabel;
+        });
+      }
+
+      function attachSelectLabelBehavior(select) {
+        if (!select) return;
+        syncSelectOptionLabels(select, "short");
+        select.addEventListener("focus", function() { syncSelectOptionLabels(select, "long"); });
+        select.addEventListener("mousedown", function() { syncSelectOptionLabels(select, "long"); });
+        select.addEventListener("change", function() { syncSelectOptionLabels(select, "short"); });
+        select.addEventListener("blur", function() { syncSelectOptionLabels(select, "short"); });
+      }
+
       const form = document.getElementById("public-entry-form");
       const saveButtons = Array.from(form.querySelectorAll(".js-save-button"));
       const submitButton = form.querySelector(".js-submit-button");
       const articleSelect = document.getElementById("public-article-select");
       const unitCostInput = document.getElementById("public-unit-cost");
+      const chequeWrap = document.getElementById("public-cheque-wrap");
+      const chequeInput = document.getElementById("public-cheque-rtgs");
       const quantityInput = document.getElementById("public-quantity");
       const qtyMinusBtn = document.getElementById("public-qty-minus");
       const qtyPlusBtn = document.getElementById("public-qty-plus");
       const totalValueInput = document.getElementById("public-total-value");
       const genderInputs = document.querySelectorAll('input[name="gender"]');
+      const handicappedInputs = document.querySelectorAll('input[name="is_handicapped"]');
+      const disabilityCategoryWrap = document.getElementById("disability-category-wrap");
+      const disabilityCategorySelect = document.getElementById("disability-category-select");
       const femaleStatusWrap = document.getElementById("female-status-wrap");
       const femaleStatusSelect = document.getElementById("female-status-select");
       const femaleStatusDescription = document.getElementById("female-status-description");
       const femaleStatusDescriptions = JSON.parse(document.getElementById("female-status-descriptions-data").textContent);
+      const articleCreateUrl = "{% url 'ui:article-create' %}?popup=1";
+      const submitRequiredFields = Array.from(form.querySelectorAll("[data-submit-required]"));
       const isEditMode = form.dataset.editMode === "true";
       let lastArticleId = articleSelect.value;
+      let articleCreateTarget = null;
       let initialSnapshot = "";
       let allowNavigation = false;
+
+      attachSelectLabelBehavior(articleSelect);
+
+      function upsertArticleOption(select, article) {
+        if (!select || !article || !article.id) return;
+        let option = Array.from(select.options).find(function(item) {
+          return item.value === String(article.id);
+        });
+        if (!option) {
+          option = document.createElement("option");
+          const createOption = Array.from(select.options).find(function(item) {
+            return item.value === "__create_new__";
+          });
+          option.value = String(article.id);
+          if (createOption && createOption.nextSibling) {
+            select.insertBefore(option, createOption.nextSibling);
+          } else {
+            select.appendChild(option);
+          }
+        }
+        option.dataset.type = article.item_type || "";
+        option.dataset.cost = article.cost_per_unit;
+        option.dataset.shortLabel = article.article_name;
+        option.dataset.longLabel = article.article_name + " - Rs." + Number(article.cost_per_unit || 0).toLocaleString("en-IN", {
+          maximumFractionDigits: 2,
+          minimumFractionDigits: 0
+        });
+        option.textContent = option.dataset.shortLabel;
+      }
+
+      function openArticleCreatePopup(targetSelect) {
+        articleCreateTarget = targetSelect;
+        window.open(articleCreateUrl, "articleCreatePopup", "popup=yes,width=760,height=760,resizable=yes,scrollbars=yes");
+      }
+
+      window.handleArticleCreated = function(article) {
+        document.querySelectorAll(".article-select").forEach(function(select) {
+          upsertArticleOption(select, article);
+          syncSelectOptionLabels(select, "short");
+        });
+        if (articleCreateTarget && document.body.contains(articleCreateTarget)) {
+          articleCreateTarget.value = String(article.id);
+          articleCreateTarget.dispatchEvent(new Event("change", { bubbles: true }));
+          articleCreateTarget.focus();
+        }
+      };
 
       function formSnapshot() {
         const formData = new FormData(form);
@@ -388,6 +496,7 @@
 
       function recalc() {
         const selected = articleSelect.options[articleSelect.selectedIndex];
+        const itemType = selected?.dataset.type || "";
         const articleCost = Number(selected?.dataset.cost || 0);
         const selectedArticleId = selected?.value || "";
         const articleChanged = selectedArticleId !== lastArticleId;
@@ -395,18 +504,56 @@
           unitCostInput.value = formatInputNumber(articleCost);
           unitCostInput.readOnly = true;
         } else {
-          if (articleChanged && !unitCostInput.value) {
+          if (articleChanged) {
             unitCostInput.value = "0";
           }
           unitCostInput.readOnly = false;
         }
         const quantity = Number(quantityInput.value || 0);
+        if (chequeWrap) {
+          const showCheque = itemType === "Aid";
+          chequeWrap.hidden = !showCheque;
+          if (!showCheque && chequeInput) {
+            chequeInput.value = "";
+          }
+        }
         const cost = Number(unitCostInput.value || 0);
         totalValueInput.textContent = "Rs." + (quantity * cost).toLocaleString("en-IN", {
           maximumFractionDigits: 2,
           minimumFractionDigits: 0
         });
         lastArticleId = selectedArticleId;
+      }
+
+      function updateSubmitRequirements(mode) {
+        const submitMode = mode === "submit";
+        submitRequiredFields.forEach(function(field) {
+          const requirement = field.dataset.submitRequired;
+          if (field.type === "radio") {
+            field.required = submitMode && requirement === "true";
+            return;
+          }
+          if (requirement === "true") {
+            field.required = submitMode;
+          } else if (requirement === "conditional-disability") {
+            const isHandicapped = Array.from(handicappedInputs).find(function(input) { return input.checked; })?.value === "true";
+            field.required = submitMode && isHandicapped;
+          } else if (requirement === "conditional-female") {
+            const selectedGender = Array.from(genderInputs).find(function(input) { return input.checked; })?.value || "";
+            field.required = submitMode && selectedGender === "Female";
+          }
+        });
+      }
+
+      function updateDisabilityCategoryUI() {
+        const isHandicapped = Array.from(handicappedInputs).find(function(input) { return input.checked; })?.value === "true";
+        disabilityCategoryWrap.hidden = !isHandicapped;
+        disabilityCategorySelect.required = isHandicapped;
+        if (!isHandicapped) {
+          disabilityCategorySelect.value = "";
+        }
+        updateSubmitRequirements(form.dataset.pendingAction || "draft");
+        updateSaveState();
       }
 
       function updateFemaleStatusUI() {
@@ -417,18 +564,33 @@
         if (!showFemaleStatus) {
           femaleStatusSelect.value = "";
           femaleStatusDescription.textContent = "Choose the category that best describes the beneficiary's present situation.";
+          updateSubmitRequirements(form.dataset.pendingAction || "draft");
+          updateSaveState();
           return;
         }
         femaleStatusDescription.textContent = femaleStatusDescriptions[femaleStatusSelect.value] || "Choose the category that best describes the beneficiary's present situation.";
+        updateSubmitRequirements(form.dataset.pendingAction || "draft");
         updateSaveState();
       }
 
-      articleSelect.addEventListener("change", recalc);
+      articleSelect.addEventListener("change", function() {
+        if (articleSelect.value === "__create_new__") {
+          articleSelect.value = lastArticleId || "";
+          syncSelectOptionLabels(articleSelect, "short");
+          openArticleCreatePopup(articleSelect);
+          return;
+        }
+        recalc();
+      });
       quantityInput.addEventListener("input", recalc);
       unitCostInput.addEventListener("input", recalc);
+      handicappedInputs.forEach(function(input) {
+        input.addEventListener("change", updateDisabilityCategoryUI);
+      });
       genderInputs.forEach(function(input) {
         input.addEventListener("change", updateFemaleStatusUI);
       });
+      disabilityCategorySelect.addEventListener("change", updateSaveState);
       femaleStatusSelect.addEventListener("change", updateFemaleStatusUI);
       qtyMinusBtn.addEventListener("click", function() {
         const current = Math.max(1, Number(quantityInput.value || 1));
@@ -441,6 +603,12 @@
         quantityInput.value = current + 1;
         recalc();
         updateSaveState();
+      });
+      form.querySelectorAll('button[name="action"]').forEach(function(button) {
+        button.addEventListener("click", function() {
+          form.dataset.pendingAction = button.value;
+          updateSubmitRequirements(button.value);
+        });
       });
       window.addEventListener("beforeunload", function(event) {
         if (allowNavigation || form.dataset.isDirty !== "true") return;
@@ -471,8 +639,11 @@
       });
       form.addEventListener("input", updateSaveState);
       form.addEventListener("change", updateSaveState);
+      form.dataset.pendingAction = "draft";
       updateFemaleStatusUI();
       recalc();
+      updateDisabilityCategoryUI();
+      updateSubmitRequirements("draft");
       initialSnapshot = formSnapshot();
       updateSaveState();
     })();
@@ -500,32 +671,31 @@
       cursor: not-allowed;
     }
     .status-pill {
-      display: inline-flex;
-      align-items: center;
-      padding: 6px 10px;
-      border-radius: 999px;
-      font-size: 0.84rem;
+      display: inline;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      font-size: 0.9rem;
       font-weight: 600;
-      border: 1px solid var(--border-color);
-      background: #fff7e6;
-      color: #6f4b00;
+      color: #64748b;
     }
     .status-pill.status-submitted {
-      background: #dcfce7;
-      color: #166534;
-      border-color: #86efac;
+      background: transparent;
+      color: #16a34a;
+      border-color: transparent;
     }
     .status-pill.status-draft {
-      background: #ffedd5;
-      color: #9a3412;
-      border-color: #fdba74;
+      background: transparent;
+      color: #f59e0b;
+      border-color: transparent;
     }
     .form-section-card {
       margin-bottom: 16px;
       padding: 16px;
       border: 1px solid var(--border-color);
       border-radius: 18px;
-      background: linear-gradient(180deg, #fffef9 0%, #fff9ef 100%);
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
     }
     .section-title-row {
       display: flex;
@@ -539,12 +709,12 @@
       margin: 0 0 4px;
     }
     .section-note {
-      color: #8a7555;
+      color: #64748b;
       font-size: 0.92rem;
     }
     .field-hint {
       margin-top: 6px;
-      color: #8a7555;
+      color: #64748b;
       font-size: 0.86rem;
     }
     .warning-panel {
@@ -569,7 +739,7 @@
       padding: 0 14px;
       border: 1px solid var(--border-color);
       border-radius: 14px;
-      background: #fffaf0;
+      background: #f8fbff;
       color: var(--text-primary);
     }
     .qty-control {
@@ -582,14 +752,14 @@
       height: 38px;
       border: 1px solid var(--border-color);
       border-radius: 12px;
-      background: #fff9eb;
+      background: #f8fafc;
       color: var(--text-primary);
       font-size: 1.15rem;
       line-height: 1;
       cursor: pointer;
     }
     .qty-btn:hover {
-      background: #fef0c7;
+      background: #eff6ff;
     }
     .qty-input {
       width: 90px;

@@ -3,24 +3,85 @@
 
 {% block content %}
   <section class="card">
-    <div class="toolbar">
-      <h2 style="margin: 0;">Articles</h2>
-      {% if request.user.role == "admin" or request.user.role == "editor" %}
-        <a class="btn" href="{% url 'ui:article-create' %}">Add article</a>
-      {% endif %}
+    <div class="toolbar" style="justify-content: space-between;">
+      <div>
+        <h2 style="margin: 0 0 6px;">Article Management</h2>
+      </div>
+      <a class="btn" href="?{{ query_string_without_page }}{% if query_string_without_page %}&{% endif %}export=csv">Export</a>
     </div>
-    <form method="get" class="toolbar" style="margin-bottom: 16px;">
-      <input class="input" type="text" name="q" value="{{ request.GET.q }}" placeholder="Search by article name" />
-      <button class="btn" type="submit">Search</button>
+
+    <form method="get" class="form-section-card" id="article-filter-form" style="margin: 18px 0 16px;">
+      <div class="toolbar" style="justify-content: space-between; align-items: end; margin-top: 0;">
+        <div style="flex: 1.5; max-width: 520px;">
+          <label>Search</label>
+          <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Search article, token name, category, or type" />
+        </div>
+      </div>
+      <div class="toolbar" style="align-items: end;">
+        <div style="min-width: 220px; max-width: 280px;">
+          <label>Item Type</label>
+          <select class="input" name="item_type">
+            <option value="">All Types</option>
+            {% for value, label in item_type_choices %}
+              <option value="{{ value }}" {% if filters.item_type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="flex: 0.8;">
+          <label>Category</label>
+          <select class="input" name="category">
+            <option value="">All Categories</option>
+            {% for value in category_choices %}
+              <option value="{{ value }}" {% if filters.category == value %}selected{% endif %}>{{ value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="flex: 0.9;">
+          <label>Super Category</label>
+          <select class="input" name="master_category">
+            <option value="">All Super Categories</option>
+            {% for value in master_category_choices %}
+              <option value="{{ value }}" {% if filters.master_category == value %}selected{% endif %}>{{ value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="width: 170px;">
+          <label>Combo / Separate</label>
+          <select class="input" name="combo">
+            <option value="">All</option>
+            {% for value, label in combo_choices %}
+              <option value="{{ value }}" {% if filters.combo == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <a class="btn" href="{% url 'ui:article-list' %}">Clear All</a>
+        {% if request.user.role == "admin" or request.user.role == "editor" %}
+          <a class="btn" href="{% url 'ui:article-create' %}">Create</a>
+        {% endif %}
+      </div>
     </form>
+
+    <div class="table-responsive">
     <table>
+      <colgroup>
+        <col style="width: 28%;">
+        <col style="width: 10%;">
+        <col style="width: 12%;">
+        <col style="width: 14%;">
+        <col style="width: 14%;">
+        <col style="width: 10%;">
+        <col style="width: 10%;">
+        <col style="width: 12%;">
+      </colgroup>
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Category</th>
-          <th>Cost</th>
-          <th>Active</th>
+          <th><a href="?{{ query_string_without_page }}{% if query_string_without_page %}&{% endif %}sort=article_name&dir={% if current_sort == 'article_name' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Article Name{% if current_sort == 'article_name' %} {% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
+          <th><a href="?{{ query_string_without_page }}{% if query_string_without_page %}&{% endif %}sort=cost_per_unit&dir={% if current_sort == 'cost_per_unit' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Cost{% if current_sort == 'cost_per_unit' %} {% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
+          <th><a href="?{{ query_string_without_page }}{% if query_string_without_page %}&{% endif %}sort=item_type&dir={% if current_sort == 'item_type' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Item Type{% if current_sort == 'item_type' %} {% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
+          <th><a href="?{{ query_string_without_page }}{% if query_string_without_page %}&{% endif %}sort=category&dir={% if current_sort == 'category' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Category{% if current_sort == 'category' %} {% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
+          <th><a href="?{{ query_string_without_page }}{% if query_string_without_page %}&{% endif %}sort=master_category&dir={% if current_sort == 'master_category' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Super Category{% if current_sort == 'master_category' %} {% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
+          <th><a href="?{{ query_string_without_page }}{% if query_string_without_page %}&{% endif %}sort=created_at&dir={% if current_sort == 'created_at' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Created At{% if current_sort == 'created_at' %} {% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
+          <th><a href="?{{ query_string_without_page }}{% if query_string_without_page %}&{% endif %}sort=article_name_tk&dir={% if current_sort == 'article_name_tk' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Token Name{% if current_sort == 'article_name_tk' %} {% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -28,14 +89,16 @@
         {% for article in articles %}
           <tr>
             <td>{{ article.article_name }}</td>
-            <td>{{ article.item_type }}</td>
-            <td>{{ article.category|default:"-" }}</td>
             <td>Rs.{{ article.cost_per_unit|rupees }}</td>
-            <td>{{ article.is_active|yesno:"Yes,No" }}</td>
+            <td>{{ article.get_item_type_display }}</td>
+            <td>{{ article.category|default:"-" }}</td>
+            <td>{{ article.master_category|default:"-" }}</td>
+            <td>{{ article.created_at|date:"d/m/Y" }}</td>
+            <td>{{ article.article_name_tk|default:"-" }}</td>
             <td>
               <div class="actions-inline">
               {% if request.user.role == "admin" or request.user.role == "editor" %}
-                <a class="btn icon-btn" title="Edit" aria-label="Edit" href="{% url 'ui:article-edit' article.id %}">
+                <a class="btn btn-edit icon-btn" title="Edit" aria-label="Edit" href="{% url 'ui:article-edit' article.id %}">
                   <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
                 </a>
               {% endif %}
@@ -49,22 +112,65 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="6">No articles found.</td>
+            <td colspan="8">No articles found.</td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
+    </div>
 
-    {% if is_paginated %}
-      <div class="toolbar" style="margin-top: 12px;">
-        {% if page_obj.has_previous %}
-          <a class="btn" href="?q={{ request.GET.q }}&page={{ page_obj.previous_page_number }}">Prev</a>
-        {% endif %}
-        <span class="small">Page {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
-        {% if page_obj.has_next %}
-          <a class="btn" href="?q={{ request.GET.q }}&page={{ page_obj.next_page_number }}">Next</a>
-        {% endif %}
-      </div>
-    {% endif %}
   </section>
+
+  <script>
+    (function() {
+      const form = document.getElementById("article-filter-form");
+      if (!form) return;
+      const storageKey = "article-filter-focus-state";
+
+      function saveSearchState(input) {
+        try {
+          sessionStorage.setItem(storageKey, JSON.stringify({
+            value: input.value,
+            selectionStart: input.selectionStart,
+            selectionEnd: input.selectionEnd,
+          }));
+        } catch (error) {}
+      }
+
+      const searchInput = form.querySelector('input[name="q"]');
+      if (searchInput) {
+        try {
+          const rawState = sessionStorage.getItem(storageKey);
+          if (rawState) {
+            const state = JSON.parse(rawState);
+            if (typeof state.value === "string") {
+              searchInput.focus();
+              const start = typeof state.selectionStart === "number" ? state.selectionStart : state.value.length;
+              const end = typeof state.selectionEnd === "number" ? state.selectionEnd : start;
+              searchInput.setSelectionRange(start, end);
+            }
+            sessionStorage.removeItem(storageKey);
+          }
+        } catch (error) {}
+      }
+
+      const immediateFields = form.querySelectorAll('select[name="item_type"], select[name="category"], select[name="master_category"], select[name="combo"]');
+      immediateFields.forEach(function(field) {
+        field.addEventListener("change", function() {
+          form.requestSubmit();
+        });
+      });
+
+      if (searchInput) {
+        let searchTimer = null;
+        searchInput.addEventListener("input", function() {
+          saveSearchState(searchInput);
+          window.clearTimeout(searchTimer);
+          searchTimer = window.setTimeout(function() {
+            form.requestSubmit();
+          }, 550);
+        });
+      }
+    })();
+  </script>
 {% endblock %}

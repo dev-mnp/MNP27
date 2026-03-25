@@ -22,7 +22,7 @@
       <div><label>Name</label><input class="input" value="{{ entry.name }}" readonly></div>
       <div><label>Mobile Number</label><input class="input" value="{{ entry.mobile|default:'-' }}" readonly></div>
       <div><label>Gender</label><input class="input" value="{{ entry.gender|default:'-' }}" readonly></div>
-      <div><label>Handicapped</label><input class="input" value="{{ entry.is_handicapped|yesno:'Yes,No' }}" readonly></div>
+      <div><label>Handicapped Status</label><input class="input" value="{% if entry.is_handicapped and entry.is_handicapped != "No" %}{{ entry.get_is_handicapped_display }}{% else %}No{% endif %}" readonly></div>
       <div style="grid-column: span 2;"><label>Address</label><textarea class="textarea" rows="3" readonly>{{ entry.address|default:"" }}</textarea></div>
       <div><label>Article</label><input class="input" value="{{ entry.article.article_name }}" readonly></div>
       <div><label>Quantity</label><input class="input" value="{{ entry.quantity }}" readonly></div>

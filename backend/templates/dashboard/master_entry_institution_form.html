@@ -2,6 +2,13 @@
 {% load currency %}
 
 {% block content %}
+  <style>
+    .required-star {
+      color: #dc2626;
+      font-weight: 600;
+      margin-left: 2px;
+    }
+  </style>
   <section class="card">
     <div class="toolbar" style="justify-content: space-between;">
       <div>
@@ -26,6 +33,9 @@
 
     <form method="post" id="institution-entry-form" data-unsaved-guard="true" {% if request.resolver_match.url_name == 'master-entry-institution-edit' %}data-edit-mode="true" data-confirm-message="Save changes to this institution entry?"{% else %}data-edit-mode="false"{% endif %}>
       {% csrf_token %}
+      {% if conflict_token %}
+        <input type="hidden" name="_conflict_token" value="{{ conflict_token }}">
+      {% endif %}
       <div class="form-section-card">
       <div class="section-title-row">
         <div>
@@ -39,11 +49,11 @@
           <div class="info-field">{% if institution_application_number and institution_application_number|slice:':10' == 'DRAFT-INS-' %}Draft{% else %}{{ institution_application_number|default:'Auto on submit' }}{% endif %}</div>
         </div>
         <div>
-          <label>Institution Name</label>
+          <label>Institution Name<span class="required-star">*</span></label>
           <input class="input" type="text" name="institution_name" value="{{ institution_form_data.institution_name }}">
         </div>
         <div>
-          <label>Institution Type</label>
+          <label>Institution Type<span class="required-star">*</span></label>
           <select class="input" name="institution_type">
             <option value="">Select Type</option>
             {% for value, label in institution_type_choices %}
@@ -52,12 +62,17 @@
           </select>
         </div>
         <div>
-          <label>Mobile Number</label>
+          <label>Mobile Number<span class="required-star">*</span></label>
           <input class="input" type="text" name="mobile" value="{{ institution_form_data.mobile }}">
         </div>
         <div style="grid-column: span 2;">
-          <label>Address</label>
+          <label>Address<span class="required-star">*</span></label>
           <textarea class="textarea" name="address" rows="3">{{ institution_form_data.address }}</textarea>
+        </div>
+        <div style="grid-column: span 2;">
+          <label>Internal Notes</label>
+          <textarea class="textarea" name="internal_notes" rows="3">{{ institution_form_data.internal_notes }}</textarea>
+          <div class="field-hint">Internal use only.</div>
         </div>
       </div>
       </div>
@@ -82,10 +97,10 @@
         </colgroup>
         <thead>
           <tr>
-            <th><button class="table-sort-btn" type="button" data-sort-key="item">Item <span class="sort-indicator">⇅</span></button></th>
+            <th><button class="table-sort-btn" type="button" data-sort-key="item">Item <span class="required-star">*</span> <span class="sort-indicator">⇅</span></button></th>
             <th><button class="table-sort-btn" type="button" data-sort-key="type">Type <span class="sort-indicator">⇅</span></button></th>
-            <th><button class="table-sort-btn" type="button" data-sort-key="quantity">Quantity <span class="sort-indicator">⇅</span></button></th>
-            <th><button class="table-sort-btn" type="button" data-sort-key="unit_cost">Unit Price <span class="sort-indicator">⇅</span></button></th>
+            <th><button class="table-sort-btn" type="button" data-sort-key="quantity">Quantity <span class="required-star">*</span> <span class="sort-indicator">⇅</span></button></th>
+            <th><button class="table-sort-btn" type="button" data-sort-key="unit_cost">Unit Price <span class="required-star">*</span> <span class="sort-indicator">⇅</span></button></th>
             <th><button class="table-sort-btn" type="button" data-sort-key="total">Total <span class="sort-indicator">⇅</span></button></th>
             <th><button class="table-sort-btn" type="button" data-sort-key="comment">Comment <span class="sort-indicator">⇅</span></button></th>
             <th>Action</th>
@@ -97,8 +112,9 @@
               <td>
                 <select class="input article-select" name="article_id">
                   <option value="">Select Item</option>
+                  <option value="__create_new__">+ Add New Article</option>
                   {% for article in articles_master_list %}
-                    <option value="{{ article.id }}" data-type="{{ article.item_type }}" data-cost="{{ article.cost_per_unit }}" {% if row.article_id == article.id|stringformat:"s" %}selected{% endif %}>
+                    <option value="{{ article.id }}" data-type="{{ article.item_type }}" data-cost="{{ article.cost_per_unit }}" data-short-label="{{ article.article_name }}" data-long-label="{{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}" {% if row.article_id == article.id|stringformat:"s" %}selected{% endif %}>
                       {{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}
                     </option>
                   {% endfor %}
@@ -118,7 +134,19 @@
                 <div class="info-field line-total-display">Rs.0</div>
                 <input class="line-total" type="hidden" value="0">
               </td>
-              <td><input class="input notes-input item-notes" name="notes" value="{{ row.notes }}"></td>
+              <td>
+                <div class="item-row-notes-stack">
+                  <div class="item-row-inline-field">
+                    <input class="input notes-input item-notes" name="notes" value="{{ row.notes }}" placeholder="Comments">
+                  </div>
+                  <div class="cheque-wrap" {% if row.item_type != "Aid" %}hidden{% endif %}>
+                    <div class="item-row-subfield">
+                      <div class="item-row-subfield-label">Cheque / RTGS in Favour</div>
+                      <textarea class="textarea cheque-input" name="cheque_rtgs_in_favour" rows="2">{{ row.cheque_rtgs_in_favour }}</textarea>
+                    </div>
+                  </div>
+                </div>
+              </td>
               <td>
                 <button class="btn btn-danger icon-btn remove-row-btn" type="button" title="Remove item" aria-label="Remove item">
                   <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
@@ -139,8 +167,9 @@
           <td>
             <select class="input article-select" name="article_id">
               <option value="">Select Item</option>
+              <option value="__create_new__">+ Add New Article</option>
               {% for article in articles_master_list %}
-                <option value="{{ article.id }}" data-type="{{ article.item_type }}" data-cost="{{ article.cost_per_unit }}">
+                <option value="{{ article.id }}" data-type="{{ article.item_type }}" data-cost="{{ article.cost_per_unit }}" data-short-label="{{ article.article_name }}" data-long-label="{{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}">
                   {{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}
                 </option>
               {% endfor %}
@@ -160,7 +189,19 @@
             <div class="info-field line-total-display">Rs.0</div>
             <input class="line-total" type="hidden" value="0">
           </td>
-          <td><input class="input notes-input item-notes" name="notes" value=""></td>
+          <td>
+            <div class="item-row-notes-stack">
+              <div class="item-row-inline-field">
+                <input class="input notes-input item-notes" name="notes" value="" placeholder="Comments">
+              </div>
+              <div class="cheque-wrap" hidden>
+                <div class="item-row-subfield">
+                  <div class="item-row-subfield-label">Cheque / RTGS in Favour</div>
+                  <textarea class="textarea cheque-input" name="cheque_rtgs_in_favour" rows="2"></textarea>
+                </div>
+              </div>
+            </div>
+          </td>
           <td>
             <button class="btn btn-danger icon-btn remove-row-btn" type="button" title="Remove item" aria-label="Remove item">
               <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
@@ -197,6 +238,10 @@
               <label>File name</label>
               {{ attachment_upload_form.file_name }}
             </div>
+            <button class="btn js-camera-capture" type="button" data-camera-file-input="id_file" data-camera-name-input="id_file_name">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="14" r="4"/></svg>
+              <span>Camera</span>
+            </button>
             <button class="btn" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg><span>Upload</span></button>
           </div>
         </form>
@@ -218,7 +263,7 @@
                   <td>{{ attachment.created_at|date:"d/m/Y H:i" }}</td>
                   <td>
                     <div class="actions-inline">
-                      <button class="btn icon-btn js-attachment-preview" type="button" data-preview-url="{% url 'ui:application-attachment-download' attachment.id %}" data-preview-title="{{ attachment.file_name }}" data-preview-source="{{ attachment.file.name|lower }}" data-download-url="{% url 'ui:application-attachment-download' attachment.id %}?download=1" title="Preview file" aria-label="Preview file">
+                      <button class="btn icon-btn js-attachment-preview" type="button" onclick="return window.openAttachmentPreviewFromButton(this);" data-preview-url="{% url 'ui:application-attachment-download' attachment.id %}" data-preview-title="{{ attachment.file_name }}" data-preview-source="{{ attachment.file.name|lower }}" data-download-url="{% url 'ui:application-attachment-download' attachment.id %}?download=1" title="Preview file" aria-label="Preview file">
                         <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/></svg>
                       </button>
                       <a class="btn icon-btn" href="{% url 'ui:application-attachment-download' attachment.id %}" target="_blank" rel="noopener" title="Open file in new tab" aria-label="Open file in new tab">
@@ -248,6 +293,25 @@
 
   <script>
     (function() {
+      function syncSelectOptionLabels(select, mode) {
+        if (!select) return;
+        Array.from(select.options).forEach(function(option) {
+          const shortLabel = option.dataset.shortLabel;
+          const longLabel = option.dataset.longLabel;
+          if (!shortLabel || !longLabel) return;
+          option.textContent = mode === "long" ? longLabel : shortLabel;
+        });
+      }
+
+      function attachSelectLabelBehavior(select) {
+        if (!select) return;
+        syncSelectOptionLabels(select, "short");
+        select.addEventListener("focus", function() { syncSelectOptionLabels(select, "long"); });
+        select.addEventListener("mousedown", function() { syncSelectOptionLabels(select, "long"); });
+        select.addEventListener("change", function() { syncSelectOptionLabels(select, "short"); });
+        select.addEventListener("blur", function() { syncSelectOptionLabels(select, "short"); });
+      }
+
       const form = document.getElementById("institution-entry-form");
       const saveButtons = Array.from(form.querySelectorAll(".js-save-button"));
       const submitButton = form.querySelector(".js-submit-button");
@@ -255,11 +319,57 @@
       const rowTemplate = document.getElementById("institution-item-row-template");
       const addRowBtn = document.getElementById("add-row-btn");
       const sortButtons = document.querySelectorAll("#institution-items-table .table-sort-btn");
+      const articleCreateUrl = "{% url 'ui:article-create' %}?popup=1";
       const isEditMode = form.dataset.editMode === "true";
       let currentSortKey = "";
       let currentSortDir = "asc";
+      let articleCreateTarget = null;
       let initialSnapshot = "";
       let allowNavigation = false;
+
+      function upsertArticleOption(select, article) {
+        if (!select || !article || !article.id) return;
+        let option = Array.from(select.options).find(function(item) {
+          return item.value === String(article.id);
+        });
+        if (!option) {
+          option = document.createElement("option");
+          const createOption = Array.from(select.options).find(function(item) {
+            return item.value === "__create_new__";
+          });
+          option.value = String(article.id);
+          if (createOption && createOption.nextSibling) {
+            select.insertBefore(option, createOption.nextSibling);
+          } else {
+            select.appendChild(option);
+          }
+        }
+        option.dataset.type = article.item_type || "";
+        option.dataset.cost = article.cost_per_unit;
+        option.dataset.shortLabel = article.article_name;
+        option.dataset.longLabel = article.article_name + " - Rs." + Number(article.cost_per_unit || 0).toLocaleString("en-IN", {
+          maximumFractionDigits: 2,
+          minimumFractionDigits: 0
+        });
+        option.textContent = option.dataset.shortLabel;
+      }
+
+      function openArticleCreatePopup(targetSelect) {
+        articleCreateTarget = targetSelect;
+        window.open(articleCreateUrl, "articleCreatePopup", "popup=yes,width=760,height=760,resizable=yes,scrollbars=yes");
+      }
+
+      window.handleArticleCreated = function(article) {
+        document.querySelectorAll(".article-select").forEach(function(select) {
+          upsertArticleOption(select, article);
+          syncSelectOptionLabels(select, "short");
+        });
+        if (articleCreateTarget && document.body.contains(articleCreateTarget)) {
+          articleCreateTarget.value = String(article.id);
+          articleCreateTarget.dispatchEvent(new Event("change", { bubbles: true }));
+          articleCreateTarget.focus();
+        }
+      };
 
       function formSnapshot() {
         const formData = new FormData(form);
@@ -301,6 +411,9 @@
         const lineTotalInput = row.querySelector(".line-total");
         const lineTotalDisplay = row.querySelector(".line-total-display");
         const duplicateIndicator = row.querySelector(".duplicate-indicator");
+        const notesInput = row.querySelector(".notes-input");
+        const chequeWrap = row.querySelector(".cheque-wrap");
+        const chequeInput = row.querySelector(".cheque-input");
         const qtyMinusBtn = row.querySelector(".qty-minus");
         const qtyPlusBtn = row.querySelector(".qty-plus");
         const removeBtn = row.querySelector(".remove-row-btn");
@@ -314,11 +427,19 @@
           const articleChanged = selectedArticleId !== lastArticleId;
           const quantity = Number(quantityInput.value || 0);
           itemTypeDisplay.textContent = itemType || "-";
+          notesInput.required = itemType === "Aid";
+          if (chequeWrap) {
+            const showCheque = itemType === "Aid";
+            chequeWrap.hidden = !showCheque;
+            if (!showCheque && chequeInput) {
+              chequeInput.value = "";
+            }
+          }
           if (articleCost > 0) {
             unitCostInput.value = formatInputNumber(articleCost);
             unitCostInput.readOnly = true;
           } else {
-            if (articleChanged && !unitCostInput.value) {
+            if (articleChanged) {
               unitCostInput.value = "0";
             }
             unitCostInput.readOnly = false;
@@ -335,7 +456,16 @@
           updateSaveState();
         }
 
-        articleSelect.addEventListener("change", updateRow);
+        attachSelectLabelBehavior(articleSelect);
+        articleSelect.addEventListener("change", function() {
+          if (articleSelect.value === "__create_new__") {
+            articleSelect.value = lastArticleId || "";
+            syncSelectOptionLabels(articleSelect, "short");
+            openArticleCreatePopup(articleSelect);
+            return;
+          }
+          updateRow();
+        });
         quantityInput.addEventListener("input", updateRow);
         unitCostInput.addEventListener("input", updateRow);
         qtyMinusBtn.addEventListener("click", function() {
@@ -378,6 +508,9 @@
           const itemLabel = articleSelect?.selectedOptions[0]?.textContent.trim() || "";
           const duplicate = !!articleId && itemType !== "Aid" && (counts.get(articleId) || 0) > 1;
           const duplicateIndicator = row.querySelector(".duplicate-indicator");
+        const notesInput = row.querySelector(".notes-input");
+        const chequeWrap = row.querySelector(".cheque-wrap");
+        const chequeInput = row.querySelector(".cheque-input");
           row.classList.toggle("duplicate-row", duplicate);
           if (articleSelect) {
             articleSelect.classList.toggle("duplicate-input", duplicate);
@@ -500,6 +633,28 @@
       align-items: center;
       gap: 8px;
     }
+    .item-row-notes-stack {
+      display: grid;
+      gap: 8px;
+    }
+    .item-row-subfield {
+      display: grid;
+      gap: 4px;
+    }
+    .item-row-subfield-label {
+      font-size: 0.73rem;
+      color: #64748b;
+      line-height: 1.2;
+    }
+    .item-row-inline-field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .item-row-inline-field .item-notes {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
     .btn:not(.icon-btn) svg {
       width: 16px;
       height: 16px;
@@ -517,32 +672,31 @@
       cursor: not-allowed;
     }
     .status-pill {
-      display: inline-flex;
-      align-items: center;
-      padding: 6px 10px;
-      border-radius: 999px;
-      font-size: 0.84rem;
+      display: inline;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      font-size: 0.9rem;
       font-weight: 600;
-      border: 1px solid var(--border-color);
-      background: #fff7e6;
-      color: #6f4b00;
+      color: #64748b;
     }
     .status-pill.status-submitted {
-      background: #dcfce7;
-      color: #166534;
-      border-color: #86efac;
+      background: transparent;
+      color: #16a34a;
+      border-color: transparent;
     }
     .status-pill.status-draft {
-      background: #ffedd5;
-      color: #9a3412;
-      border-color: #fdba74;
+      background: transparent;
+      color: #f59e0b;
+      border-color: transparent;
     }
     .form-section-card {
       margin-bottom: 16px;
       padding: 16px;
       border: 1px solid var(--border-color);
       border-radius: 18px;
-      background: linear-gradient(180deg, #fffef9 0%, #fff9ef 100%);
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
     }
     .section-title-row {
       display: flex;
@@ -556,7 +710,7 @@
       margin: 0 0 4px;
     }
     .section-note {
-      color: #8a7555;
+      color: #64748b;
       font-size: 0.92rem;
     }
     .inline-feedback-group {
@@ -569,7 +723,7 @@
       padding: 0 14px;
       border: 1px solid var(--border-color);
       border-radius: 14px;
-      background: #fffaf0;
+      background: #f8fbff;
       color: var(--text-primary);
     }
     .table-sort-btn {
@@ -584,7 +738,7 @@
       gap: 6px;
     }
     .sort-indicator {
-      color: #8a7555;
+      color: #64748b;
       font-size: 0.85rem;
     }
     .qty-control {
@@ -602,7 +756,7 @@
       height: 32px;
       border: 1px solid var(--border-color);
       border-radius: 10px;
-      background: #fff9eb;
+      background: #f8fafc;
       color: var(--text-primary);
       font-size: 1.1rem;
       line-height: 1;
@@ -610,7 +764,7 @@
       flex: 0 0 auto;
     }
     .qty-btn:hover {
-      background: #fef0c7;
+      background: #eff6ff;
     }
     .qty-input {
       width: 64px;

@@ -1,0 +1,562 @@
+{% extends "base.html" %}
+{% load currency %}
+
+{% block content %}
+<style>
+  .dashboard-root {
+    color: #1b1b1f;
+    font-family: "Space Grotesk", var(--app-font);
+  }
+  .dashboard-shell {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+  .hero {
+    background: #ffffff;
+    border-radius: 24px;
+    padding: 28px 28px 24px;
+    box-shadow: 0 24px 60px rgba(27, 27, 31, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+  }
+  .hero-top-capsule {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(26, 102, 255, 0.15);
+    background: rgba(26, 102, 255, 0.06);
+    padding: 10px 14px;
+    flex-wrap: wrap;
+  }
+  .hero-top-left { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+  .hero-top-title {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #1b1b1f;
+    white-space: nowrap;
+    text-align: center;
+    min-width: 22px;
+  }
+  .hero-top-welcome { color: #4a4f5a; font-size: 14px; font-weight: 500; white-space: nowrap; }
+  .hero-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(26, 102, 255, 0.1);
+    color: #1a3f8a;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .hero-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-top: 20px; }
+  .hero-card {
+    border-radius: 18px; padding: 16px; position: relative; overflow: hidden; min-height: 96px;
+  }
+  .hero-card::after {
+    content: ''; position: absolute; inset: auto -20% -40% auto; width: 180px; height: 180px; border-radius: 50%;
+    background: radial-gradient(circle at center, rgba(255, 255, 255, 0.35), transparent 70%);
+  }
+  .hero-card-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7; }
+  .hero-card-value { font-size: 22px; font-weight: 600; margin-top: 6px; }
+  .hero-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; position: relative; z-index: 3; }
+  .hero-card-edit-btn {
+    appearance: none;
+    border: 0;
+    background: rgba(255,255,255,0.55);
+    color: inherit;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+  }
+  .hero-card-edit-btn svg {
+    width: 15px;
+    height: 15px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .hero-card-edit-btn:hover { background: rgba(255,255,255,0.78); }
+  .hero-card-editor[hidden] { display: none !important; }
+  .hero-card-editor {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 1;
+  }
+  .hero-card-editor input {
+    width: 150px;
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 10px;
+    padding: 7px 10px;
+    font: inherit;
+    background: rgba(255,255,255,0.78);
+    color: inherit;
+  }
+  .section {
+    background: rgba(255, 255, 255, 0.92);
+    border-radius: 22px;
+    padding: 22px;
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    box-shadow: 0 10px 24px rgba(27, 27, 31, 0.06);
+  }
+  .section-title {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title span { display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: #1a66ff; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  .district-row-2 { grid-template-columns: minmax(190px, 0.28fr) minmax(360px, 1.27fr) minmax(240px, 0.45fr) !important; }
+  .stat-card {
+    background: #ffffff; border-radius: 16px; padding: 16px; border: 1px solid rgba(0, 0, 0, 0.06); min-height: 90px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .stat-card.align-top { justify-content: flex-start; }
+  .stat-card.list-card { min-height: unset; }
+  .pending-dropdown {
+    margin-top: 10px; border: 1px solid rgba(26, 102, 255, 0.2); border-radius: 12px; background: rgba(26, 102, 255, 0.06); padding: 6px 10px;
+  }
+  .pending-dropdown summary {
+    list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-size: 13px; font-weight: 600; color: #1a2f63; padding: 4px 2px;
+  }
+  .pending-dropdown summary::-webkit-details-marker { display: none; }
+  .pending-dropdown summary::after { content: '▾'; font-size: 12px; opacity: 0.8; transition: transform 0.2s ease; }
+  .pending-dropdown[open] summary::after { transform: rotate(180deg); }
+  .pending-list { margin-top: 8px; max-height: 180px; overflow-y: auto; border-radius: 10px; background: rgba(255, 255, 255, 0.7); padding: 6px; }
+  .pending-item { padding: 6px 10px; font-size: 13px; color: #1a2f63; border-radius: 8px; }
+  .pending-item:nth-child(odd) { background: rgba(26, 102, 255, 0.06); }
+  .pending-empty, .stat-muted { font-size: 12px; color: #8b909a; margin-top: 6px; }
+  .stat-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.9px; color: #6a6f7a; }
+  .stat-value, .variance-value { font-size: 20px; font-weight: 600; color: #1b1b1f; margin-top: 8px; line-height: 1.2; }
+  .variance-value-under { color: #15803d; }
+  .variance-value-over { color: #dc2626; }
+  .stat-lines { margin-top: 8px; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+  .stat-line { display: grid; gap: 2px; }
+  .stat-line-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: #6a6f7a; font-weight: 600; }
+  .stat-line-value { font-size: 18px; font-weight: 700; color: #1b1b1f; }
+  .stat-line.gender-male .stat-line-value { color: #1d4ed8; }
+  .stat-line.gender-female .stat-line-value { color: #db2777; }
+  .stat-line.gender-transgender .stat-line-value { color: #7c3aed; }
+  .stat-line.female-unmarried .stat-line-value { color: #0284c7; }
+  .stat-line.female-married .stat-line-value { color: #f97316; }
+  .stat-line.female-widow .stat-line-value { color: #8b5cf6; }
+  .stat-line.female-single-mother .stat-line-value { color: #10b981; }
+  .pie-card {
+    display: grid;
+    grid-template-columns: 108px 1fr;
+    gap: 14px;
+    align-items: center;
+    min-width: 0;
+  }
+  .public-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  .public-card-compact,
+  .public-chart-card {
+    grid-column: span 2;
+  }
+  .public-card-compact .stat-value {
+    font-size: 18px;
+  }
+  .public-card-compact {
+    min-height: 82px;
+  }
+  .pie-chart {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    background: var(--pie-background, #e5e7eb);
+    position: relative;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+  }
+  .pie-chart::after {
+    content: attr(data-total-label);
+    position: absolute;
+    inset: 22px;
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    white-space: pre-line;
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+    line-height: 1.25;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.05);
+    z-index: 2;
+  }
+  .pie-slice-label {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 9px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(15, 23, 42, 0.45);
+    pointer-events: none;
+    z-index: 1;
+    white-space: nowrap;
+  }
+  .pie-legend {
+    display: grid;
+    gap: 8px;
+  }
+  .pie-legend-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    color: #334155;
+  }
+  .pie-legend-label {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+    line-height: 1.25;
+  }
+  .pie-legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    flex: 0 0 auto;
+    background: var(--legend-color, #94a3b8);
+  }
+  .pie-legend-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pie-legend-value {
+    font-weight: 700;
+    color: #0f172a;
+    flex: 0 0 auto;
+  }
+  .total-strip {
+    background: linear-gradient(120deg, #1a66ff, #7c3aed);
+    color: #fff;
+    border-radius: 20px;
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    align-items: center;
+  }
+  .total-strip .stat-card { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; }
+  .total-strip .stat-label { color: rgba(255, 255, 255, 0.7); }
+  .total-strip .stat-value { color: #fff; }
+  .loading-card, .error-card { background: #ffffff; border-radius: 16px; padding: 20px; border: 1px solid rgba(0, 0, 0, 0.06); }
+  .error-card { border-color: rgba(220, 38, 38, 0.4); color: #b91c1c; }
+  @media (max-width: 768px) {
+    .hero { padding: 22px; }
+    .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .hero-top-left { flex-direction: column; align-items: flex-start; gap: 4px; }
+    .hero-top-title, .hero-top-welcome { white-space: normal; }
+    .district-row-2 { grid-template-columns: 1fr !important; }
+    .public-grid { grid-template-columns: 1fr; }
+    .public-card-compact,
+    .public-chart-card { grid-column: span 1; }
+    .pie-card { grid-template-columns: 110px 1fr; }
+  }
+  @media (max-width: 520px) { .hero-stats { grid-template-columns: 1fr; } }
+</style>
+
+<div class="dashboard-root">
+  <div class="dashboard-shell">
+    <div class="hero">
+      <div class="hero-stats">
+        <div class="hero-card" style="background: #ffe3bf; color: #4a2c14;">
+          <div class="hero-card-head">
+            <div class="hero-card-title">Event Budget</div>
+            {% if can_edit_event_budget %}
+              <button type="button" class="hero-card-edit-btn" data-budget-edit-toggle aria-label="Edit event budget" title="Edit event budget">
+                <svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>
+              </button>
+            {% endif %}
+          </div>
+          <div class="hero-card-value">Rs.{{ overall_event_budget|rupees_round }}</div>
+          {% if can_edit_event_budget %}
+            <form method="post" class="hero-card-editor" data-budget-editor hidden>
+              {% csrf_token %}
+              <input type="text" name="event_budget" value="{{ overall_event_budget|rupees_round }}" inputmode="decimal" aria-label="Event budget" />
+              <button type="submit" class="btn" style="min-height: 34px; padding: 6px 12px; font-size: 0.9rem;">Save</button>
+            </form>
+          {% endif %}
+        </div>
+        <div class="hero-card" style="background: #d6f5df; color: #1f3d2a;">
+          <div class="hero-card-title">Total Accrued</div>
+          <div class="hero-card-value">Rs.{{ metrics.overall.actual_total_value_accrued|rupees_round }}</div>
+          <div class="stat-muted" style="margin-top: 6px;">
+            <strong>{{ metrics.overall.district_variance_signed.sign }} Rs.{{ metrics.overall.district_variance_signed.amount|rupees_round }}</strong> (District Contribution)
+          </div>
+        </div>
+        <div class="hero-card" style="background: #e9d5ff; color: #3b1f5e;">
+          <div class="hero-card-title">Planning Total</div>
+          <div class="hero-card-value">Rs.{{ metrics.overall.total_value_accrued|rupees_round }}</div>
+          <div class="stat-muted" style="margin-top: 6px;">
+            <strong>{{ metrics.overall.district_contribution_signed.sign }} Rs.{{ metrics.overall.district_contribution_signed.amount|rupees_round }}</strong> (District Contribution)
+          </div>
+        </div>
+        <div class="hero-card" style="background: #d8ecff; color: #163250;">
+          <div class="hero-card-title">Balance (can Spend)</div>
+          <div class="hero-card-value">Rs.{{ balance_to_allot|rupees_round }}</div>
+        </div>
+        <div class="hero-card" style="background: #fecdd3; color: #4a1f29;">
+          <div class="hero-card-title">Fund Raised</div>
+          <div class="hero-card-value">Rs.{{ metrics.fund_requests.total_value|rupees_round }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title"><span></span> District</h2>
+      <div class="stat-grid" style="grid-template-columns: repeat(4, minmax(220px, 1fr));">
+        <div class="stat-card"><div class="stat-label">Districts Received</div><div class="stat-value">{{ metrics.district.districts_received }}</div></div>
+        <div class="stat-card"><div class="stat-label">Districts Pending</div><div class="stat-value">{{ metrics.district.districts_pending }}</div></div>
+        <div class="stat-card"><div class="stat-label">Articles</div><div class="stat-value">{{ metrics.district.unique_articles }}</div></div>
+        <div class="stat-card"><div class="stat-label">Total Beneficiary &amp; Article Quantity</div><div class="stat-value">{{ metrics.district.total_articles_qty }}</div></div>
+      </div>
+      <div class="stat-grid district-row-2" style="margin-top: 16px;">
+        <div class="stat-card align-top"><div class="stat-label">Total Allotted</div><div class="stat-value">Rs.{{ metrics.district.total_allotted_fund|rupees_round }}</div></div>
+        <div class="stat-card list-card align-top">
+          <div class="stat-lines" style="margin-top: 4px; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;">
+            <div class="stat-line">
+              <div class="stat-line-label">Underutilized</div>
+              <div class="variance-value variance-value-under" style="margin-top: 6px;">Rs.{{ metrics.district.under_utilized_value|rupees_round }}</div>
+              <div class="stat-muted" style="margin-top: 2px;">{{ metrics.district.under_utilized_district_count }} districts</div>
+            </div>
+            <div class="stat-line">
+              <div class="stat-line-label">Overutilized</div>
+              <div class="variance-value variance-value-over" style="margin-top: 6px;">Rs.{{ metrics.district.over_utilized_value|rupees_round }}</div>
+              <div class="stat-muted" style="margin-top: 2px;">{{ metrics.district.over_utilized_district_count }} districts</div>
+            </div>
+            <div class="stat-line">
+              <div class="stat-line-label">Net (Over - Under)</div>
+              <div class="variance-value" style="margin-top: 2px;">{{ metrics.overall.district_variance_signed.sign }} Rs.{{ metrics.overall.district_variance_signed.amount|rupees_round }}</div>
+              <div class="stat-muted" style="margin-top: 2px; visibility: hidden;">0 districts</div>
+            </div>
+          </div>
+        </div>
+        <div class="stat-card align-top"><div class="stat-label">Total Accrued</div><div class="stat-value">Rs.{{ metrics.district.total_value_accrued|rupees_round }}</div></div>
+      </div>
+      <div class="stat-grid" style="margin-top: 16px; grid-template-columns: 1fr;">
+        <div class="stat-card list-card align-top">
+          <div class="stat-label">Pending Districts (Names)</div>
+          {% if metrics.pending_districts %}
+            <details class="pending-dropdown">
+              <summary>Show pending districts ({{ metrics.pending_districts|length }})</summary>
+              <div class="pending-list" role="listbox" aria-label="Pending district list">
+                {% for name in metrics.pending_districts %}
+                  <div class="pending-item" role="option">{{ name }}</div>
+                {% endfor %}
+              </div>
+            </details>
+          {% else %}
+            <div class="pending-empty">None</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title"><span></span> Public</h2>
+      <div class="stat-grid public-grid">
+        <div class="stat-card public-card-compact"><div class="stat-label">Total Beneficiary &amp; Article Quantity</div><div class="stat-value">{{ metrics.public.total_beneficiaries }}</div></div>
+        <div class="stat-card public-card-compact"><div class="stat-label">Article</div><div class="stat-value">{{ metrics.public.unique_articles }}</div></div>
+        <div class="stat-card public-card-compact"><div class="stat-label">Total Value Accrued</div><div class="stat-value">Rs.{{ metrics.public.total_value_accrued|rupees_round }}</div></div>
+        <div class="stat-card public-chart-card">
+          <div class="stat-label">Gender Split</div>
+          <div class="pie-card">
+            <div class="pie-chart" data-pie-chart data-total-label="Gender
+{{ metrics.public.total_beneficiaries }}">
+              {% for item in metrics.public.gender_lines %}
+                <span data-pie-segment data-value="{{ item.value }}" data-color="{% if item.label == 'Male' %}#1d4ed8{% elif item.label == 'Female' %}#db2777{% else %}#7c3aed{% endif %}" hidden></span>
+              {% endfor %}
+            </div>
+            <div class="pie-legend">
+              {% for item in metrics.public.gender_lines %}
+                <div class="pie-legend-item">
+                  <div class="pie-legend-label">
+                    <span class="pie-legend-dot" style="--legend-color:{% if item.label == 'Male' %}#1d4ed8{% elif item.label == 'Female' %}#db2777{% else %}#7c3aed{% endif %};"></span>
+                    <span class="pie-legend-text">{{ item.label }}</span>
+                  </div>
+                  <span class="pie-legend-value">{{ item.value }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        <div class="stat-card public-chart-card">
+          <div class="stat-label">Female Status</div>
+          <div class="pie-card">
+            <div class="pie-chart" data-pie-chart data-total-label="Female
+{{ metrics.public.gender_lines.1.value }}">
+              {% for item in metrics.public.female_status_lines %}
+                {% if item.value %}
+                  <span data-pie-segment data-value="{{ item.value }}" data-color="{% if item.class_name == 'female-unmarried' %}#0284c7{% elif item.class_name == 'female-married' %}#f97316{% elif item.class_name == 'female-widow' %}#8b5cf6{% elif item.class_name == 'female-single-mother' %}#10b981{% else %}#94a3b8{% endif %}" hidden></span>
+                {% endif %}
+              {% endfor %}
+            </div>
+            <div class="pie-legend">
+              {% for item in metrics.public.female_status_lines %}
+                {% if item.value %}
+                  <div class="pie-legend-item">
+                    <div class="pie-legend-label">
+                      <span class="pie-legend-dot" style="--legend-color:{% if item.class_name == 'female-unmarried' %}#0284c7{% elif item.class_name == 'female-married' %}#f97316{% elif item.class_name == 'female-widow' %}#8b5cf6{% elif item.class_name == 'female-single-mother' %}#10b981{% else %}#94a3b8{% endif %};"></span>
+                      <span class="pie-legend-text">{{ item.label }}</span>
+                    </div>
+                    <span class="pie-legend-value">{{ item.value }}</span>
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        <div class="stat-card public-chart-card">
+          <div class="stat-label">Handicapped</div>
+          <div class="pie-card">
+            <div class="pie-chart" data-pie-chart data-total-label="Handicapped
+{{ metrics.public.total_beneficiaries }}">
+              {% for item in metrics.public.handicapped_lines %}
+                {% if item.value %}
+                  <span data-pie-segment data-value="{{ item.value }}" data-color="{{ item.color }}" hidden></span>
+                {% endif %}
+              {% endfor %}
+            </div>
+            <div class="pie-legend">
+              {% for item in metrics.public.handicapped_lines %}
+                {% if item.value %}
+                  <div class="pie-legend-item">
+                    <div class="pie-legend-label">
+                      <span class="pie-legend-dot" style="--legend-color:{{ item.color }};"></span>
+                      <span class="pie-legend-text">{{ item.label }}</span>
+                    </div>
+                    <span class="pie-legend-value">{{ item.value }}</span>
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title"><span></span> Institution &amp; Others</h2>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">Beneficiaries</div><div class="stat-value">{{ metrics.institutions.application_count }}</div></div>
+        <div class="stat-card"><div class="stat-label">Articles</div><div class="stat-value">{{ metrics.institutions.unique_articles }}</div></div>
+        <div class="stat-card"><div class="stat-label">Total Article Quantity</div><div class="stat-value">{{ metrics.institutions.total_articles_qty }}</div></div>
+        <div class="stat-card"><div class="stat-label">Total Value Accrued</div><div class="stat-value">Rs.{{ metrics.institutions.total_value_accrued|rupees_round }}</div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title"><span></span> Fund Requests</h2>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">Fund Request Made</div><div class="stat-value">{{ metrics.fund_requests.count }}</div></div>
+        <div class="stat-card"><div class="stat-label">Fund Request Value</div><div class="stat-value">Rs.{{ metrics.fund_requests.total_value|rupees_round }}</div></div>
+      </div>
+    </div>
+
+    <div class="total-strip">
+      <div class="stat-card"><div class="stat-label">Total Beneficiaries</div><div class="stat-value">{{ metrics.overall.total_beneficiaries }}</div></div>
+      <div class="stat-card"><div class="stat-label">Total Articles</div><div class="stat-value">{{ metrics.overall.unique_articles }}</div></div>
+      <div class="stat-card"><div class="stat-label">Total Article Quantity</div><div class="stat-value">{{ metrics.overall.total_articles_qty }}</div></div>
+    </div>
+  </div>
+</div>
+<script>
+  (function() {
+    document.querySelectorAll("[data-budget-edit-toggle]").forEach(function(toggle) {
+      toggle.addEventListener("click", function() {
+        var card = toggle.closest(".hero-card");
+        if (!card) return;
+        var editor = card.querySelector("[data-budget-editor]");
+        if (!editor) return;
+        var isHidden = editor.hasAttribute("hidden");
+        if (isHidden) {
+          editor.removeAttribute("hidden");
+          var input = editor.querySelector("input[name='event_budget']");
+          if (input) {
+            input.focus();
+            input.select();
+          }
+        } else {
+          editor.setAttribute("hidden", "hidden");
+        }
+      });
+    });
+  })();
+</script>
+<script>
+  (function() {
+    document.querySelectorAll("[data-pie-chart]").forEach(function(chart) {
+      var segments = Array.from(chart.querySelectorAll("[data-pie-segment]"));
+      chart.querySelectorAll('.pie-slice-label').forEach(function(label) {
+        label.remove();
+      });
+      var total = segments.reduce(function(sum, segment) {
+        return sum + Number(segment.getAttribute("data-value") || 0);
+      }, 0);
+      if (!total) {
+        chart.style.setProperty("--pie-background", "conic-gradient(#e5e7eb 0 360deg)");
+        return;
+      }
+      var current = 0;
+      var parts = [];
+      var radius = chart.offsetWidth / 2;
+      var labelRadius = radius * 0.80;
+      segments.forEach(function(segment) {
+        var value = Number(segment.getAttribute("data-value") || 0);
+        var color = segment.getAttribute("data-color") || "#94a3b8";
+        var start = current;
+        var end = current + (value / total) * 360;
+        current = end;
+        parts.push(color + " " + start + "deg " + end + "deg");
+
+        var percentage = (value / total) * 100;
+        if (percentage < 8) {
+          return;
+        }
+        var angle = ((start + end) / 2) - 90;
+        var radians = angle * Math.PI / 180;
+        var label = document.createElement('span');
+        label.className = 'pie-slice-label';
+        label.textContent = Math.round(percentage) + '%';
+        label.style.left = (radius + Math.cos(radians) * labelRadius) + 'px';
+        label.style.top = (radius + Math.sin(radians) * labelRadius) + 'px';
+        chart.appendChild(label);
+      });
+      chart.style.setProperty("--pie-background", "conic-gradient(" + parts.join(", ") + ")");
+    });
+  })();
+</script>
+{% endblock %}

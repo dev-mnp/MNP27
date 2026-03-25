@@ -49,3 +49,17 @@ def rupees(value):
             formatted = _indian_grouping(formatted)
 
     return f"{sign}{formatted}"
+
+
+@register.filter
+def rupees_round(value):
+    if value in (None, ""):
+        return "0"
+
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return value
+
+    rounded = amount.quantize(Decimal("1"))
+    return rupees(rounded)

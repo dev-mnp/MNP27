@@ -2,9 +2,20 @@
 
 {% block content %}
   <section class="card">
-    <h2 style="margin-top: 0;">
-      {% if object %}Edit article{% else %}Create article{% endif %}
-    </h2>
+    <div class="toolbar" style="justify-content: space-between;">
+      <div>
+        <h2 style="margin: 0 0 6px;">{% if object %}Edit Article{% else %}Create Article{% endif %}</h2>
+        <p style="margin: 0; color: var(--text-secondary);">Maintain article name, token name, price, category, and super category.</p>
+      </div>
+      {% if popup_mode %}
+        <button class="btn" type="button" onclick="window.close()">Close</button>
+      {% else %}
+        <a class="btn" href="{% url 'ui:article-list' %}">Back</a>
+      {% endif %}
+    </div>
+    {% if popup_mode %}
+      <div class="field-hint" style="margin-bottom: 16px;">After save, this window will close and the new article will be available in the application form.</div>
+    {% endif %}
     <form method="post" {% if object %}data-confirm-message="Save changes to this article?"{% endif %}>
       {% csrf_token %}
       <div class="grid2">
@@ -13,7 +24,7 @@
           {{ form.article_name }}
         </div>
         <div>
-          <label>Article name (local)</label>
+          <label>Token Name</label>
           {{ form.article_name_tk }}
         </div>
         <div>
@@ -27,23 +38,35 @@
         <div>
           <label>Category</label>
           {{ form.category }}
+          <datalist id="article-category-options">
+            {% for value in category_suggestions %}
+              <option value="{{ value }}"></option>
+            {% endfor %}
+          </datalist>
+          <div class="field-hint">Choose an existing category or type a new one.</div>
         </div>
         <div>
           <label>Master category</label>
           {{ form.master_category }}
+          <datalist id="article-master-category-options">
+            {% for value in master_category_suggestions %}
+              <option value="{{ value }}"></option>
+            {% endfor %}
+          </datalist>
+          <div class="field-hint">Choose an existing super category or type a new one.</div>
         </div>
-      </div>
-      <div class="small" style="margin-top: 10px;">
-        <label>Comments</label>
-        {{ form.comments }}
       </div>
       <div class="toolbar" style="margin-top: 12px; justify-content: flex-start;">
         <label>{{ form.is_active }} Active</label>
         <label>{{ form.combo }} Combo</label>
       </div>
-      <div style="margin-top: 12px;">
+      <div class="toolbar" style="margin-top: 16px; justify-content: flex-end;">
+        {% if popup_mode %}
+          <button class="btn" type="button" onclick="window.close()">Cancel</button>
+        {% else %}
+          <a class="btn" href="{% url 'ui:article-list' %}">Cancel</a>
+        {% endif %}
         <button class="btn" type="submit">Save</button>
-        <a class="btn" href="{% url 'ui:article-list' %}">Back</a>
       </div>
     </form>
   </section>

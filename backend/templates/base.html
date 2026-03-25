@@ -8,22 +8,22 @@
   <style>
     :root {
       --bg-primary: #ffffff;
-      --bg-secondary: #fff8ea;
-      --bg-tertiary: #fff1cc;
+      --bg-secondary: #f5f7fb;
+      --bg-tertiary: #eef4ff;
       --text-primary: #111827;
-      --text-secondary: #6f6554;
+      --text-secondary: #667085;
       --text-tertiary: #9ca3af;
-      --border-color: #eadfca;
-      --accent-primary: #f1b400;
-      --accent-hover: #d99a00;
-      --accent-strong: #ab2c1a;
-      --accent-strong-hover: #8e2416;
+      --border-color: #dbe3f0;
+      --accent-primary: #2563eb;
+      --accent-hover: #1d4ed8;
+      --accent-strong: #1e40af;
+      --accent-strong-hover: #1e3a8a;
       --error: #d43c2d;
       --app-font: "Poppins", "Segoe UI", Roboto, Arial, sans-serif;
     }
 
     *, *::before, *::after { box-sizing: border-box; }
-    html, body { margin: 0; width: 100%; height: 100%; font-family: var(--app-font); background: var(--bg-secondary); color: var(--text-primary); overflow: hidden; }
+    html, body { margin: 0; width: 100%; height: 100%; font-family: var(--app-font); background: linear-gradient(135deg, #f7faff 0%, #eef4ff 46%, #f8fbff 100%); color: var(--text-primary); overflow: hidden; }
     body { min-height: 100vh; }
     a { color: #1d4ed8; text-decoration: none; }
     a:hover { color: #1e40af; text-decoration: underline; }
@@ -31,7 +31,7 @@
     .sidebar {
       width: 250px;
       flex-shrink: 0;
-      background: linear-gradient(180deg, #fff8ec 0%, #fff3d8 100%);
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
       border-right: 1px solid var(--border-color);
       padding: 18px 14px;
       position: fixed;
@@ -45,11 +45,10 @@
       overflow-y: auto;
       z-index: 8;
     }
-    .sidebar-header { margin-bottom: 14px; }
-    .sidebar-brand-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-    .sidebar-brand-copy { min-width: 0; }
-    .brand { font-size: 22px; font-weight: 700; line-height: 1.1; letter-spacing: 0.4px; margin-bottom: 8px; }
-    .pill-home { display: inline-flex; padding: 6px 10px; border: 1px solid #f0d68b; border-radius: 999px; background: #fff5d8; color: #6f4b00; font-size: 12px; }
+    .sidebar-header { margin-bottom: 12px; }
+    .sidebar-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .sidebar-brand-copy { display: none; }
+    .sidebar-brand-logo { width: 54px; height: 54px; object-fit: contain; flex: 0 0 auto; }
     .sidebar-toggle {
       width: 34px;
       min-width: 34px;
@@ -57,7 +56,7 @@
       padding: 0;
       border: 1px solid var(--border-color);
       border-radius: 10px;
-      background: #fff7e6;
+      background: #f8fafc;
       color: var(--text-primary);
       display: inline-flex;
       align-items: center;
@@ -96,16 +95,42 @@
       background: transparent; color: var(--text-primary); font-weight: 500;
     }
     .menu-item:hover { background: var(--bg-primary); border-color: var(--border-color); text-decoration: none; }
-    .menu-item.active { background: #fff0c2; border-color: #efc85d; color: #8a2d12; }
-    .menu-dot { width: 8px; height: 8px; border-radius: 999px; background: #cbd5e1; }
-    .menu-item.active .menu-dot { background: #ab2c1a; }
+    .menu-item.active { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+    .menu-dot { display: none; }
+    .menu-icon {
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #94a3b8;
+      flex: 0 0 auto;
+    }
+    .menu-icon svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .menu-item.active .menu-icon { color: #2563eb; }
     .app-main { flex: 1; display: flex; flex-direction: column; min-width: 0; margin-left: 250px; height: 100vh; overflow-y: auto; transition: margin-left 0.22s ease; }
-    body.sidebar-collapsed .sidebar { transform: translateX(-100%); }
-    body.sidebar-collapsed .app-main { margin-left: 0; }
+    body.sidebar-collapsed .sidebar { width: 74px; padding: 18px 10px; transform: none; }
+    body.sidebar-collapsed .app-main { margin-left: 74px; }
     body.sidebar-collapsed .menu-toggle { display: inline-flex; }
+    body.sidebar-collapsed .sidebar-brand-copy { display: none; }
+    body.sidebar-collapsed .sidebar-brand-row { justify-content: center; }
+    body.sidebar-collapsed .menu-item { justify-content: center; padding: 10px; }
+    body.sidebar-collapsed .menu-label { display: none; }
+    body.sidebar-collapsed #sidebar-close-toggle { display: none; }
+    body.sidebar-collapsed .sidebar-brand-logo { width: 42px; height: 42px; }
+    body.sidebar-collapsed .sidebar-footer .btn-subtle { width: 40px; min-width: 40px; padding: 0; justify-content: center; }
+    body.sidebar-collapsed .sidebar-footer .btn-subtle .menu-label { display: none; }
     .topbar {
       height: 64px; padding: 12px 18px; border-bottom: 1px solid var(--border-color);
-      display: flex; justify-content: space-between; align-items: center; background: rgba(255, 251, 242, 0.96);
+      display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.96);
       position: sticky; top: 0; z-index: 5;
     }
     .topbar-left {
@@ -124,7 +149,7 @@
       padding: 0;
       border: 1px solid var(--border-color);
       border-radius: 12px;
-      background: #fff7e6;
+      background: #eff6ff;
       color: var(--text-primary);
       align-items: center;
       justify-content: center;
@@ -148,17 +173,17 @@
       z-index: 9;
     }
     .user-pill {
-      font-size: 13px; color: #6a5740; background: #fff8e8; border: 1px solid var(--border-color);
+      font-size: 13px; color: #475467; background: #f8fbff; border: 1px solid var(--border-color);
       border-radius: 999px; padding: 8px 12px; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .btn-subtle {
-      border: 1px solid #efc85d; background: #fff4c8; border-radius: 999px; padding: 8px 14px; text-decoration: none; color: #6f4b00;
+      border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 999px; padding: 8px 14px; text-decoration: none; color: #1d4ed8;
     }
-    .btn-subtle:hover { background: #ffe9a2; color: #573500; }
+    .btn-subtle:hover { background: #dbeafe; color: #1e40af; }
     .app-content { padding: 22px 24px; min-width: 0; }
     .wrap { width: 100%; max-width: none; margin: 0; }
 
-    .card { background: rgba(255, 255, 255, 0.96); border: 1px solid var(--border-color); border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: 0 12px 32px rgba(171, 44, 26, 0.08); }
+    .card { background: rgba(255, 255, 255, 0.99); border: 1px solid var(--border-color); border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: 0 12px 32px rgba(37, 99, 235, 0.08); }
     .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
     .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     .row { display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 16px; }
@@ -166,8 +191,8 @@
       appearance: none;
       -webkit-appearance: none;
       border: 1px solid var(--border-color);
-      background: linear-gradient(180deg, #f7c646 0%, #eeaf00 100%);
-      color: #522f00;
+      background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+      color: #ffffff;
       border-radius: 12px;
       padding: 9px 14px;
       font-weight: 500;
@@ -182,7 +207,7 @@
       white-space: nowrap;
       vertical-align: middle;
     }
-    .btn:hover { background: linear-gradient(180deg, #f4bd28 0%, #df9e00 100%); border-color: var(--accent-hover); color: #432600; }
+    .btn:hover { background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%); border-color: var(--accent-hover); color: #ffffff; }
     .btn:not(.icon-btn),
     .btn-subtle:not(.icon-btn) {
       gap: 8px;
@@ -201,30 +226,84 @@
     .btn-danger { background: rgba(212, 60, 45, 0.12); border-color: var(--error); color: #b0271a; }
     .btn-danger:hover { background: rgba(212, 60, 45, 0.18); border-color: #c53020; color: #8f2015; }
     .btn-edit {
-      background: linear-gradient(180deg, #f7c646 0%, #eeaf00 100%);
-      border-color: #efc85d;
-      color: #6f4b00;
+      background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+      border-color: #93c5fd;
+      color: #ffffff;
     }
     .btn-edit:hover {
-      background: linear-gradient(180deg, #f4bd28 0%, #df9e00 100%);
+      background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
       border-color: var(--accent-hover);
-      color: #573500;
+      color: #ffffff;
     }
-    .btn-reopen {
-      background: #ecfdf5;
-      border-color: rgba(34, 197, 94, 0.4);
-      color: #166534;
+    .btn.btn-reopen {
+      background: #f8fafc;
+      border-color: #dbe3f0;
+      color: #475467;
     }
-    .btn-reopen:hover {
-      background: #dcfce7;
-      border-color: rgba(22, 163, 74, 0.5);
-      color: #14532d;
+    .btn.btn-reopen:hover {
+      background: #eff6ff;
+      border-color: #bfdbfe;
+      color: #1d4ed8;
     }
     .icon-btn {
-      width: 40px;
-      min-width: 40px;
+      width: 32px;
+      min-width: 32px;
+      height: 32px;
       padding: 0;
-      border-radius: 12px;
+      border-radius: 999px;
+      background: transparent;
+      border-color: transparent;
+      box-shadow: none;
+    }
+    .icon-btn:hover {
+      background: rgba(37, 99, 235, 0.08);
+      border-color: transparent;
+    }
+    .btn-edit.icon-btn {
+      background: transparent;
+      border-color: transparent;
+      color: #2563eb;
+    }
+    .btn-edit.icon-btn:hover {
+      background: rgba(37, 99, 235, 0.08);
+      border-color: transparent;
+      color: #1d4ed8;
+    }
+    .btn-danger.icon-btn {
+      background: transparent;
+      border-color: transparent;
+      color: #dc2626;
+    }
+    .btn-danger.icon-btn:hover {
+      background: rgba(220, 38, 38, 0.08);
+      border-color: transparent;
+      color: #b91c1c;
+    }
+    .btn.btn-reopen.icon-btn {
+      background: transparent;
+      border-color: transparent;
+      color: #64748b;
+    }
+    .btn.btn-reopen.icon-btn:hover {
+      background: rgba(100, 116, 139, 0.08);
+      border-color: transparent;
+      color: #1d4ed8;
+    }
+    .js-attachment-preview.icon-btn,
+    .js-attachment-preview.icon-btn:hover,
+    #attachment-preview-open-link.icon-btn,
+    #attachment-preview-open-link.icon-btn:hover,
+    #attachment-preview-download-link-inline.icon-btn,
+    #attachment-preview-download-link-inline.icon-btn:hover {
+      background: transparent;
+      border-color: transparent;
+      box-shadow: none;
+    }
+    .js-attachment-preview.icon-btn {
+      color: #475467;
+    }
+    .js-attachment-preview.icon-btn:hover {
+      color: #1d4ed8;
     }
     .icon-btn svg {
       width: 18px;
@@ -263,7 +342,7 @@
     .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table { width: 100%; border-collapse: collapse; }
     th, td { border-bottom: 1px solid var(--border-color); text-align: left; padding: 10px; font-size: 14px; vertical-align: top; }
-    th { background: #fff4d2; font-weight: 700; }
+    th { background: #f8fafc; font-weight: 700; }
     .messages {
       list-style: none;
       margin: 0;
@@ -283,10 +362,11 @@
     .messages li {
       border: 1px solid var(--border-color);
       border-radius: 14px;
-      padding: 12px 16px;
+      padding: 12px 46px 12px 16px;
       background: #fff7ed;
       color: #9a3412;
       opacity: 1;
+      position: relative;
     }
     .messages-floating li {
       pointer-events: auto;
@@ -316,6 +396,35 @@
       background: #fef3c7;
       color: #92400e;
       border-color: rgba(245, 158, 11, 0.45);
+    }
+    .message-close {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 28px;
+      height: 28px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.24);
+      color: inherit;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.18s ease, transform 0.18s ease;
+    }
+    .message-close:hover {
+      background: rgba(255, 255, 255, 0.36);
+      transform: scale(1.04);
+    }
+    .message-close svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
     .modal-backdrop {
       position: fixed;
@@ -377,6 +486,35 @@
       min-height: 0;
       background: #fff;
     }
+    .modal-tabs {
+      display: flex;
+      gap: 8px;
+      padding: 10px 16px 0;
+      background: #fff;
+      border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+    }
+    .modal-tabs[hidden] {
+      display: none;
+    }
+    .modal-tab {
+      border: 1px solid #e6d39d;
+      background: #f8fafc;
+      color: #64748b;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      max-width: 240px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .modal-tab.is-active {
+      background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+      border-color: #93c5fd;
+      color: #ffffff;
+    }
     .modal-frame {
       width: 100%;
       height: 100%;
@@ -399,11 +537,210 @@
     .modal-fallback .btn {
       margin-top: 12px;
     }
+    .camera-modal-card {
+      width: min(94vw, 1040px);
+      height: min(88vh, 860px);
+      background: #fff;
+      border-radius: 22px;
+      border: 1px solid rgba(230, 211, 157, 0.9);
+      box-shadow: 0 20px 48px rgba(17, 24, 39, 0.22);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .camera-modal-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.9fr);
+      gap: 0;
+      flex: 1;
+      min-height: 0;
+      background: #fff;
+    }
+    .camera-stage {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      padding: 16px;
+      border-right: 1px solid rgba(226, 232, 240, 0.8);
+      background: #fffdf7;
+    }
+    .camera-stage-note {
+      margin: 0 0 12px;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    .camera-video-shell {
+      position: relative;
+      flex: 1;
+      min-height: 280px;
+      border: 1px solid rgba(230, 211, 157, 0.9);
+      border-radius: 18px;
+      background: #101828;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .camera-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #101828;
+    }
+    .camera-video-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      color: rgba(255, 255, 255, 0.88);
+      font-size: 15px;
+      line-height: 1.5;
+      background: rgba(15, 23, 42, 0.52);
+    }
+    .camera-video-placeholder[hidden] {
+      display: none;
+    }
+    .camera-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+    .camera-pages {
+      min-height: 0;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+    }
+    .camera-pages-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .camera-pages-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .camera-pages-note {
+      color: var(--text-secondary);
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+    .camera-page-preview-shell {
+      border: 1px solid rgba(230, 211, 157, 0.9);
+      border-radius: 18px;
+      background: #fffdf7;
+      padding: 10px;
+      margin-bottom: 12px;
+      min-height: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .camera-page-preview-empty {
+      color: var(--text-secondary);
+      font-size: 14px;
+      text-align: center;
+      line-height: 1.5;
+      padding: 20px;
+    }
+    .camera-page-preview-image {
+      width: 100%;
+      max-height: 320px;
+      object-fit: contain;
+      border-radius: 12px;
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      background: #fff;
+      display: none;
+    }
+    .camera-page-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+    .camera-page-empty {
+      border: 1px dashed rgba(230, 211, 157, 0.95);
+      border-radius: 16px;
+      padding: 22px 16px;
+      text-align: center;
+      color: var(--text-secondary);
+      background: #fffdf7;
+      font-size: 14px;
+    }
+    .camera-page-card {
+      display: grid;
+      grid-template-columns: 88px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      border: 1px solid rgba(230, 211, 157, 0.9);
+      border-radius: 16px;
+      padding: 10px;
+      background: #fffdf7;
+      cursor: pointer;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+    .camera-page-card:hover {
+      border-color: rgba(226, 183, 20, 0.9);
+      box-shadow: 0 8px 18px rgba(226, 183, 20, 0.12);
+    }
+    .camera-page-card.is-active {
+      border-color: rgba(226, 183, 20, 0.95);
+      background: #fff7dd;
+      box-shadow: 0 10px 22px rgba(226, 183, 20, 0.16);
+    }
+    .camera-page-thumb {
+      width: 88px;
+      height: 112px;
+      border-radius: 12px;
+      object-fit: cover;
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      background: #f8fafc;
+    }
+    .camera-page-meta {
+      min-width: 0;
+    }
+    .camera-page-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .camera-page-size {
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+    .camera-page-remove {
+      align-self: start;
+    }
+    @media (max-width: 900px) {
+      .camera-modal-card {
+        width: min(96vw, 1040px);
+        height: min(92vh, 900px);
+      }
+      .camera-modal-body {
+        grid-template-columns: 1fr;
+      }
+      .camera-stage {
+        border-right: 0;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+      }
+    }
 
-    .mnp-login .app-shell { display: block; }
+    .mnp-login .app-shell { display: block; min-height: 100vh; }
     .mnp-login .sidebar,
     .mnp-login .topbar { display: none; }
-    .mnp-login .app-content { min-height: 100vh; background: linear-gradient(135deg, #fff7df 0%, #fdecc8 35%, #f6f0ff 70%, #eaf6ff 100%); padding: 22px 0; }
+    .mnp-login .app-main { margin-left: 0; min-height: 100vh; height: auto; overflow: visible; }
+    .mnp-login .app-content { min-height: 100vh; background: linear-gradient(135deg, #fff7df 0%, #fdecc8 35%, #f6f0ff 70%, #eaf6ff 100%); padding: 0; }
     .mnp-login .wrap { max-width: none; margin: 0; padding: 0; width: 100%; }
 
     @media (max-width: 1200px) {
@@ -535,7 +872,62 @@
         min-width: 680px;
       }
     }
-  </style>
+  
+    .menu-group {
+      display: grid;
+      gap: 4px;
+    }
+
+    .menu-group-head {
+      display: block;
+    }
+
+    .menu-group-head .menu-item {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .menu-group-trigger {
+      appearance: none;
+      -webkit-appearance: none;
+      font: inherit;
+      text-align: left;
+      justify-content: flex-start;
+      width: 100%;
+      cursor: pointer;
+    }
+
+    .menu-subitems {
+      display: none;
+      gap: 4px;
+      padding-left: 42px;
+      margin-top: -2px;
+    }
+
+    .menu-group.open .menu-subitems {
+      display: grid;
+    }
+
+    .sidebar-collapsed .menu-subitems {
+      display: none;
+    }
+
+    .menu-subitem {
+      font-size: 0.92rem;
+      color: var(--text-secondary);
+      text-decoration: none;
+      padding: 6px 0;
+      transition: color 0.2s ease;
+    }
+
+    .menu-subitem.active {
+      color: #2563eb;
+    }
+
+    .menu-subitem:hover {
+      color: #1d4ed8;
+    }
+</style>
   <link rel="stylesheet" href="{% static 'core/styles/mnp-theme.css' %}">
 </head>
 <body class="light {% if 'login' in request.path %}mnp-login{% endif %}">
@@ -544,10 +936,7 @@
     <aside class="sidebar" id="app-sidebar">
       <div class="sidebar-header">
         <div class="sidebar-brand-row">
-          <div class="sidebar-brand-copy">
-            <div class="brand">MNP27</div>
-            <a class="pill-home" href="/">Admin Portal</a>
-          </div>
+          <img class="sidebar-brand-logo" src="{% static 'core/images/login-logo.webp' %}" alt="Makkal Nala Pani logo">
           {% if request.user.is_authenticated %}
             <button class="sidebar-toggle" id="sidebar-close-toggle" type="button" aria-label="Close sidebar">
               <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
@@ -558,24 +947,57 @@
 
       <nav class="menu">
         {% if request.user.is_authenticated %}
-          <a href="{% url 'ui:master-entry' %}" class="menu-item {% if request.path == '/ui/' or 'master-entry' in request.path %}active{% endif %}">
-            <span class="menu-dot"></span>Applications
+          {% with module_perms=request.user.get_module_permission_map %}
+          <a href="{% url 'ui:dashboard' %}" class="menu-item {% if request.path == '/ui/' or '/ui/dashboard/' in request.path %}active{% endif %}">
+            <span class="menu-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="4.5" rx="1.5"/><rect x="14" y="11.5" width="7" height="8.5" rx="1.5"/><rect x="3" y="14" width="7" height="6" rx="1.5"/></svg></span><span class="menu-label">Dashboard</span>
           </a>
-          <a href="{% url 'ui:article-list' %}" class="menu-item {% if 'article' in request.path %}active{% endif %}">
-            <span class="menu-dot"></span>Articles
-          </a>
-          <a href="{% url 'ui:master-data-districts' %}" class="menu-item {% if 'master-data' in request.path %}active{% endif %}">
-            <span class="menu-dot"></span>Master Data
-          </a>
-          <a href="{% url 'ui:fund-request-list' %}" class="menu-item {% if 'fund-request' in request.path %}active{% endif %}">
-            <span class="menu-dot"></span>Fund Requests
-          </a>
-          {% if request.user.role == 'admin' %}
-            <div class="menu-divider"></div>
-            <a href="{% url 'ui:application-audit-logs' %}" class="menu-item {% if 'applications/audit-logs' in request.path %}active{% endif %}">
-              <span class="menu-dot"></span>Audit Logs
+          {% if module_perms.application_entry.can_view %}
+            <a href="{% url 'ui:master-entry' %}" class="menu-item {% if 'master-entry' in request.path %}active{% endif %}">
+              <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M7 4h10l3 3v13H7z"/><path d="M17 4v4h4"/><path d="M10 12h7"/><path d="M10 16h7"/></svg></span><span class="menu-label">Application Entry</span>
             </a>
           {% endif %}
+          {% if module_perms.article_management.can_view %}
+            <a href="{% url 'ui:article-list' %}" class="menu-item {% if 'article' in request.path %}active{% endif %}">
+              <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M5 7h14v10H5z"/><path d="M9 7V5h6v2"/><path d="M9 12h6"/></svg></span><span class="menu-label">Article Management</span>
+            </a>
+          {% endif %}
+          {% if module_perms.inventory_planning.can_view %}
+            <a href="{% url 'ui:order-management' %}" class="menu-item {% if 'order-management' in request.path %}active{% endif %}">
+              <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M3 5h4l2.2 9h8.8l2-7H8.5"/><path d="M10 19a1 1 0 1 1 0 .01"/><path d="M17 19a1 1 0 1 1 0 .01"/></svg></span><span class="menu-label">Inventory Planning</span>
+            </a>
+          {% endif %}
+          {% if module_perms.order_fund_request.can_view %}
+            <div class="menu-group {% if 'fund-request' in request.path %}open{% endif %}">
+              <div class="menu-group-head">
+                <button class="menu-item menu-group-trigger {% if 'fund-request' in request.path and not request.GET.status %}active{% endif %}" type="button" aria-label="Toggle Order & Fund Request submenu" aria-expanded="{% if 'fund-request' in request.path %}true{% else %}false{% endif %}">
+                  <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"/><path d="M8 11h8"/><path d="M12 7V4"/><path d="M12 20v-3"/></svg></span><span class="menu-label">Order & Fund Request</span>
+                </button>
+              </div>
+              <div class="menu-subitems">
+                <a href="{% url 'ui:fund-request-list' %}?status=draft" class="menu-subitem {% if 'fund-request' in request.path and request.GET.status == 'draft' %}active{% endif %}">Draft</a>
+                <a href="{% url 'ui:fund-request-list' %}?status=submitted" class="menu-subitem {% if 'fund-request' in request.path and request.GET.status == 'submitted' %}active{% endif %}">Submitted</a>
+              </div>
+            </div>
+          {% endif %}
+          {% if module_perms.user_management.can_view or module_perms.base_files.can_view or module_perms.audit_logs.can_view %}
+            <div class="menu-divider"></div>
+            {% if module_perms.user_management.can_view %}
+              <a href="{% url 'ui:user-list' %}" class="menu-item {% if '/ui/users/' in request.path %}active{% endif %}">
+                <span class="menu-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.5"/><path d="M4 19c0-2.8 2.8-5 5-5s5 2.2 5 5"/><path d="M14 19c.3-1.9 1.8-3.4 3.8-4"/></svg></span><span class="menu-label">User Management</span>
+              </a>
+            {% endif %}
+            {% if module_perms.base_files.can_view %}
+              <a href="{% url 'ui:master-data-districts' %}" class="menu-item {% if 'master-data' in request.path %}active{% endif %}">
+                <span class="menu-icon"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="6" ry="2.5"/><path d="M6 6v6c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V6"/><path d="M6 12v6c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-6"/></svg></span><span class="menu-label">Base Files</span>
+              </a>
+            {% endif %}
+            {% if module_perms.audit_logs.can_view %}
+              <a href="{% url 'ui:application-audit-logs' %}" class="menu-item {% if 'applications/audit-logs' in request.path %}active{% endif %}">
+                <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M12 8v5l3 2"/><path d="M20 12a8 8 0 1 1-2.34-5.66"/></svg></span><span class="menu-label">Audit Logs</span>
+              </a>
+            {% endif %}
+          {% endif %}
+          {% endwith %}
         {% else %}
           <a href="{% url 'ui-login' %}" class="menu-item">Login</a>
         {% endif %}
@@ -583,9 +1005,9 @@
 
       <div class="sidebar-footer">
         {% if request.user.is_authenticated %}
-          <a class="btn btn-subtle" href="{% url 'ui-logout' %}">Logout</a>
+          <a class="btn btn-subtle" href="{% url 'ui-logout' %}"><span class="menu-label">Logout</span></a>
         {% else %}
-          <a class="btn btn-subtle" href="{% url 'ui-login' %}">Sign in</a>
+          <a class="btn btn-subtle" href="{% url 'ui-login' %}"><span class="menu-label">Sign in</span></a>
         {% endif %}
       </div>
     </aside>
@@ -598,7 +1020,7 @@
               <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
             </button>
           {% endif %}
-          <div class="topbar-title">Makkal Nalapani Operations</div>
+          <div class="topbar-title">Makkal Nalapani {% now "Y" %}</div>
         </div>
         <div class="topbar-actions">
           <div class="user-pill">
@@ -616,7 +1038,12 @@
           {% if messages %}
             <ul class="messages messages-floating">
               {% for message in messages %}
-                <li class="{% if message.tags %}{{ message.tags }}{% endif %}">{{ message }}</li>
+                <li class="{% if message.tags %}{{ message.tags }}{% endif %}">
+                  <span>{{ message }}</span>
+                  <button class="message-close" type="button" aria-label="Close message">
+                    <svg viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+                  </button>
+                </li>
               {% endfor %}
             </ul>
           {% endif %}
@@ -630,9 +1057,6 @@
       <div class="modal-header">
         <div class="modal-title" id="attachment-preview-title">File preview</div>
         <div class="modal-header-actions">
-          <button class="btn icon-btn" type="button" id="attachment-preview-print" aria-label="Print file" title="Print file">
-            <svg viewBox="0 0 24 24"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>
-          </button>
           <a class="btn icon-btn" href="#" id="attachment-preview-open-link" target="_blank" rel="noopener" aria-label="Open file in new tab" title="Open file in new tab">
             <svg viewBox="0 0 24 24"><path d="M14 3h7v7"/><path d="M10 14 21 3"/><path d="M21 14v7H3V3h7"/></svg>
           </a>
@@ -644,6 +1068,7 @@
           <svg viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
         </button>
       </div>
+      <div class="modal-tabs" id="attachment-preview-tabs" hidden></div>
       <div class="modal-body">
         <embed class="modal-frame" id="attachment-preview-frame" type="application/pdf">
         <img class="modal-image" id="attachment-preview-image" alt="Attachment preview">
@@ -653,6 +1078,54 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
             <span>Download</span>
           </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop" id="camera-capture-modal" aria-hidden="true">
+    <div class="camera-modal-card" role="dialog" aria-modal="true" aria-labelledby="camera-capture-title">
+      <div class="modal-header">
+        <div class="modal-title" id="camera-capture-title">Capture document</div>
+        <div class="modal-header-actions"></div>
+        <button class="btn icon-btn modal-close" type="button" id="camera-capture-close" aria-label="Close camera capture">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="camera-modal-body">
+        <div class="camera-stage">
+          <p class="camera-stage-note">Take one or more page photos. We will resize them and prepare a single PDF for upload.</p>
+          <div class="camera-video-shell">
+            <video class="camera-video" id="camera-capture-video" autoplay playsinline muted></video>
+            <div class="camera-video-placeholder" id="camera-capture-placeholder">Allow camera access to capture pages for this application.</div>
+          </div>
+          <div class="camera-actions">
+            <button class="btn" type="button" id="camera-capture-shot">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="14" r="4"/></svg>
+              <span>Capture Page</span>
+            </button>
+            <button class="btn" type="button" id="camera-capture-clear">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+              <span>Clear Pages</span>
+            </button>
+            <button class="btn" type="button" id="camera-capture-use">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+              <span>Use as PDF</span>
+            </button>
+          </div>
+          <canvas id="camera-capture-canvas" hidden></canvas>
+        </div>
+        <div class="camera-pages">
+          <div class="camera-pages-header">
+            <div class="camera-pages-title">Captured pages</div>
+          </div>
+          <div class="camera-pages-note">You can capture up to 10 pages, click a page to inspect it, and then use them as one high-quality PDF file.</div>
+          <div class="camera-page-preview-shell">
+            <img class="camera-page-preview-image" id="camera-page-preview-image" alt="Selected captured page preview">
+            <div class="camera-page-preview-empty" id="camera-page-preview-empty">Capture a page, then click it here to review the scan quality.</div>
+          </div>
+          <div class="camera-page-list" id="camera-page-list">
+            <div class="camera-page-empty" id="camera-page-empty">No pages captured yet.</div>
+          </div>
         </div>
       </div>
     </div>
@@ -696,22 +1169,65 @@
       if (sidebarCloseToggle) {
         setToggleIcon(sidebarCloseToggle, "left");
       }
+      document.querySelectorAll(".menu-group").forEach(function(group) {
+        var trigger = group.querySelector(".menu-group-trigger");
+        if (!trigger) return;
+        var expanded = !collapsed && group.classList.contains("open");
+        trigger.setAttribute("aria-expanded", expanded ? "true" : "false");
+      });
     }
+
+    document.querySelectorAll(".menu-group-trigger").forEach(function(trigger) {
+      trigger.addEventListener("click", function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (document.body.classList.contains("sidebar-collapsed")) {
+          return;
+        }
+        var group = trigger.closest(".menu-group");
+        if (!group) {
+          return;
+        }
+        group.classList.toggle("open");
+        trigger.setAttribute("aria-expanded", group.classList.contains("open") ? "true" : "false");
+      });
+    });
 
     var previewModal = document.getElementById("attachment-preview-modal");
     var previewFrame = document.getElementById("attachment-preview-frame");
     var previewImage = document.getElementById("attachment-preview-image");
     var previewTitle = document.getElementById("attachment-preview-title");
+    var previewTabs = document.getElementById("attachment-preview-tabs");
     var previewClose = document.getElementById("attachment-preview-close");
-    var previewPrint = document.getElementById("attachment-preview-print");
     var previewOpenLink = document.getElementById("attachment-preview-open-link");
     var previewDownloadLinkInline = document.getElementById("attachment-preview-download-link-inline");
     var previewFallback = document.getElementById("attachment-preview-fallback");
     var previewDownloadLink = document.getElementById("attachment-preview-download-link");
+    var cameraModal = document.getElementById("camera-capture-modal");
+    var cameraClose = document.getElementById("camera-capture-close");
+    var cameraVideo = document.getElementById("camera-capture-video");
+    var cameraPlaceholder = document.getElementById("camera-capture-placeholder");
+    var cameraCanvas = document.getElementById("camera-capture-canvas");
+    var cameraShot = document.getElementById("camera-capture-shot");
+    var cameraClear = document.getElementById("camera-capture-clear");
+    var cameraUse = document.getElementById("camera-capture-use");
+    var cameraPageList = document.getElementById("camera-page-list");
+    var cameraPageEmpty = document.getElementById("camera-page-empty");
+    var cameraPagePreviewImage = document.getElementById("camera-page-preview-image");
+    var cameraPagePreviewEmpty = document.getElementById("camera-page-preview-empty");
     var appMain = document.querySelector(".app-main");
     var RESTORE_SCROLL_KEY = "mnp.restore-scroll";
     var currentPreviewUrl = "";
     var currentDownloadUrl = "";
+    var currentPreviewItems = [];
+    var currentPreviewIndex = 0;
+    var cameraState = {
+      stream: null,
+      pages: [],
+      targetFileInput: null,
+      targetNameInput: null,
+      selectedPageIndex: -1,
+    };
 
     function previewKindFromSource(source) {
       var lower = String(source || "").toLowerCase();
@@ -744,11 +1260,267 @@
       if (previewDownloadLinkInline) {
         previewDownloadLinkInline.setAttribute("href", "#");
       }
+      if (previewTabs) {
+        previewTabs.innerHTML = "";
+        previewTabs.hidden = true;
+      }
       currentPreviewUrl = "";
       currentDownloadUrl = "";
+      currentPreviewItems = [];
+      currentPreviewIndex = 0;
     }
 
-    function openPreviewModal(url, title, sourceName, downloadUrl) {
+    function closeCameraModal() {
+      if (!cameraModal) return;
+      cameraModal.classList.remove("is-open");
+      cameraModal.setAttribute("aria-hidden", "true");
+      if (cameraState.stream) {
+        cameraState.stream.getTracks().forEach(function(track) { track.stop(); });
+        cameraState.stream = null;
+      }
+      if (cameraVideo) {
+        cameraVideo.srcObject = null;
+      }
+      if (cameraPlaceholder) {
+        cameraPlaceholder.hidden = false;
+      }
+      cameraState.pages.forEach(function(page) {
+        try { URL.revokeObjectURL(page.previewUrl); } catch (error) {}
+      });
+      cameraState.pages = [];
+      cameraState.targetFileInput = null;
+      cameraState.targetNameInput = null;
+      cameraState.selectedPageIndex = -1;
+      renderCameraPages();
+    }
+
+    function renderSelectedCameraPage() {
+      if (!cameraPagePreviewImage || !cameraPagePreviewEmpty) return;
+      var selectedPage = cameraState.pages[cameraState.selectedPageIndex] || null;
+      if (!selectedPage) {
+        cameraPagePreviewImage.style.display = "none";
+        cameraPagePreviewImage.removeAttribute("src");
+        cameraPagePreviewEmpty.hidden = false;
+        return;
+      }
+      cameraPagePreviewImage.src = selectedPage.previewUrl;
+      cameraPagePreviewImage.style.display = "block";
+      cameraPagePreviewEmpty.hidden = true;
+    }
+
+    function renderCameraPages() {
+      if (!cameraPageList || !cameraPageEmpty) return;
+      cameraPageList.innerHTML = "";
+      if (!cameraState.pages.length) {
+        cameraState.selectedPageIndex = -1;
+        cameraPageEmpty.hidden = false;
+        cameraPageList.appendChild(cameraPageEmpty);
+        renderSelectedCameraPage();
+        return;
+      }
+      if (cameraState.selectedPageIndex < 0 || cameraState.selectedPageIndex >= cameraState.pages.length) {
+        cameraState.selectedPageIndex = 0;
+      }
+      cameraPageEmpty.hidden = true;
+      cameraState.pages.forEach(function(page, index) {
+        var card = document.createElement("div");
+        card.className = "camera-page-card" + (index === cameraState.selectedPageIndex ? " is-active" : "");
+        var img = document.createElement("img");
+        img.className = "camera-page-thumb";
+        img.src = page.previewUrl;
+        img.alt = "Captured page " + (index + 1);
+        var meta = document.createElement("div");
+        meta.className = "camera-page-meta";
+        var name = document.createElement("div");
+        name.className = "camera-page-name";
+        name.textContent = "Page " + (index + 1);
+        var size = document.createElement("div");
+        size.className = "camera-page-size";
+        size.textContent = page.width + " × " + page.height;
+        meta.appendChild(name);
+        meta.appendChild(size);
+        var remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "btn btn-danger icon-btn camera-page-remove";
+        remove.setAttribute("aria-label", "Remove page");
+        remove.setAttribute("title", "Remove page");
+        remove.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
+        remove.addEventListener("click", function(event) {
+          event.stopPropagation();
+          try { URL.revokeObjectURL(page.previewUrl); } catch (error) {}
+          cameraState.pages.splice(index, 1);
+          if (cameraState.selectedPageIndex >= cameraState.pages.length) {
+            cameraState.selectedPageIndex = cameraState.pages.length - 1;
+          } else if (cameraState.selectedPageIndex > index) {
+            cameraState.selectedPageIndex -= 1;
+          } else if (cameraState.selectedPageIndex === index && cameraState.selectedPageIndex >= cameraState.pages.length) {
+            cameraState.selectedPageIndex = cameraState.pages.length - 1;
+          }
+          renderCameraPages();
+        });
+        card.addEventListener("click", function() {
+          cameraState.selectedPageIndex = index;
+          renderCameraPages();
+        });
+        card.appendChild(img);
+        card.appendChild(meta);
+        card.appendChild(remove);
+        cameraPageList.appendChild(card);
+      });
+      renderSelectedCameraPage();
+    }
+
+    function pdfTextBytes(text) {
+      return new TextEncoder().encode(text);
+    }
+
+    function concatPdfChunks(chunks) {
+      var totalLength = chunks.reduce(function(sum, chunk) {
+        return sum + chunk.length;
+      }, 0);
+      var output = new Uint8Array(totalLength);
+      var offset = 0;
+      chunks.forEach(function(chunk) {
+        output.set(chunk, offset);
+        offset += chunk.length;
+      });
+      return output;
+    }
+
+    function buildPdfFromPages(pages) {
+      return Promise.all(pages.map(function(page) {
+        return page.blob.arrayBuffer().then(function(buffer) {
+          return {
+            width: page.width,
+            height: page.height,
+            bytes: new Uint8Array(buffer),
+          };
+        });
+      })).then(function(preparedPages) {
+        var totalObjects = 2 + (preparedPages.length * 3);
+        var offsets = new Array(totalObjects + 1).fill(0);
+        var chunks = [];
+        var position = 0;
+        var pageRefs = [];
+
+        function pushChunk(chunk) {
+          chunks.push(chunk);
+          position += chunk.length;
+        }
+
+        function pushText(text) {
+          pushChunk(pdfTextBytes(text));
+        }
+
+        function addObject(number, writer) {
+          offsets[number] = position;
+          pushText(number + " 0 obj\n");
+          writer();
+          pushText("\nendobj\n");
+        }
+
+        pushText("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+
+        preparedPages.forEach(function(page, index) {
+          var imageObjectNumber = 3 + (index * 3);
+          var contentObjectNumber = imageObjectNumber + 1;
+          var pageObjectNumber = imageObjectNumber + 2;
+          var pageWidth = 595.28;
+          var pageHeight = Math.max(300, Math.min(841.89, (page.height / page.width) * pageWidth));
+          var drawWidth = pageWidth - 40;
+          var drawHeight = Math.min(pageHeight - 40, (page.height / page.width) * drawWidth);
+          var offsetX = (pageWidth - drawWidth) / 2;
+          var offsetY = pageHeight - drawHeight - 20;
+          var contentStream = "q\n" + drawWidth.toFixed(2) + " 0 0 " + drawHeight.toFixed(2) + " " + offsetX.toFixed(2) + " " + offsetY.toFixed(2) + " cm\n/Im0 Do\nQ";
+          var contentBytes = pdfTextBytes(contentStream);
+
+          addObject(imageObjectNumber, function() {
+            pushText("<< /Type /XObject /Subtype /Image /Width " + page.width + " /Height " + page.height + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + page.bytes.length + " >>\nstream\n");
+            pushChunk(page.bytes);
+            pushText("\nendstream");
+          });
+
+          addObject(contentObjectNumber, function() {
+            pushText("<< /Length " + contentBytes.length + " >>\nstream\n");
+            pushChunk(contentBytes);
+            pushText("\nendstream");
+          });
+
+          addObject(pageObjectNumber, function() {
+            pushText("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + pageWidth.toFixed(2) + " " + pageHeight.toFixed(2) + "] /Resources << /XObject << /Im0 " + imageObjectNumber + " 0 R >> >> /Contents " + contentObjectNumber + " 0 R >>");
+          });
+
+          pageRefs.push(pageObjectNumber + " 0 R");
+        });
+
+        addObject(1, function() {
+          pushText("<< /Type /Catalog /Pages 2 0 R >>");
+        });
+
+        addObject(2, function() {
+          pushText("<< /Type /Pages /Count " + pageRefs.length + " /Kids [" + pageRefs.join(" ") + "] >>");
+        });
+
+        var startXref = position;
+        pushText("xref\n0 " + (totalObjects + 1) + "\n");
+        pushText("0000000000 65535 f \n");
+        for (var i = 1; i <= totalObjects; i += 1) {
+          pushText(String(offsets[i]).padStart(10, "0") + " 00000 n \n");
+        }
+        pushText("trailer << /Size " + (totalObjects + 1) + " /Root 1 0 R >>\nstartxref\n" + startXref + "\n%%EOF");
+        return new Blob([concatPdfChunks(chunks)], { type: "application/pdf" });
+      });
+    }
+
+    function assignGeneratedFileToInput(fileInput, file) {
+      if (!fileInput || !window.DataTransfer) return false;
+      var transfer = new DataTransfer();
+      transfer.items.add(file);
+      fileInput.files = transfer.files;
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    }
+
+    function startCameraCapture(fileInput, fileNameInput) {
+      if (!cameraModal || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        window.alert("Camera capture is not available in this browser.");
+        return false;
+      }
+      cameraState.targetFileInput = fileInput || null;
+      cameraState.targetNameInput = fileNameInput || null;
+      cameraModal.classList.add("is-open");
+      cameraModal.setAttribute("aria-hidden", "false");
+      renderCameraPages();
+      navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 2400 },
+          height: { ideal: 3200 }
+        },
+        audio: false,
+      }).then(function(stream) {
+        cameraState.stream = stream;
+        if (cameraVideo) {
+          cameraVideo.srcObject = stream;
+        }
+        if (cameraPlaceholder) {
+          cameraPlaceholder.hidden = true;
+        }
+      }).catch(function() {
+        if (cameraPlaceholder) {
+          cameraPlaceholder.hidden = false;
+          cameraPlaceholder.textContent = "Unable to access the camera. Please allow camera access and try again.";
+        }
+      });
+      return false;
+    }
+
+    function renderPreviewItem(item) {
+      if (!item || !previewModal || !previewFrame) return;
+      var url = item.preview_url || "";
+      var title = item.title || "File preview";
+      var sourceName = item.source || "";
+      var downloadUrl = item.download_url || "";
       if (!previewModal || !previewFrame) return;
       var kind = previewKindFromSource(sourceName);
       previewTitle.textContent = title || "File preview";
@@ -781,40 +1553,145 @@
       } else if (previewFallback) {
         previewFallback.style.display = "block";
       }
+    }
+
+    function renderPreviewTabs(items, activeIndex) {
+      if (!previewTabs) return;
+      if (!items || items.length <= 1) {
+        previewTabs.innerHTML = "";
+        previewTabs.hidden = true;
+        return;
+      }
+      previewTabs.hidden = false;
+      previewTabs.innerHTML = "";
+      items.forEach(function(item, index) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.className = "modal-tab" + (index === activeIndex ? " is-active" : "");
+        button.textContent = item.title || ("File " + (index + 1));
+        button.title = item.title || ("File " + (index + 1));
+        button.addEventListener("click", function() {
+          currentPreviewIndex = index;
+          renderPreviewTabs(currentPreviewItems, currentPreviewIndex);
+          renderPreviewItem(currentPreviewItems[currentPreviewIndex]);
+        });
+        previewTabs.appendChild(button);
+      });
+    }
+
+    function openPreviewModal(url, title, sourceName, downloadUrl, items) {
+      currentPreviewItems = Array.isArray(items) && items.length ? items : [{
+        preview_url: url || "",
+        title: title || "File preview",
+        source: sourceName || "",
+        download_url: downloadUrl || "",
+      }];
+      currentPreviewIndex = 0;
+      renderPreviewTabs(currentPreviewItems, currentPreviewIndex);
+      renderPreviewItem(currentPreviewItems[currentPreviewIndex]);
       previewModal.classList.add("is-open");
       previewModal.setAttribute("aria-hidden", "false");
     }
 
+    function printAttachment(url) {
+      if (!url) return;
+      try {
+        var frame = document.getElementById("attachment-print-frame");
+        if (!frame) {
+          frame = document.createElement("iframe");
+          frame.id = "attachment-print-frame";
+          frame.style.position = "fixed";
+          frame.style.right = "0";
+          frame.style.bottom = "0";
+          frame.style.width = "0";
+          frame.style.height = "0";
+          frame.style.border = "0";
+          frame.style.opacity = "0";
+          document.body.appendChild(frame);
+        }
+        frame.onload = function() {
+          try {
+            var win = frame.contentWindow;
+            if (!win) return;
+            win.focus();
+            setTimeout(function() {
+              try { win.print(); } catch (error) {}
+            }, 300);
+          } catch (error) {}
+        };
+        frame.src = url;
+      } catch (error) {}
+    }
+
+    window.openAttachmentPreviewFromButton = function(button) {
+      if (!button) return false;
+      var previewItems = [];
+      var previewItemsRaw = button.getAttribute("data-preview-items-b64") || "";
+      if (previewItemsRaw) {
+        try {
+          previewItems = JSON.parse(window.atob(previewItemsRaw));
+        } catch (error) {
+          previewItems = [];
+        }
+      }
+      openPreviewModal(
+        button.getAttribute("data-preview-url"),
+        button.getAttribute("data-preview-title"),
+        button.getAttribute("data-preview-source"),
+        button.getAttribute("data-download-url"),
+        previewItems
+      );
+      return false;
+    };
+
+    window.openCameraCaptureFromButton = function(button) {
+      if (!button) return false;
+      var fileInputId = button.getAttribute("data-camera-file-input") || "";
+      var fileNameInputId = button.getAttribute("data-camera-name-input") || "";
+      var fileInput = fileInputId ? document.getElementById(fileInputId) : null;
+      var fileNameInput = fileNameInputId ? document.getElementById(fileNameInputId) : null;
+      return startCameraCapture(fileInput, fileNameInput);
+    };
+
+    document.querySelectorAll(".js-attachment-preview").forEach(function(button) {
+      button.addEventListener("click", function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        window.openAttachmentPreviewFromButton(button);
+      });
+    });
+
     document.addEventListener("click", function(event) {
+      var cameraTrigger = event.target.closest(".js-camera-capture");
+      if (cameraTrigger) {
+        event.preventDefault();
+        event.stopPropagation();
+        window.openCameraCaptureFromButton(cameraTrigger);
+        return;
+      }
       var trigger = event.target.closest(".js-attachment-preview");
       if (trigger) {
         event.preventDefault();
+        event.stopPropagation();
         openPreviewModal(
           trigger.getAttribute("data-preview-url"),
           trigger.getAttribute("data-preview-title"),
           trigger.getAttribute("data-preview-source"),
-          trigger.getAttribute("data-download-url")
+          trigger.getAttribute("data-download-url"),
+          (function() {
+            var raw = trigger.getAttribute("data-preview-items-b64") || "";
+            if (!raw) return [];
+            try { return JSON.parse(window.atob(raw)); } catch (error) { return []; }
+          })()
         );
-        return;
-      }
-      var printTrigger = event.target.closest(".js-attachment-print");
-      if (printTrigger) {
-        event.preventDefault();
-        var printUrl = printTrigger.getAttribute("data-print-url");
-        if (!printUrl) return;
-        var printWindow = window.open(printUrl, "_blank", "noopener");
-        if (printWindow) {
-          printWindow.onload = function() {
-            try {
-              printWindow.focus();
-              printWindow.print();
-            } catch (error) {}
-          };
-        }
         return;
       }
       if (event.target === previewModal) {
         closePreviewModal();
+        return;
+      }
+      if (event.target === cameraModal) {
+        closeCameraModal();
       }
     });
 
@@ -822,24 +1699,86 @@
       previewClose.addEventListener("click", closePreviewModal);
     }
 
-    if (previewPrint) {
-      previewPrint.addEventListener("click", function() {
-        if (!currentPreviewUrl) return;
-        var printWindow = window.open(currentPreviewUrl, "_blank", "noopener");
-        if (printWindow) {
-          printWindow.onload = function() {
-            try {
-              printWindow.focus();
-              printWindow.print();
-            } catch (error) {}
-          };
+    if (cameraClose) {
+      cameraClose.addEventListener("click", closeCameraModal);
+    }
+
+    if (cameraShot) {
+      cameraShot.addEventListener("click", function() {
+        if (!cameraVideo || !cameraCanvas || !cameraState.stream) return;
+        var videoWidth = cameraVideo.videoWidth || 0;
+        var videoHeight = cameraVideo.videoHeight || 0;
+        if (!videoWidth || !videoHeight) return;
+        var maxWidth = 2400;
+        var scale = Math.min(1, maxWidth / videoWidth);
+        var width = Math.round(videoWidth * scale);
+        var height = Math.round(videoHeight * scale);
+        cameraCanvas.width = width;
+        cameraCanvas.height = height;
+        var context = cameraCanvas.getContext("2d");
+        context.drawImage(cameraVideo, 0, 0, width, height);
+        cameraCanvas.toBlob(function(blob) {
+          if (!blob) return;
+          var previewUrl = URL.createObjectURL(blob);
+          cameraState.pages.push({
+            blob: blob,
+            previewUrl: previewUrl,
+            width: width,
+            height: height,
+          });
+          cameraState.selectedPageIndex = cameraState.pages.length - 1;
+          renderCameraPages();
+        }, "image/jpeg", 0.98);
+      });
+    }
+
+    if (cameraClear) {
+      cameraClear.addEventListener("click", function() {
+        cameraState.pages.forEach(function(page) {
+          try { URL.revokeObjectURL(page.previewUrl); } catch (error) {}
+        });
+        cameraState.pages = [];
+        renderCameraPages();
+      });
+    }
+
+    if (cameraUse) {
+      cameraUse.addEventListener("click", function() {
+        if (!cameraState.pages.length || !cameraState.targetFileInput) {
+          window.alert("Capture at least one page before using it.");
+          return;
         }
+        buildPdfFromPages(cameraState.pages).then(function(pdfBlob) {
+          var timestamp = new Date();
+          var label = "scan_" +
+            timestamp.getFullYear() +
+            String(timestamp.getMonth() + 1).padStart(2, "0") +
+            String(timestamp.getDate()).padStart(2, "0") +
+            "_" +
+            String(timestamp.getHours()).padStart(2, "0") +
+            String(timestamp.getMinutes()).padStart(2, "0");
+          var file = new File([pdfBlob], label + ".pdf", { type: "application/pdf" });
+          if (!assignGeneratedFileToInput(cameraState.targetFileInput, file)) {
+            window.alert("This browser cannot assign the generated PDF file automatically. Please use the normal file upload.");
+            return;
+          }
+          if (cameraState.targetNameInput && !cameraState.targetNameInput.value.trim()) {
+            cameraState.targetNameInput.value = label + ".pdf";
+            cameraState.targetNameInput.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+          closeCameraModal();
+        }).catch(function() {
+          window.alert("Could not prepare the scanned PDF. Please try again.");
+        });
       });
     }
 
     document.addEventListener("keydown", function(event) {
       if (event.key === "Escape" && previewModal && previewModal.classList.contains("is-open")) {
         closePreviewModal();
+      }
+      if (event.key === "Escape" && cameraModal && cameraModal.classList.contains("is-open")) {
+        closeCameraModal();
       }
     });
 
@@ -880,16 +1819,30 @@
       }
     } catch (error) {}
 
-    document.querySelectorAll(".messages-floating li").forEach(function(message) {
+    function dismissFloatingMessage(message) {
+      if (!message) return;
+      message.style.transition = "opacity 0.25s ease, transform 0.25s ease";
+      message.style.opacity = "0";
+      message.style.transform = "translateY(-6px)";
       window.setTimeout(function() {
-        message.style.transition = "opacity 0.25s ease, transform 0.25s ease";
-        message.style.opacity = "0";
-        message.style.transform = "translateY(-6px)";
-        window.setTimeout(function() {
-          if (message.parentNode) {
-            message.parentNode.removeChild(message);
-          }
-        }, 260);
+        if (message.parentNode) {
+          message.parentNode.removeChild(message);
+        }
+      }, 260);
+    }
+
+    document.querySelectorAll(".message-close").forEach(function(button) {
+      button.addEventListener("click", function() {
+        dismissFloatingMessage(button.closest("li"));
+      });
+    });
+
+    document.querySelectorAll(".messages-floating li").forEach(function(message) {
+      if (message.classList.contains("persistent")) {
+        return;
+      }
+      window.setTimeout(function() {
+        dismissFloatingMessage(message);
       }, 3000);
     });
 

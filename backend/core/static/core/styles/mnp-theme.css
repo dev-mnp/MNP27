@@ -1,14 +1,14 @@
 :root {
   --bg-primary: #ffffff;
-  --bg-secondary: #fff8ea;
-  --bg-tertiary: #fff1cc;
+  --bg-secondary: #f5f7fb;
+  --bg-tertiary: #eef4ff;
   --text-primary: #111827;
-  --text-secondary: #6f6554;
+  --text-secondary: #667085;
   --text-tertiary: #9ca3af;
-  --border-color: #eadfca;
-  --border-hover: #dfc88b;
-  --accent-primary: #f1b400;
-  --accent-hover: #d99a00;
+  --border-color: #dbe3f0;
+  --border-hover: #bfdbfe;
+  --accent-primary: #2563eb;
+  --accent-hover: #1d4ed8;
   --success: #10b981;
   --warning: #f59e0b;
   --error: #d43c2d;
@@ -25,15 +25,15 @@
 
 .light {
   --bg-primary: #ffffff;
-  --bg-secondary: #fff8ea;
-  --bg-tertiary: #fff1cc;
+  --bg-secondary: #f5f7fb;
+  --bg-tertiary: #eef4ff;
   --text-primary: #111827;
-  --text-secondary: #6f6554;
+  --text-secondary: #667085;
   --text-tertiary: #9ca3af;
-  --border-color: #eadfca;
-  --border-hover: #dfc88b;
-  --accent-primary: #f1b400;
-  --accent-hover: #d99a00;
+  --border-color: #dbe3f0;
+  --border-hover: #bfdbfe;
+  --accent-primary: #2563eb;
+  --accent-hover: #1d4ed8;
 }
 
 .dark {
@@ -64,7 +64,7 @@ body {
   margin: 0;
   min-height: 100vh;
   color: var(--text-primary);
-  background: linear-gradient(135deg, #fff8ea 0%, #fff4df 38%, #fff7f1 66%, #f7f5ff 100%);
+  background: linear-gradient(135deg, #f7faff 0%, #eef4ff 48%, #f8fbff 100%);
   transition: background-color var(--transition-duration), color var(--transition-duration);
 }
 
@@ -131,7 +131,7 @@ nav a:hover {
   border-radius: 16px;
   padding: 18px;
   margin-bottom: 16px;
-  box-shadow: 0 12px 30px rgba(171, 44, 26, 0.08);
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.08);
 }
 
 .card > h2,
@@ -243,7 +243,7 @@ td {
 th {
   color: var(--text-primary);
   font-weight: 700;
-  background: #fff4d2;
+  background: #f8fafc;
 }
 
 tbody tr:nth-child(odd) {
@@ -254,10 +254,10 @@ tbody tr:nth-child(odd) {
   appearance: none;
   -webkit-appearance: none;
   padding: 8px 12px;
-  border: 1px solid #e0b13f;
+  border: 1px solid #93c5fd;
   border-radius: 12px;
-  background: linear-gradient(180deg, #f7c646 0%, #eeaf00 100%);
-  color: #522f00;
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+  color: #ffffff;
   cursor: pointer;
   font-weight: 500;
   font-size: 0.95rem;
@@ -272,8 +272,8 @@ tbody tr:nth-child(odd) {
 
 .btn:hover {
   border-color: var(--accent-hover);
-  background: linear-gradient(180deg, #f4bd28 0%, #df9e00 100%);
-  color: #432600;
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
 }
 
 .btn-danger {

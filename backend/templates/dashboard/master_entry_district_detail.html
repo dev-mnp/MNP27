@@ -23,6 +23,7 @@
       <div><label>Total Accrued</label><input class="input" value="Rs.{{ total_accrued|rupees }}" readonly></div>
       <div><label>Remaining Fund</label><input class="input" value="Rs.{{ remaining_fund|rupees }}" readonly></div>
       <div><label>Total Quantity</label><input class="input" value="{{ total_quantity }}" readonly></div>
+      <div style="grid-column: span 2;"><label>Internal Notes</label><textarea class="textarea" rows="3" readonly>{% if entries %}{{ entries.0.internal_notes|default:"" }}{% endif %}</textarea></div>
     </div>
 
     <table>

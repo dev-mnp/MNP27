@@ -21,6 +21,105 @@ class StatusChoices(models.TextChoices):
     INACTIVE = "inactive", "Inactive"
 
 
+class ModuleKeyChoices(models.TextChoices):
+    APPLICATION_ENTRY = "application_entry", "Application Entry"
+    ARTICLE_MANAGEMENT = "article_management", "Article Management"
+    BASE_FILES = "base_files", "Base Files"
+    INVENTORY_PLANNING = "inventory_planning", "Inventory Planning"
+    ORDER_FUND_REQUEST = "order_fund_request", "Order & Fund Request"
+    AUDIT_LOGS = "audit_logs", "Audit Logs"
+    USER_MANAGEMENT = "user_management", "User Management"
+
+
+MODULE_PERMISSION_ACTION_LABELS = {
+    "view": "View",
+    "create_edit": "Create / Edit",
+    "delete": "Delete",
+    "submit": "Submit",
+    "reopen": "Reopen",
+    "export": "Export",
+    "upload_replace": "Upload / Replace",
+    "reset_password": "Reset Password",
+}
+
+ALL_MODULE_PERMISSION_ACTIONS = tuple(MODULE_PERMISSION_ACTION_LABELS.keys())
+
+MODULE_PERMISSION_DEFINITIONS = [
+    {
+        "key": ModuleKeyChoices.APPLICATION_ENTRY,
+        "label": "Application Entry",
+        "actions": ("view", "create_edit", "delete", "submit", "reopen"),
+    },
+    {
+        "key": ModuleKeyChoices.ARTICLE_MANAGEMENT,
+        "label": "Article Management",
+        "actions": ("view", "create_edit", "delete"),
+    },
+    {
+        "key": ModuleKeyChoices.BASE_FILES,
+        "label": "Base Files",
+        "actions": ("view", "upload_replace"),
+    },
+    {
+        "key": ModuleKeyChoices.INVENTORY_PLANNING,
+        "label": "Inventory Planning",
+        "actions": ("view", "export"),
+    },
+    {
+        "key": ModuleKeyChoices.ORDER_FUND_REQUEST,
+        "label": "Order & Fund Request",
+        "actions": ("view", "create_edit", "delete", "submit", "reopen"),
+    },
+    {
+        "key": ModuleKeyChoices.AUDIT_LOGS,
+        "label": "Audit Logs",
+        "actions": ("view",),
+    },
+    {
+        "key": ModuleKeyChoices.USER_MANAGEMENT,
+        "label": "User Management",
+        "actions": ("view", "create_edit", "delete", "reset_password"),
+    },
+]
+
+ROLE_MODULE_PERMISSION_DEFAULTS = {
+    RoleChoices.ADMIN: {
+        definition["key"]: set(definition["actions"])
+        for definition in MODULE_PERMISSION_DEFINITIONS
+    },
+    RoleChoices.EDITOR: {
+        ModuleKeyChoices.APPLICATION_ENTRY: {"view", "create_edit", "submit", "reopen"},
+        ModuleKeyChoices.ARTICLE_MANAGEMENT: {"view", "create_edit"},
+        ModuleKeyChoices.BASE_FILES: {"view", "upload_replace"},
+        ModuleKeyChoices.INVENTORY_PLANNING: {"view", "export"},
+        ModuleKeyChoices.ORDER_FUND_REQUEST: {"view", "create_edit", "submit", "reopen"},
+        ModuleKeyChoices.AUDIT_LOGS: set(),
+        ModuleKeyChoices.USER_MANAGEMENT: set(),
+    },
+    RoleChoices.VIEWER: {
+        ModuleKeyChoices.APPLICATION_ENTRY: {"view"},
+        ModuleKeyChoices.ARTICLE_MANAGEMENT: {"view"},
+        ModuleKeyChoices.BASE_FILES: {"view"},
+        ModuleKeyChoices.INVENTORY_PLANNING: {"view"},
+        ModuleKeyChoices.ORDER_FUND_REQUEST: {"view"},
+        ModuleKeyChoices.AUDIT_LOGS: set(),
+        ModuleKeyChoices.USER_MANAGEMENT: set(),
+    },
+}
+
+
+def build_role_module_permission_map(role: str):
+    permission_map = {}
+    defaults = ROLE_MODULE_PERMISSION_DEFAULTS.get(role, {})
+    for definition in MODULE_PERMISSION_DEFINITIONS:
+        module_key = str(definition["key"])
+        allowed_actions = defaults.get(definition["key"], set())
+        permission_map[module_key] = {
+            f"can_{action}": action in allowed_actions for action in ALL_MODULE_PERMISSION_ACTIONS
+        }
+    return permission_map
+
+
 class ItemTypeChoices(models.TextChoices):
     ARTICLE = "Article", "Article"
     AID = "Aid", "Aid"
@@ -107,6 +206,45 @@ class FemaleStatusChoices(models.TextChoices):
     STUDENT = "Student", "Student"
 
 
+class DisabilityCategoryChoices(models.TextChoices):
+    BLINDNESS_LOW_VISION = "Blindness / Low Vision", "Blindness / Low Vision"
+    DEAF_HARD_HEARING = "Deaf / Hard of Hearing", "Deaf / Hard of Hearing"
+    LOCOMOTOR_DISABILITY = "Locomotor Disability", "Locomotor Disability"
+    CEREBRAL_PALSY = "Cerebral Palsy", "Cerebral Palsy"
+    LEPROSY_CURED = "Leprosy Cured", "Leprosy Cured"
+    DWARFISM = "Dwarfism", "Dwarfism"
+    ACID_ATTACK_VICTIM = "Acid Attack Victim", "Acid Attack Victim"
+    MUSCULAR_DYSTROPHY = "Muscular Dystrophy", "Muscular Dystrophy"
+    AUTISM_SPECTRUM_DISORDER = "Autism Spectrum Disorder", "Autism Spectrum Disorder"
+    INTELLECTUAL_DISABILITY = "Intellectual Disability", "Intellectual Disability"
+    SPECIFIC_LEARNING_DISABILITY = "Specific Learning Disability", "Specific Learning Disability"
+    MENTAL_ILLNESS = "Mental Illness", "Mental Illness"
+    MULTIPLE_DISABILITY = "Multiple Disability", "Multiple Disability"
+    DEAF_BLINDNESS = "Deaf-Blindness", "Deaf-Blindness"
+    MIXED = "Mixed", "Mixed"
+    OTHER = "Other", "Other"
+
+
+class HandicappedStatusChoices(models.TextChoices):
+    NO = "No", "No"
+    BLINDNESS_LOW_VISION = "Blindness / Low Vision", "Blindness / Low Vision"
+    DEAF_HARD_HEARING = "Deaf / Hard of Hearing", "Deaf / Hard of Hearing"
+    LOCOMOTOR_DISABILITY = "Locomotor Disability", "Locomotor Disability"
+    CEREBRAL_PALSY = "Cerebral Palsy", "Cerebral Palsy"
+    LEPROSY_CURED = "Leprosy Cured", "Leprosy Cured"
+    DWARFISM = "Dwarfism", "Dwarfism"
+    ACID_ATTACK_VICTIM = "Acid Attack Victim", "Acid Attack Victim"
+    MUSCULAR_DYSTROPHY = "Muscular Dystrophy", "Muscular Dystrophy"
+    AUTISM_SPECTRUM_DISORDER = "Autism Spectrum Disorder", "Autism Spectrum Disorder"
+    INTELLECTUAL_DISABILITY = "Intellectual Disability", "Intellectual Disability"
+    SPECIFIC_LEARNING_DISABILITY = "Specific Learning Disability", "Specific Learning Disability"
+    MENTAL_ILLNESS = "Mental Illness", "Mental Illness"
+    MULTIPLE_DISABILITY = "Multiple Disability", "Multiple Disability"
+    DEAF_BLINDNESS = "Deaf-Blindness", "Deaf-Blindness"
+    MIXED = "Mixed", "Mixed"
+    OTHER = "Other", "Other"
+
+
 class InstitutionTypeChoices(models.TextChoices):
     INSTITUTIONS = "institutions", "Institutions"
     OTHERS = "others", "Others"
@@ -166,6 +304,13 @@ class AppUser(AbstractUser):
     email = models.EmailField(unique=True)
     role = models.CharField(max_length=12, choices=RoleChoices.choices, default=RoleChoices.VIEWER)
     status = models.CharField(max_length=9, choices=StatusChoices.choices, default=StatusChoices.ACTIVE)
+    created_by = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_app_users",
+    )
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
     objects = AppUserManager()
@@ -185,6 +330,60 @@ class AppUser(AbstractUser):
     def display_name(self) -> str:
         full = self.get_full_name().strip()
         return full or self.email
+
+    def get_module_permission_map(self):
+        cache_name = "_resolved_module_permission_map"
+        if hasattr(self, cache_name):
+            return getattr(self, cache_name)
+        permission_map = build_role_module_permission_map(self.role)
+        if hasattr(self, "_prefetched_objects_cache") and "module_permissions" in self._prefetched_objects_cache:
+            permission_rows = list(self._prefetched_objects_cache["module_permissions"])
+        else:
+            permission_rows = list(self.module_permissions.all())
+        for permission in permission_rows:
+            module_key = permission.module_key
+            permission_map[module_key] = {
+                f"can_{action}": bool(getattr(permission, f"can_{action}", False))
+                for action in ALL_MODULE_PERMISSION_ACTIONS
+            }
+        setattr(self, cache_name, permission_map)
+        return permission_map
+
+    def has_module_permission(self, module_key, action="view"):
+        if not getattr(self, "is_authenticated", False):
+            return False
+        if self.is_superuser:
+            return True
+        if self.status != StatusChoices.ACTIVE:
+            return False
+        resolved_key = getattr(module_key, "value", module_key)
+        permission_field = action if str(action).startswith("can_") else f"can_{action}"
+        return bool(self.get_module_permission_map().get(str(resolved_key), {}).get(permission_field, False))
+
+
+class UserModulePermission(BaseTimestampedModel):
+    user = models.ForeignKey(AppUser, on_delete=models.CASCADE, related_name="module_permissions")
+    module_key = models.CharField(max_length=64, choices=ModuleKeyChoices.choices)
+    can_view = models.BooleanField(default=False)
+    can_create_edit = models.BooleanField(default=False)
+    can_delete = models.BooleanField(default=False)
+    can_submit = models.BooleanField(default=False)
+    can_reopen = models.BooleanField(default=False)
+    can_export = models.BooleanField(default=False)
+    can_upload_replace = models.BooleanField(default=False)
+    can_reset_password = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "user_module_permissions"
+        verbose_name = "User Module Permission"
+        verbose_name_plural = "User Module Permissions"
+        constraints = [
+            models.UniqueConstraint(fields=["user", "module_key"], name="unique_user_module_permission"),
+        ]
+        ordering = ["module_key"]
+
+    def __str__(self) -> str:
+        return f"{self.user.email} - {self.get_module_key_display()}"
 
 
 class Article(BaseTimestampedModel):
@@ -270,9 +469,34 @@ class FundRequest(BaseTimestampedModel):
         return f"{self.fund_request_type} {self.fund_request_number}"
 
 
+class Vendor(BaseTimestampedModel):
+    vendor_name = models.CharField(max_length=255)
+    gst_number = models.CharField(max_length=64, blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
+    city = models.CharField(max_length=120, blank=True, null=True)
+    state = models.CharField(max_length=120, blank=True, null=True)
+    pincode = models.CharField(max_length=20, blank=True, null=True)
+    cheque_in_favour = models.CharField(max_length=255, blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "vendors"
+        verbose_name = "Vendor"
+        verbose_name_plural = "Vendors"
+        indexes = [
+            models.Index(fields=["vendor_name"]),
+            models.Index(fields=["gst_number"]),
+            models.Index(fields=["is_active"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.vendor_name
+
+
 class FundRequestRecipient(BaseTimestampedModel):
     fund_request = models.ForeignKey(FundRequest, on_delete=models.CASCADE, related_name="recipients")
     beneficiary_type = models.CharField(max_length=20, choices=RecipientTypeChoices.choices, blank=True, null=True)
+    source_entry_id = models.PositiveIntegerField(blank=True, null=True)
     beneficiary = models.TextField(blank=True, null=True)
     recipient_name = models.CharField(max_length=255)
     name_of_beneficiary = models.CharField(max_length=255, blank=True, null=True)
@@ -290,7 +514,18 @@ class FundRequestRecipient(BaseTimestampedModel):
         db_table = "fund_request_recipients"
         verbose_name = "Fund Request Recipient"
         verbose_name_plural = "Fund Request Recipients"
-        indexes = [models.Index(fields=["fund_request"]), models.Index(fields=["beneficiary_type"])]
+        indexes = [
+            models.Index(fields=["fund_request"]),
+            models.Index(fields=["beneficiary_type"]),
+            models.Index(fields=["beneficiary_type", "source_entry_id"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["beneficiary_type", "source_entry_id"],
+                condition=models.Q(source_entry_id__isnull=False),
+                name="uniq_fund_request_recipient_source_global",
+            )
+        ]
 
     def __str__(self) -> str:
         return self.recipient_name or "Recipient"
@@ -299,10 +534,22 @@ class FundRequestRecipient(BaseTimestampedModel):
 class FundRequestArticle(BaseTimestampedModel):
     fund_request = models.ForeignKey(FundRequest, on_delete=models.CASCADE, related_name="articles")
     article = models.ForeignKey(Article, on_delete=models.RESTRICT, related_name="fund_request_lines")
+    vendor = models.ForeignKey(
+        Vendor,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="fund_request_articles",
+    )
     sl_no = models.PositiveIntegerField(blank=True, null=True)
     beneficiary = models.TextField(blank=True, null=True)
     article_name = models.CharField(max_length=255)
+    vendor_name = models.CharField(max_length=255, blank=True, null=True)
     gst_no = models.CharField(max_length=64, blank=True, null=True)
+    vendor_address = models.TextField(blank=True, null=True)
+    vendor_city = models.CharField(max_length=120, blank=True, null=True)
+    vendor_state = models.CharField(max_length=120, blank=True, null=True)
+    vendor_pincode = models.CharField(max_length=20, blank=True, null=True)
     quantity = models.PositiveIntegerField(default=1)
     unit_price = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     price_including_gst = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -320,6 +567,7 @@ class FundRequestArticle(BaseTimestampedModel):
         indexes = [
             models.Index(fields=["fund_request"]),
             models.Index(fields=["article"]),
+            models.Index(fields=["vendor"]),
         ]
 
     def __str__(self) -> str:
@@ -368,7 +616,9 @@ class DistrictBeneficiaryEntry(BaseTimestampedModel):
     article_cost_per_unit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     quantity = models.PositiveIntegerField(default=1)
     total_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    cheque_rtgs_in_favour = models.CharField(max_length=255, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
+    internal_notes = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=10, choices=BeneficiaryStatusChoices.choices, default=BeneficiaryStatusChoices.PENDING)
     created_by = models.ForeignKey(
         AppUser,
@@ -404,7 +654,7 @@ class PublicBeneficiaryEntry(BaseTimestampedModel):
     application_number = models.CharField(max_length=120, unique=True, blank=True, null=True)
     name = models.CharField(max_length=255)
     aadhar_number = models.CharField(max_length=20, validators=[MinLengthValidator(12)])
-    is_handicapped = models.BooleanField(default=False)
+    is_handicapped = models.CharField(max_length=80, choices=HandicappedStatusChoices.choices, default=HandicappedStatusChoices.NO)
     gender = models.CharField(max_length=15, choices=GenderChoices.choices, blank=True, null=True)
     female_status = models.CharField(max_length=80, choices=FemaleStatusChoices.choices, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
@@ -413,6 +663,7 @@ class PublicBeneficiaryEntry(BaseTimestampedModel):
     article_cost_per_unit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     quantity = models.PositiveIntegerField(default=1)
     total_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    cheque_rtgs_in_favour = models.CharField(max_length=255, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=10, choices=BeneficiaryStatusChoices.choices, default=BeneficiaryStatusChoices.PENDING)
     created_by = models.ForeignKey(
@@ -458,7 +709,9 @@ class InstitutionsBeneficiaryEntry(BaseTimestampedModel):
     article_cost_per_unit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     quantity = models.PositiveIntegerField(default=1)
     total_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    cheque_rtgs_in_favour = models.CharField(max_length=255, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
+    internal_notes = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=10, choices=BeneficiaryStatusChoices.choices, default=BeneficiaryStatusChoices.PENDING)
     created_by = models.ForeignKey(
         AppUser,
@@ -584,6 +837,26 @@ class OrderEntry(BaseTimestampedModel):
         if self.unit_price is not None:
             self.total_amount = non_negative_decimal(self.unit_price) * self.quantity_ordered
         super().save(*args, **kwargs)
+
+
+class DashboardSetting(BaseTimestampedModel):
+    event_budget = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    updated_by = models.ForeignKey(
+        AppUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_dashboard_settings",
+    )
+
+    class Meta:
+        db_table = "dashboard_settings"
+        verbose_name = "Dashboard Setting"
+        verbose_name_plural = "Dashboard Settings"
+
+    def __str__(self) -> str:
+        return f"Dashboard Setting ({self.event_budget})"
+
 
 
 class PublicBeneficiaryHistory(BaseTimestampedModel):

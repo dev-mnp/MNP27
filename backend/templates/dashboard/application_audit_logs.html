@@ -11,7 +11,7 @@
       </div>
     </div>
 
-    <form method="get" class="card" style="margin-bottom: 16px; background: linear-gradient(180deg, #fffef9 0%, #fff9ef 100%);">
+    <form method="get" class="card" id="audit-filter-form" style="margin-bottom: 16px; background: linear-gradient(180deg, #fffef9 0%, #fff9ef 100%);">
       <div class="toolbar" style="margin-bottom: 0; align-items: end;">
         <div style="flex: 1;">
           <label>Search</label>
@@ -45,9 +45,8 @@
           <label>To</label>
           <input class="input" type="date" name="date_to" value="{{ date_to }}">
         </div>
-        <button class="btn" type="submit">Apply</button>
         {% if search_query or application_type or selected_user_id or date_from or date_to %}
-          <a class="btn" href="{% url 'ui:application-audit-logs' %}">Reset</a>
+          <a class="btn" href="{% url 'ui:application-audit-logs' %}">Clear All</a>
         {% endif %}
       </div>
     </form>
@@ -99,4 +98,49 @@
       </div>
     {% endif %}
   </section>
+  <script>
+    (function() {
+      var filterForm = document.getElementById("audit-filter-form");
+      if (!filterForm) return;
+      var filterStorageKey = "audit-filter-focus-state";
+
+      filterForm.querySelectorAll('select[name="application_type"], select[name="user_id"], input[name="date_from"], input[name="date_to"]').forEach(function(field) {
+        field.addEventListener("change", function() {
+          filterForm.requestSubmit();
+        });
+      });
+
+      var searchInput = filterForm.querySelector('input[name="q"]');
+      if (searchInput) {
+        try {
+          var rawFilterState = sessionStorage.getItem(filterStorageKey);
+          if (rawFilterState) {
+            var filterState = JSON.parse(rawFilterState);
+            if (typeof filterState.value === "string") {
+              searchInput.focus();
+              var start = typeof filterState.selectionStart === "number" ? filterState.selectionStart : filterState.value.length;
+              var end = typeof filterState.selectionEnd === "number" ? filterState.selectionEnd : start;
+              searchInput.setSelectionRange(start, end);
+            }
+            sessionStorage.removeItem(filterStorageKey);
+          }
+        } catch (error) {}
+
+        var searchTimer = null;
+        searchInput.addEventListener("input", function() {
+          try {
+            sessionStorage.setItem(filterStorageKey, JSON.stringify({
+              value: searchInput.value,
+              selectionStart: searchInput.selectionStart,
+              selectionEnd: searchInput.selectionEnd
+            }));
+          } catch (error) {}
+          window.clearTimeout(searchTimer);
+          searchTimer = window.setTimeout(function() {
+            filterForm.requestSubmit();
+          }, 550);
+        });
+      }
+    })();
+  </script>
 {% endblock %}

@@ -1,0 +1,576 @@
+{% extends "base.html" %}
+{% load currency %}
+
+{% block content %}
+  <style>
+    .order-page-card {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+    }
+    .order-filter-card {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+    }
+    .order-metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .order-metric-card {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+      padding: 18px 20px;
+    }
+    .order-metric-title-article { color: #2563eb; }
+    .order-metric-title-aid { color: #16a34a; }
+    .order-metric-title-project { color: #9333ea; }
+    .order-table-wrap {
+      overflow-x: auto;
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+    }
+    .order-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #ffffff;
+    }
+    .order-heading {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .order-heading svg {
+      width: 22px;
+      height: 22px;
+      stroke: #2563eb;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .order-table thead th {
+      padding: 14px 16px;
+      background: #ffffff;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #4b5563;
+      white-space: nowrap;
+      text-align: center;
+    }
+    .order-table tbody td {
+      padding: 14px 16px;
+      border-bottom: 1px solid #e5e7eb;
+      vertical-align: top;
+      text-align: center;
+    }
+    .order-table th:first-child,
+    .order-table td:first-child,
+    .order-table th:nth-child(2),
+    .order-table td:nth-child(2) {
+      text-align: left;
+    }
+    .order-summary-row:hover { background: #f9fafb; }
+    .order-sort-link { color: inherit; text-decoration: none; }
+    .order-sort-link:hover { color: inherit; text-decoration: none; }
+    th.order-col-district { color: #2563eb; background: #eef5ff; border-bottom-color: #d6e7ff; }
+    th.order-col-public { color: #16a34a; background: #effaf3; border-bottom-color: #d7f0df; }
+    th.order-col-institutions { color: #7c3aed; background: #f5f0ff; border-bottom-color: #e7dbff; }
+    th.order-col-district .order-sort-link { color: #2563eb !important; }
+    th.order-col-public .order-sort-link { color: #16a34a !important; }
+    th.order-col-institutions .order-sort-link { color: #7c3aed !important; }
+    td.order-col-district { color: #2563eb; background: #f3f8ff; font-weight: 600; }
+    td.order-col-public { color: #16a34a; background: #f2fbf5; font-weight: 600; }
+    td.order-col-institutions { color: #7c3aed; background: #f8f4ff; font-weight: 600; }
+    .order-ordered { color: #2563eb; font-weight: 700; }
+    .order-pending { color: var(--error); font-weight: 600; }
+    .order-excess { color: #16a34a; font-weight: 600; }
+    .order-excess-label { font-size: 0.75rem; font-weight: 700; margin-left: 6px; letter-spacing: 0.02em; }
+    .status-draft-text { color: #d97706; font-weight: 600; }
+    .status-submitted-text { color: #16a34a; font-weight: 600; }
+    .status-fund-raised { color: #16a34a; font-weight: 600; }
+    .status-partial { color: #d97706; font-weight: 600; }
+    .status-not-raised { color: #dc2626; font-weight: 600; }
+    .order-beneficiary-group {
+      border: 1px solid #dbe7f4;
+      border-radius: 12px;
+      background: #ffffff;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .order-beneficiary-toggle {
+      width: 100%;
+      border: 0;
+      background: #f8fbff;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: #0f172a;
+      cursor: pointer;
+      font: inherit;
+    }
+    .order-beneficiary-toggle:hover {
+      background: #f1f7ff;
+    }
+    .order-beneficiary-toggle-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+    }
+    .order-beneficiary-toggle-count {
+      color: #64748b;
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+    .order-beneficiary-toggle-arrow {
+      color: #64748b;
+      font-size: 0.9rem;
+      transition: transform 0.18s ease;
+    }
+    .order-beneficiary-toggle[aria-expanded="true"] .order-beneficiary-toggle-arrow {
+      transform: rotate(90deg);
+    }
+    .order-beneficiary-body {
+      padding: 10px 12px 12px;
+      background: #ffffff;
+    }
+    .order-beneficiary-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0;
+      background: #ffffff;
+    }
+    .order-beneficiary-table th,
+    .order-beneficiary-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+      vertical-align: top;
+    }
+    .order-beneficiary-table th {
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: #64748b;
+      background: #f8fafc;
+      white-space: nowrap;
+    }
+    .order-beneficiary-table th:nth-child(3),
+    .order-beneficiary-table th:nth-child(4),
+    .order-beneficiary-table th:nth-child(5),
+    .order-beneficiary-table td:nth-child(3),
+    .order-beneficiary-table td:nth-child(4),
+    .order-beneficiary-table td:nth-child(5) {
+      text-align: center;
+    }
+    .order-beneficiary-sort {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      color: inherit;
+      font: inherit;
+      text-transform: inherit;
+      letter-spacing: inherit;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .order-beneficiary-sort-indicator {
+      color: #94a3b8;
+      font-size: 0.82rem;
+    }
+  </style>
+  <section class="card order-page-card">
+    <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 18px;">
+      <div>
+        <h2 class="order-heading" style="margin: 0;">
+          <svg viewBox="0 0 24 24"><path d="M3 7h18"/><path d="M6 7V5"/><path d="M18 7V5"/><path d="M5 11h14"/><path d="M7 15h10"/><path d="M9 19h6"/></svg>
+          <span>Inventory Planning</span>
+        </h2>
+      </div>
+    </div>
+
+    <div class="order-metric-grid">
+      {% for metric in metrics %}
+        <div class="order-metric-card">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+            <div style="font-size: 1.05rem; font-weight: 700;"
+                 class="{% if metric.label == 'Article' %}order-metric-title-article{% elif metric.label == 'Aid' %}order-metric-title-aid{% else %}order-metric-title-project{% endif %}">
+              {{ metric.label }}{% if metric.label == 'Aid' %}s{% elif metric.label == 'Project' %}s{% endif %}
+            </div>
+            <span style="font-size: 0.9rem; color: var(--text-secondary);">{{ metric.count }} items</span>
+          </div>
+          <div style="display: grid; gap: 10px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 0.92rem; color: var(--text-secondary);">Needed</span>
+              <strong>{{ metric.needed }}</strong>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 0.92rem; color: var(--text-secondary);">Ordered</span>
+              <strong style="color: #2563eb;">{{ metric.ordered }}</strong>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+              <span style="font-size: 0.92rem; color: var(--text-secondary); font-weight: 600;">Pending</span>
+              <strong {% if metric.pending > 0 %}style="color: var(--error);"{% else %}style="color: #16a34a;"{% endif %}>{{ metric.pending }}</strong>
+            </div>
+            {% if metric.label == "Article" %}
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 0.92rem; color: var(--text-secondary); font-weight: 600;">Excess</span>
+                <strong style="color: #16a34a;">{{ metric.excess }}</strong>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <form method="get" id="order-management-filter-form" class="card order-filter-card" style="margin-bottom: 18px; padding: 14px 16px;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 12px;">
+        <div style="display: inline-flex; flex-direction: column; gap: 6px; min-width: 220px;">
+          <label for="order-item-type" style="font-weight: 600; color: var(--text-secondary); font-size: 0.92rem;">Item Type</label>
+          <select id="order-item-type" class="input" name="item_type" style="min-width: 220px;">
+            <option value="">All Item Types</option>
+            {% for value, label in item_type_choices %}
+              <option value="{{ value }}" {% if filters.item_type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="display: inline-flex; flex-direction: column; gap: 6px; min-width: 180px;">
+          <label for="order-status" style="font-weight: 600; color: var(--text-secondary); font-size: 0.92rem;">Application Status</label>
+          <select id="order-status" class="input" name="status" style="min-width: 180px;">
+            {% for value, label in status_choices %}
+              <option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="display: inline-flex; flex-direction: column; gap: 6px; min-width: 180px;">
+          <label for="order-combo" style="font-weight: 600; color: var(--text-secondary); font-size: 0.92rem;">Combo</label>
+          <select id="order-combo" class="input" name="combo" style="min-width: 180px;">
+            {% for value, label in combo_choices %}
+              <option value="{{ value }}" {% if filters.combo == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="display: inline-flex; flex-direction: column; gap: 6px; min-width: 180px;">
+          <label for="order-order-status" style="font-weight: 600; color: var(--text-secondary); font-size: 0.92rem;">Order Status</label>
+          <select id="order-order-status" class="input" name="order_status" style="min-width: 180px;">
+            {% for value, label in order_status_choices %}
+              <option value="{{ value }}" {% if filters.order_status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="display: inline-flex; flex-direction: column; gap: 6px; min-width: 180px;">
+          <label for="order-balance" style="font-weight: 600; color: var(--text-secondary); font-size: 0.92rem;">Balance</label>
+          <select id="order-balance" class="input" name="balance" style="min-width: 180px;">
+            {% for value, label in balance_choices %}
+              <option value="{{ value }}" {% if filters.balance == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="display: inline-flex; align-items: flex-end; gap: 8px; flex-wrap: wrap;">
+          <a class="btn" href="{% url 'ui:order-management' %}?{{ query_string_without_page }}&export=csv&export_mode=overview">Export Overview</a>
+          <a class="btn" href="{% url 'ui:order-management' %}?{{ query_string_without_page }}&export=csv&export_mode=complete">Export Complete</a>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: minmax(260px, 1fr) auto; gap: 12px; align-items: end;">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label for="order-search" style="font-weight: 600; color: var(--text-secondary); font-size: 0.92rem;">Search</label>
+          <input
+            id="order-search"
+            class="input"
+            type="text"
+            name="q"
+            value="{{ filters.q }}"
+            placeholder="Search order item, source article, application number, or beneficiary..."
+          />
+        </div>
+        <a class="btn" href="{% url 'ui:order-management' %}">Clear All</a>
+      </div>
+    </form>
+
+    <div class="order-table-wrap">
+      <table class="order-table">
+        <thead>
+          <tr>
+            <th style="width: 22px;"></th>
+            <th><a class="order-sort-link" href="?{% if query_string_without_sort %}{{ query_string_without_sort }}&{% endif %}sort=article_name&dir={% if current_sort == 'article_name' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Order Item {% if current_sort == 'article_name' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th><a class="order-sort-link" href="?{% if query_string_without_sort %}{{ query_string_without_sort }}&{% endif %}sort=total_quantity&dir={% if current_sort == 'total_quantity' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Needed {% if current_sort == 'total_quantity' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th><a class="order-sort-link" href="?{% if query_string_without_sort %}{{ query_string_without_sort }}&{% endif %}sort=quantity_ordered&dir={% if current_sort == 'quantity_ordered' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Ordered {% if current_sort == 'quantity_ordered' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th><a class="order-sort-link" href="?{% if query_string_without_sort %}{{ query_string_without_sort }}&{% endif %}sort=quantity_pending&dir={% if current_sort == 'quantity_pending' and current_dir == 'asc' %}desc{% else %}asc{% endif %}"><span style="color: #dc2626;">Pending</span> / <span style="color: #16a34a;">Excess</span> {% if current_sort == 'quantity_pending' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th class="order-col-district"><a class="order-sort-link" style="color: inherit;" href="?{% if query_string_without_sort %}{{ query_string_without_sort }}&{% endif %}sort=district&dir={% if current_sort == 'district' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">District {% if current_sort == 'district' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th class="order-col-public"><a class="order-sort-link" style="color: inherit;" href="?{% if query_string_without_sort %}{{ query_string_without_sort }}&{% endif %}sort=public&dir={% if current_sort == 'public' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Public {% if current_sort == 'public' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+            <th class="order-col-institutions"><a class="order-sort-link" style="color: inherit;" href="?{% if query_string_without_sort %}{{ query_string_without_sort }}&{% endif %}sort=institutions&dir={% if current_sort == 'institutions' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Institutions &amp; Others {% if current_sort == 'institutions' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr class="order-summary-row" data-target="{{ row.row_id }}" tabindex="0" style="cursor: pointer;">
+              <td style="text-align: center;">▸</td>
+              <td>{{ row.article_name }}</td>
+              <td>{{ row.total_quantity }}</td>
+              <td><span class="order-ordered">{{ row.quantity_ordered }}</span></td>
+              <td>
+                {% if row.quantity_pending > 0 %}
+                  <span class="order-pending">{{ row.quantity_pending }}</span>
+                {% elif row.quantity_excess > 0 %}
+                  <span class="order-excess">{{ row.quantity_excess }}<span class="order-excess-label">Excess</span></span>
+                {% else %}
+                  <span>0</span>
+                {% endif %}
+              </td>
+              <td class="order-col-district">{{ row.breakdown.district }}</td>
+              <td class="order-col-public">{{ row.breakdown.public }}</td>
+              <td class="order-col-institutions">{{ row.breakdown.institutions }}</td>
+            </tr>
+            <tr id="{{ row.row_id }}" class="order-detail-row" hidden>
+              <td colspan="8" style="background: #f8fbff;">
+                <div style="padding: 14px 12px;">
+                  {% if row.source_items_display %}
+                    <div style="margin-bottom: 12px;"><strong>{% if row.combo_related %}Given together in:{% else %}Source item(s):{% endif %}</strong> {{ row.source_items_display }}</div>
+                  {% endif %}
+                  {% regroup row.beneficiaries by beneficiary_type as beneficiary_groups %}
+                  {% for group in beneficiary_groups %}
+                    <div class="order-beneficiary-group">
+                      <button type="button" class="order-beneficiary-toggle js-beneficiary-toggle" aria-expanded="false">
+                        <span class="order-beneficiary-toggle-label">
+                          <span class="order-beneficiary-toggle-arrow">▸</span>
+                          <span>{{ group.grouper }}</span>
+                        </span>
+                        <span class="order-beneficiary-toggle-count">{{ group.list|length }} entries</span>
+                      </button>
+                      <div class="order-beneficiary-body" hidden>
+                        <div style="overflow-x: auto;">
+                          <table class="order-beneficiary-table js-beneficiary-table">
+                            <thead>
+                              <tr>
+                                <th><button type="button" class="order-beneficiary-sort js-beneficiary-sort" data-sort-type="text">Application <span class="order-beneficiary-sort-indicator">⇅</span></button></th>
+                                <th><button type="button" class="order-beneficiary-sort js-beneficiary-sort" data-sort-type="text">Beneficiary <span class="order-beneficiary-sort-indicator">⇅</span></button></th>
+                                <th><button type="button" class="order-beneficiary-sort js-beneficiary-sort" data-sort-type="number">Qty <span class="order-beneficiary-sort-indicator">⇅</span></button></th>
+                                <th><button type="button" class="order-beneficiary-sort js-beneficiary-sort" data-sort-type="text">Application Status <span class="order-beneficiary-sort-indicator">⇅</span></button></th>
+                                <th><button type="button" class="order-beneficiary-sort js-beneficiary-sort" data-sort-type="text">Order Status <span class="order-beneficiary-sort-indicator">⇅</span></button></th>
+                                <th><button type="button" class="order-beneficiary-sort js-beneficiary-sort" data-sort-type="text">Source Item <span class="order-beneficiary-sort-indicator">⇅</span></button></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {% for item in group.list %}
+                                <tr>
+                                  <td>{{ item.application_number }}</td>
+                                  <td>{{ item.beneficiary_name }}</td>
+                                  <td>{{ item.quantity }}</td>
+                                  <td>
+                                    <span class="{% if item.application_status == 'draft' %}status-draft-text{% elif item.application_status == 'submitted' %}status-submitted-text{% endif %}">
+                                      {{ item.application_status|title }}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <span class="{% if item.order_status == 'Fund Raised' %}status-fund-raised{% elif item.order_status == 'Partial' %}status-partial{% else %}status-not-raised{% endif %}">
+                                      {% if item.order_status == 'Partial' %}
+                                        Partial ({{ item.ordered_quantity|default:0 }}/{{ item.quantity }})
+                                      {% else %}
+                                        {{ item.order_status }}
+                                      {% endif %}
+                                    </span>
+                                  </td>
+                                  <td>{{ item.source_item }}</td>
+                                </tr>
+                              {% endfor %}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if rows %}
+      <div style="display:flex; justify-content:flex-end; margin-top: 12px; color: var(--text-secondary); font-size: 0.92rem; font-weight: 600;">
+        Items shown: {{ filtered_item_count }}{% if filtered_item_count != all_item_count %} of {{ all_item_count }}{% endif %}
+      </div>
+    {% endif %}
+
+    {% if not rows %}
+      <div class="card" style="margin: 0; box-shadow: none;">No order requirements found for the current filters.</div>
+    {% endif %}
+  </section>
+
+  <script>
+    (function() {
+      var scrollStorageKey = "order-management-scroll-y";
+      var scrollContainer = document.querySelector(".app-main") || window;
+      try {
+        var savedScrollY = sessionStorage.getItem(scrollStorageKey);
+        if (savedScrollY !== null) {
+          sessionStorage.removeItem(scrollStorageKey);
+          var scrollTarget = parseInt(savedScrollY, 10) || 0;
+          if (scrollContainer === window) {
+            window.scrollTo(0, scrollTarget);
+          } else {
+            scrollContainer.scrollTop = scrollTarget;
+          }
+        }
+      } catch (error) {}
+
+      function preserveScrollPosition() {
+        try {
+          var currentScrollY = scrollContainer === window
+            ? (window.scrollY || window.pageYOffset || 0)
+            : scrollContainer.scrollTop;
+          sessionStorage.setItem(scrollStorageKey, String(currentScrollY || 0));
+        } catch (error) {}
+      }
+
+      document.querySelectorAll(".order-sort-link").forEach(function(link) {
+        link.addEventListener("click", preserveScrollPosition);
+      });
+
+      var filterForm = document.getElementById("order-management-filter-form");
+      if (filterForm) {
+        var filterStorageKey = "order-management-filter-focus-state";
+        var searchInput = filterForm.querySelector('input[name="q"]');
+        var watchedInputs = filterForm.querySelectorAll('select[name="item_type"], select[name="status"], select[name="order_status"], select[name="combo"], select[name="balance"]');
+
+        if (searchInput) {
+          try {
+            var rawFilterState = sessionStorage.getItem(filterStorageKey);
+            if (rawFilterState) {
+              var filterState = JSON.parse(rawFilterState);
+              searchInput.focus();
+              var start = typeof filterState.selectionStart === "number" ? filterState.selectionStart : searchInput.value.length;
+              var end = typeof filterState.selectionEnd === "number" ? filterState.selectionEnd : start;
+              searchInput.setSelectionRange(start, end);
+              sessionStorage.removeItem(filterStorageKey);
+            }
+          } catch (error) {}
+
+          var searchTimer = null;
+          searchInput.addEventListener("input", function() {
+            try {
+              sessionStorage.setItem(filterStorageKey, JSON.stringify({
+                value: searchInput.value,
+                selectionStart: searchInput.selectionStart,
+                selectionEnd: searchInput.selectionEnd
+              }));
+            } catch (error) {}
+            window.clearTimeout(searchTimer);
+            searchTimer = window.setTimeout(function() {
+              preserveScrollPosition();
+              filterForm.requestSubmit();
+            }, 550);
+          });
+        }
+
+        watchedInputs.forEach(function(input) {
+          input.addEventListener("change", function() {
+            preserveScrollPosition();
+            filterForm.requestSubmit();
+          });
+        });
+      }
+
+      function toggleRow(row) {
+        var targetId = row.getAttribute("data-target");
+        if (!targetId) return;
+        var detailRow = document.getElementById(targetId);
+        if (!detailRow) return;
+        var isOpen = !detailRow.hasAttribute("hidden");
+        document.querySelectorAll(".order-detail-row").forEach(function(other) {
+          other.setAttribute("hidden", "hidden");
+        });
+        document.querySelectorAll(".order-summary-row td:first-child").forEach(function(cell) {
+          cell.textContent = "▸";
+        });
+        if (!isOpen) {
+          detailRow.removeAttribute("hidden");
+          var arrow = row.querySelector("td:first-child");
+          if (arrow) arrow.textContent = "▾";
+        }
+      }
+
+      document.querySelectorAll(".order-summary-row").forEach(function(row) {
+        row.addEventListener("click", function(event) {
+          if (event.target.closest("a, button, input, select, textarea")) return;
+          toggleRow(row);
+        });
+        row.addEventListener("keydown", function(event) {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            toggleRow(row);
+          }
+        });
+      });
+
+      document.querySelectorAll('.js-beneficiary-toggle').forEach(function(button) {
+        button.addEventListener('click', function() {
+          var body = button.nextElementSibling;
+          var expanded = button.getAttribute('aria-expanded') === 'true';
+          button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+          if (body) {
+            if (expanded) {
+              body.setAttribute('hidden', 'hidden');
+            } else {
+              body.removeAttribute('hidden');
+            }
+          }
+        });
+      });
+
+      document.querySelectorAll('.js-beneficiary-sort').forEach(function(button) {
+        button.addEventListener('click', function() {
+          var th = button.closest('th');
+          var table = button.closest('.js-beneficiary-table');
+          if (!th || !table) return;
+          var tbody = table.querySelector('tbody');
+          if (!tbody) return;
+          var headers = Array.from(th.parentElement.children);
+          var columnIndex = headers.indexOf(th);
+          var currentDir = button.getAttribute('data-sort-dir') === 'asc' ? 'asc' : 'desc';
+          var nextDir = currentDir === 'asc' ? 'desc' : 'asc';
+          table.querySelectorAll('.js-beneficiary-sort').forEach(function(other) {
+            other.removeAttribute('data-sort-dir');
+            var indicator = other.querySelector('.order-beneficiary-sort-indicator');
+            if (indicator) indicator.textContent = '⇅';
+          });
+
+          var rows = Array.from(tbody.querySelectorAll('tr'));
+          var sortType = button.getAttribute('data-sort-type') || 'text';
+          rows.sort(function(a, b) {
+            var aText = (a.children[columnIndex] ? a.children[columnIndex].innerText : '').trim();
+            var bText = (b.children[columnIndex] ? b.children[columnIndex].innerText : '').trim();
+            var comparison = 0;
+            if (sortType === 'number') {
+              comparison = (parseFloat(aText) || 0) - (parseFloat(bText) || 0);
+            } else {
+              comparison = aText.localeCompare(bText, undefined, { numeric: true, sensitivity: 'base' });
+            }
+            return nextDir === 'asc' ? comparison : -comparison;
+          });
+
+          rows.forEach(function(row) { tbody.appendChild(row); });
+          button.setAttribute('data-sort-dir', nextDir);
+          var indicator = button.querySelector('.order-beneficiary-sort-indicator');
+          if (indicator) indicator.textContent = nextDir === 'asc' ? '↑' : '↓';
+        });
+      });
+    })();
+  </script>
+{% endblock %}

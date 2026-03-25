@@ -16,14 +16,15 @@
       background: #f8be34;
       border-bottom: 1px solid rgba(123, 74, 8, 0.12);
       box-shadow: 0 2px 10px rgba(84, 55, 0, 0.06);
+      padding: 10px 0 12px;
     }
 
     .login-header-inner {
       width: 100%;
       max-width: none;
       margin: 0;
-      padding: 10px 28px;
-      min-height: 82px;
+      padding: 0 28px;
+      min-height: 0;
       display: grid;
       grid-template-columns: 420px 1fr;
       align-items: center;
@@ -205,10 +206,14 @@
     }
 
     @media (max-width: 720px) {
+      .login-header {
+        padding: 10px 0;
+      }
+
       .login-header-inner {
-        padding: 10px 16px;
+        padding: 0 16px;
         min-height: auto;
-        align-items: flex-start;
+        align-items: center;
         grid-template-columns: 1fr;
       }
 

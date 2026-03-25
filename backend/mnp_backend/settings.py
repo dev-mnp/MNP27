@@ -144,3 +144,7 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=120),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }
+
+# Fund request formsets can legitimately post a large number of recipient fields
+# in one submission, especially for aid requests populated in batches.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = int(os.getenv('DJANGO_DATA_UPLOAD_MAX_NUMBER_FIELDS', '10000'))

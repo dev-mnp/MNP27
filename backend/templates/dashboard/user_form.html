@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="card">
+    <div class="toolbar" style="justify-content: space-between;">
+      <div><h2 style="margin: 0;">{{ page_title }}</h2></div>
+      <a class="btn" href="{% url 'ui:user-list' %}">Back</a>
+    </div>
+
+    <form method="post" class="form-section-card" style="margin-top:18px;">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <ul class="messages inline-feedback-group">
+          {% for error in form.non_field_errors %}<li class="error">{{ error }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+      <div class="grid2">
+        <div>
+          <label>First Name</label>
+          {{ form.first_name }}
+          {{ form.first_name.errors }}
+        </div>
+        <div>
+          <label>Last Name</label>
+          {{ form.last_name }}
+          {{ form.last_name.errors }}
+        </div>
+        <div style="grid-column: span 2;">
+          <label>Email</label>
+          {{ form.email }}
+          {{ form.email.errors }}
+        </div>
+        <div>
+          <label>Role</label>
+          {{ form.role }}
+          {{ form.role.errors }}
+        </div>
+        <div>
+          <label>Status</label>
+          {{ form.status }}
+          {{ form.status.errors }}
+        </div>
+        <div style="grid-column: span 2;">
+          <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <label style="margin:0;">Password</label>
+            <button class="btn btn-subtle" type="button" id="toggle-password-visibility">Show passwords</button>
+          </div>
+        </div>
+        <div>
+          <label>{% if submit_label == 'Create' %}Password{% else %}New Password{% endif %}</label>
+          {{ form.password1 }}
+          {{ form.password1.errors }}
+        </div>
+        <div>
+          <label>Confirm Password</label>
+          {{ form.password2 }}
+          {{ form.password2.errors }}
+        </div>
+      </div>
+
+      <div class="form-section-card" style="margin-top:20px; background: rgba(242, 247, 255, 0.75); border-color: rgba(153, 181, 230, 0.34);">
+        <div class="toolbar" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div>
+            <h3 style="margin:0;">Module Permissions</h3>
+            <p style="margin:8px 0 0; color: var(--muted);">Role sets the default access. You can fine-tune the module permissions below.</p>
+          </div>
+        </div>
+        <div style="display:grid; gap:12px;">
+          {% for section in form.permission_sections %}
+            <div style="display:grid; grid-template-columns: 220px 1fr; gap:16px; align-items:start; padding:12px 0; border-top: 1px solid rgba(156, 181, 223, 0.18);">
+              <div style="font-weight:600; color: var(--text);">{{ section.label }}</div>
+              <div style="display:flex; flex-wrap:wrap; gap:14px 18px;">
+                {% for item in section.fields %}
+                  <label style="display:inline-flex; align-items:center; gap:8px; color: var(--muted);">
+                    {{ item.bound_field }}
+                    <span>{{ item.label }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="toolbar" style="justify-content:flex-end; margin-top:20px;">
+        <a class="btn" href="{% url 'ui:user-list' %}">Cancel</a>
+        <button class="btn" type="submit">{{ submit_label }}</button>
+      </div>
+    </form>
+  </section>
+
+  <script>
+    (function() {
+      const toggle = document.getElementById('toggle-password-visibility');
+      const fields = [document.getElementById('id_password1'), document.getElementById('id_password2')].filter(Boolean);
+      if (!toggle || !fields.length) return;
+      toggle.addEventListener('click', function() {
+        const visible = fields[0].type === 'text';
+        fields.forEach(function(field) { field.type = visible ? 'password' : 'text'; });
+        toggle.textContent = visible ? 'Show passwords' : 'Hide passwords';
+      });
+    })();
+  </script>
+{% endblock %}

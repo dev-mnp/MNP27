@@ -22,6 +22,7 @@
       <div><label>Application Number</label><input class="input" value="{{ application_number }}" readonly></div>
       <div><label>Mobile Number</label><input class="input" value="{{ entry_header.mobile|default:'-' }}" readonly></div>
       <div style="grid-column: span 2;"><label>Address</label><textarea class="textarea" rows="3" readonly>{{ entry_header.address|default:"" }}</textarea></div>
+      <div style="grid-column: span 2;"><label>Internal Notes</label><textarea class="textarea" rows="3" readonly>{{ entry_header.internal_notes|default:"" }}</textarea></div>
       <div><label>Total Quantity</label><input class="input" value="{{ total_quantity }}" readonly></div>
       <div><label>Total Value</label><input class="input" value="Rs.{{ total_value|rupees }}" readonly></div>
     </div>

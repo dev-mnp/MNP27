@@ -3,48 +3,127 @@
 
 {% block content %}
   <section class="card">
-    <div class="toolbar">
-      <h2 style="margin: 0;">Fund Requests</h2>
-      {% if request.user.role == "admin" or request.user.role == "editor" %}
-        <a class="btn" href="{% url 'ui:fund-request-create' %}">New fund request</a>
-      {% endif %}
+    <style>
+      .fund-request-actions {
+        flex-wrap: nowrap;
+        gap: 6px !important;
+        align-items: center;
+      }
+      .fund-request-actions form {
+        display: inline-flex;
+        margin: 0;
+      }
+      .fund-request-actions .icon-btn {
+        width: 36px;
+        min-width: 36px;
+        height: 36px;
+      }
+      .fund-request-actions .icon-btn {
+        border: none;
+        background: transparent;
+        box-shadow: none;
+        padding: 0;
+      }
+      .fund-request-actions .icon-btn svg { stroke: currentColor; }
+      .fund-request-actions .fund-request-neutral-action.icon-btn {
+        color: #2563eb;
+      }
+      .fund-request-actions .icon-btn:hover {
+        background: transparent;
+        transform: none;
+        box-shadow: none;
+      }
+      .fund-request-actions .fund-request-neutral-action.icon-btn:hover {
+        color: #1d4ed8;
+      }
+      .fund-request-actions .btn-reopen.icon-btn {
+        color: #2563eb;
+      }
+      .fund-request-actions .btn-reopen.icon-btn:hover {
+        color: #1d4ed8;
+      }
+    </style>
+    <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+      <div>
+        <h2 style="margin: 0 0 6px 0;">Order & Fund Request</h2>
+        <div class="small" style="color: var(--text-secondary);">Draft requests stay internal. Only submitted requests move mapped quantities to ordered in Inventory Planning.</div>
+      </div>
+      <div class="actions-inline">
+        <details class="export-menu" style="position: relative;">
+          <summary class="btn" style="list-style:none; cursor:pointer;">Export</summary>
+          <div class="card" style="position:absolute; right:0; top:calc(100% + 8px); min-width:170px; padding:8px; display:grid; gap:6px; z-index:20;">
+            <a class="btn" href="{% url 'ui:fund-request-list' %}?export=xlsx&export_status=draft{% if filters.q %}&q={{ filters.q|urlencode }}{% endif %}{% if filters.request_type %}&request_type={{ filters.request_type|urlencode }}{% endif %}">
+              Draft
+            </a>
+            <a class="btn" href="{% url 'ui:fund-request-list' %}?export=xlsx&export_status=submitted{% if filters.q %}&q={{ filters.q|urlencode }}{% endif %}{% if filters.request_type %}&request_type={{ filters.request_type|urlencode }}{% endif %}">
+              Submitted
+            </a>
+          </div>
+        </details>
+        {% if request.user.role == "admin" or request.user.role == "editor" %}
+          <a class="btn" href="{% url 'ui:fund-request-create' %}">Create</a>
+        {% endif %}
+      </div>
     </div>
-    <form method="get" class="toolbar" style="margin-bottom: 16px;">
-      <input class="input" type="text" name="q" value="{{ request.GET.q }}" placeholder="Search request number" />
-      <button class="btn" type="submit">Search</button>
+    <form method="get" class="card" id="fund-request-filter-form" style="margin-bottom: 16px; padding: 16px; background: var(--panel-bg-muted);">
+      <div class="toolbar" style="gap: 10px; flex-wrap: wrap; margin-bottom: 0;">
+      <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Search request number or item type" style="min-width: 280px; flex: 1 1 280px;" />
+      <select class="input" name="request_type" style="width: 180px;">
+        <option value="">All Types</option>
+        {% for value, label in request_type_choices %}
+          <option value="{{ value }}" {% if filters.request_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      {% if filters.status %}
+        <input type="hidden" name="status" value="{{ filters.status }}" />
+      {% endif %}
+      <a class="btn" href="{% url 'ui:fund-request-list' %}{% if filters.status %}?status={{ filters.status }}{% endif %}">Clear All</a>
+      </div>
     </form>
     <table>
       <thead>
         <tr>
           <th>Request #</th>
           <th>Type</th>
-          <th>Status</th>
-          <th>Beneficiaries</th>
-          <th>Articles</th>
+          <th>Item Type</th>
+          <th>Recipients / Items</th>
           <th>Total</th>
+          <th>Status</th>
           <th>Created</th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody>
+        {% with module_perms=request.user.get_module_permission_map %}
         {% for fr in fund_requests %}
           <tr>
             <td>{{ fr.fund_request_number|default:"Draft" }}</td>
             <td>{{ fr.get_fund_request_type_display }}</td>
-            <td>{{ fr.get_status_display }}</td>
-            <td>{{ fr.recipients.count }}</td>
-            <td>{{ fr.articles.count }}</td>
+            <td>{% if fr.fund_request_type == "Aid" %}{{ fr.aid_type|default:"-" }}{% else %}Articles{% endif %}</td>
+            <td>{% if fr.fund_request_type == "Aid" %}{{ fr.recipients.count }} recipient(s){% else %}{{ fr.articles.count }} item(s){% endif %}</td>
             <td>Rs.{{ fr.total_amount|rupees }}</td>
-            <td>{{ fr.created_by.email|default:"system" }}</td>
+            <td class="{% if fr.status == 'submitted' %}status-submitted{% else %}status-draft{% endif %}">{{ fr.get_status_display }}</td>
+            <td>{{ fr.created_at|date:"d/m/Y H:i" }}</td>
             <td>
-              <div class="actions-inline">
-              <a class="btn icon-btn" title="Open" aria-label="Open" href="{% url 'ui:fund-request-detail' fr.id %}">
-                <svg viewBox="0 0 24 24"><path d="M3 12h18"/><path d="m12 3 9 9-9 9"/><path d="M3 3v18"/></svg>
+              <div class="actions-inline fund-request-actions">
+              <a class="btn icon-btn fund-request-neutral-action" title="View" aria-label="View" href="{% url 'ui:fund-request-detail' fr.id %}">
+                <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
               </a>
-              {% if request.user.role == "admin" or request.user.role == "editor" %}
-                <a class="btn icon-btn" title="Edit" aria-label="Edit" href="{% url 'ui:fund-request-edit' fr.id %}">
+              <a class="btn icon-btn fund-request-neutral-action" title="Download PDF" aria-label="Download PDF" href="{% url 'ui:fund-request-pdf' fr.id %}" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+              </a>
+              {% if fr.status == "draft" and request.user.role == "admin" or fr.status == "draft" and request.user.role == "editor" %}
+                <a class="btn btn-edit icon-btn" title="Modify" aria-label="Modify" href="{% url 'ui:fund-request-edit' fr.id %}">
                   <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
                 </a>
+              {% endif %}
+              {% if request.user.role == "admin" and fr.status == "submitted" and module_perms.order_fund_request.can_reopen %}
+                <form method="post" action="{% url 'ui:fund-request-reopen' fr.id %}">
+                  {% csrf_token %}
+                  <button class="btn btn-reopen icon-btn" type="submit" title="Reopen" aria-label="Reopen">
+                    <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.708"/><path d="M3 3v6h6"/></svg>
+                  </button>
+                </form>
               {% endif %}
               {% if request.user.role == "admin" %}
                 <a class="btn btn-danger icon-btn" title="Delete" aria-label="Delete" href="{% url 'ui:fund-request-delete' fr.id %}">
@@ -59,7 +138,55 @@
             <td colspan="8">No fund requests yet.</td>
           </tr>
         {% endfor %}
+        {% endwith %}
       </tbody>
     </table>
   </section>
+  <script>
+    (function() {
+      var filterForm = document.getElementById("fund-request-filter-form");
+      if (!filterForm) return;
+      var filterStorageKey = "fund-request-filter-focus-state";
+
+      var searchInput = filterForm.querySelector('input[name="q"]');
+      if (!searchInput) return;
+
+      try {
+        var rawFilterState = sessionStorage.getItem(filterStorageKey);
+        if (rawFilterState) {
+          var filterState = JSON.parse(rawFilterState);
+          if (typeof filterState.value === "string") {
+            searchInput.focus();
+            var start = typeof filterState.selectionStart === "number" ? filterState.selectionStart : filterState.value.length;
+            var end = typeof filterState.selectionEnd === "number" ? filterState.selectionEnd : start;
+            searchInput.setSelectionRange(start, end);
+          }
+          sessionStorage.removeItem(filterStorageKey);
+        }
+      } catch (error) {}
+
+      var searchTimer = null;
+      searchInput.addEventListener("input", function() {
+        try {
+          sessionStorage.setItem(filterStorageKey, JSON.stringify({
+            value: searchInput.value,
+            selectionStart: searchInput.selectionStart,
+            selectionEnd: searchInput.selectionEnd
+          }));
+        } catch (error) {}
+        window.clearTimeout(searchTimer);
+        searchTimer = window.setTimeout(function() {
+          filterForm.requestSubmit();
+        }, 550);
+      });
+
+      ['select[name="request_type"]'].forEach(function(selector) {
+        var field = filterForm.querySelector(selector);
+        if (!field) return;
+        field.addEventListener("change", function() {
+          filterForm.requestSubmit();
+        });
+      });
+    })();
+  </script>
 {% endblock %}

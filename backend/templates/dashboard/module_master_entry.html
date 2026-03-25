@@ -2,6 +2,7 @@
 {% load currency %}
 
 {% block content %}
+  {% with module_perms=request.user.get_module_permission_map %}
   {% if public_submit_popup %}
     <div class="submit-popup" id="public-submit-popup" role="status" aria-live="polite">
       <div class="submit-popup-card">
@@ -31,7 +32,7 @@
       <div>
         <h2 style="margin: 0 0 6px;">Applications Management</h2>
         <p style="margin: 0; color: var(--text-secondary);">
-          District applications, Public applications, and Institution applications
+          Create, review, and track application records across beneficiary types
         </p>
       </div>
       <div class="small master-count-pill">
@@ -39,11 +40,11 @@
       </div>
     </div>
 
-    <form method="get" class="master-filter-card">
+    <form method="get" class="master-filter-card" id="applications-filter-form">
       <div class="beneficiary-switch-row">
         <div class="beneficiary-switch-capsule">
           <label for="beneficiary-type" style="margin-bottom: 0;">Beneficiary Type</label>
-          <select id="beneficiary-type" class="input" name="type" onchange="this.form.submit()">
+          <select id="beneficiary-type" class="input" name="type">
             <option value="district" {% if beneficiary_type == "district" %}selected{% endif %}>District</option>
             <option value="public" {% if beneficiary_type == "public" %}selected{% endif %}>Public</option>
             <option value="institutions" {% if beneficiary_type == "institutions" %}selected{% endif %}>Institutions</option>
@@ -81,12 +82,10 @@
           </select>
         </div>
         <div class="filter-actions">
-          <button class="btn compact-btn compact-btn-primary" type="submit">Apply</button>
-          <a class="btn btn-subtle compact-btn master-reset-btn" href="?type={{ beneficiary_type }}">Reset</a>
+          <a class="btn btn-subtle compact-btn master-reset-btn" href="?type={{ beneficiary_type }}">Clear All</a>
         </div>
       </div>
       <div class="filter-hint">
-        Click a table header to sort. Click the application number to expand its summary.
       </div>
     </form>
 
@@ -110,6 +109,7 @@
             <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=application_number&dir={% if sort_by == 'application_number' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">APP NUMBER {% if sort_by == "application_number" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
             <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=district_name&dir={% if sort_by == 'district_name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">DISTRICT NAME {% if sort_by == "district_name" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
             <th>ARTICLES</th>
+            <th>BUDGET</th>
             <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=total_accrued&dir={% if sort_by == 'total_accrued' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">TOTAL ACCRUED {% if sort_by == "total_accrued" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
             <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=remaining_fund&dir={% if sort_by == 'remaining_fund' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">REMAINING FUND {% if sort_by == "remaining_fund" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
             <th><a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort=status&dir={% if sort_by == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">STATUS {% if sort_by == "status" %}{% if sort_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
@@ -128,6 +128,7 @@
               </td>
               <td>{{ row.district_name }}</td>
               <td>{{ row.article_count }} item(s), {{ row.total_quantity }} quantity</td>
+              <td>Rs.{{ row.allotted_budget|rupees }}</td>
               <td>Rs.{{ row.total_accrued|rupees }}</td>
               <td style="color: {% if row.remaining_fund < 0 %}#dc2626{% else %}#16a34a{% endif %};">
                 Rs.{{ row.remaining_fund|rupees }}
@@ -136,34 +137,11 @@
               <td>{{ row.created_at|date:"d/m/Y" }}</td>
               <td>
                 <div class="actions-inline">
-                {% if row.attachment_id %}
-                <button
-                  class="btn icon-btn js-attachment-preview"
-                  type="button"
-                  title="Preview attachment"
-                  aria-label="Preview attachment"
-                  data-preview-url="{{ row.attachment_preview_url }}"
-                  data-preview-title="{{ row.attachment_title }}"
-                  data-preview-source="{{ row.attachment_source }}"
-                  data-download-url="{{ row.attachment_preview_url }}?download=1"
-                >
-                  <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                </button>
-                <button
-                  class="btn icon-btn js-attachment-print"
-                  type="button"
-                  title="Print file"
-                  aria-label="Print file"
-                  data-print-url="{{ row.attachment_preview_url }}"
-                >
-                  <svg viewBox="0 0 24 24"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>
-                </button>
-                {% endif %}
                 {% if row.status != "submitted" %}
                 <a class="btn btn-edit icon-btn" title="Modify" aria-label="Modify" href="{% url 'ui:master-entry-district-edit' row.district_id %}">
                   <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
                 </a>
-                {% elif request.user.role == "admin" %}
+                {% elif request.user.role == "admin" and module_perms.application_entry.can_reopen %}
                   <form method="post" action="{% url 'ui:master-entry-district-reopen' row.district_id %}" style="display: inline;" data-confirm-message="Reopen this district application as draft?">
                     {% csrf_token %}
                     <button class="btn btn-reopen icon-btn" type="submit" title="Reopen" aria-label="Reopen">
@@ -179,12 +157,31 @@
                     </button>
                   </form>
                 {% endif %}
+                {% if row.attachment_count %}
+                <button
+                  class="btn icon-btn js-attachment-preview"
+                  type="button"
+                  onclick="return window.openAttachmentPreviewFromButton(this);"
+                  title="Preview attachment{% if row.attachment_count > 1 %}s{% endif %}"
+                  aria-label="Preview attachment{% if row.attachment_count > 1 %}s{% endif %}"
+                  data-preview-url="{{ row.attachment_preview_url }}"
+                  data-preview-title="{{ row.attachment_title }}"
+                  data-preview-source="{{ row.attachment_source }}"
+                  data-download-url="{{ row.attachment_preview_url }}?download=1"
+                  data-preview-items-b64="{{ row.attachment_items_b64 }}"
+                >
+                  <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                {% endif %}
                 </div>
               </td>
             </tr>
             <tr id="district-{{ row.district_id }}" class="summary-row" hidden>
-              <td colspan="8">
+              <td colspan="9">
                 <div class="summary-card">
+                  {% if row.internal_notes %}
+                    <div style="margin-bottom: 12px;"><strong>Internal Notes:</strong> {{ row.internal_notes }}</div>
+                  {% endif %}
                   <table class="summary-detail-table">
                     <thead>
                       <tr>
@@ -193,6 +190,7 @@
                         <th>Unit Cost</th>
                         <th>Total</th>
                         <th>Comments</th>
+                        <th>Cheque / RTGS in Favour</th>
                         <th>Added / Modified On</th>
                       </tr>
                     </thead>
@@ -204,6 +202,7 @@
                           <td>Rs.{{ item.unit_cost|rupees }}</td>
                           <td>Rs.{{ item.total_amount|rupees }}</td>
                           <td>{{ item.notes|default:"-" }}</td>
+                          <td>{{ item.cheque_rtgs_in_favour|default:"-" }}</td>
                           <td>{{ item.changed_at|date:"d/m/Y H:i" }}</td>
                         </tr>
                       {% endfor %}
@@ -213,10 +212,13 @@
               </td>
             </tr>
           {% empty %}
-            <tr><td colspan="8">No district entries created yet.</td></tr>
+            <tr><td colspan="9">No district entries created yet.</td></tr>
           {% endfor %}
         </tbody>
       </table>
+      <div class="toolbar" style="justify-content: flex-end; margin-top: 12px;">
+        <div class="small"><strong>Total Accrued:</strong> Rs.{{ district_total_accrued|rupees }}</div>
+      </div>
     {% elif beneficiary_type == "public" %}
       <div class="toolbar" style="justify-content: space-between;">
         <div class="toolbar" style="margin-bottom: 0;">
@@ -261,34 +263,11 @@
               <td>{{ entry.created_at|date:"d/m/Y" }}</td>
               <td>
                 <div class="actions-inline">
-                {% if entry.attachment_id %}
-                <button
-                  class="btn icon-btn js-attachment-preview"
-                  type="button"
-                  title="Preview attachment"
-                  aria-label="Preview attachment"
-                  data-preview-url="{{ entry.attachment_preview_url }}"
-                  data-preview-title="{{ entry.attachment_title }}"
-                  data-preview-source="{{ entry.attachment_source }}"
-                  data-download-url="{{ entry.attachment_preview_url }}?download=1"
-                >
-                  <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                </button>
-                <button
-                  class="btn icon-btn js-attachment-print"
-                  type="button"
-                  title="Print file"
-                  aria-label="Print file"
-                  data-print-url="{{ entry.attachment_preview_url }}"
-                >
-                  <svg viewBox="0 0 24 24"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>
-                </button>
-                {% endif %}
                 {% if entry.status != "submitted" %}
                 <a class="btn btn-edit icon-btn" title="Modify" aria-label="Modify" href="{% url 'ui:master-entry-public-edit' entry.id %}">
                   <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
                 </a>
-                {% elif request.user.role == "admin" %}
+                {% elif request.user.role == "admin" and module_perms.application_entry.can_reopen %}
                   <form method="post" action="{% url 'ui:master-entry-public-reopen' entry.id %}" style="display: inline;" data-confirm-message="Reopen this public application as draft?">
                     {% csrf_token %}
                     <button class="btn btn-reopen icon-btn" type="submit" title="Reopen" aria-label="Reopen">
@@ -304,24 +283,42 @@
                     </button>
                   </form>
                 {% endif %}
+                {% if entry.attachment_count %}
+                <button
+                  class="btn icon-btn js-attachment-preview"
+                  type="button"
+                  onclick="return window.openAttachmentPreviewFromButton(this);"
+                  title="Preview attachment{% if entry.attachment_count > 1 %}s{% endif %}"
+                  aria-label="Preview attachment{% if entry.attachment_count > 1 %}s{% endif %}"
+                  data-preview-url="{{ entry.attachment_preview_url }}"
+                  data-preview-title="{{ entry.attachment_title }}"
+                  data-preview-source="{{ entry.attachment_source }}"
+                  data-download-url="{{ entry.attachment_preview_url }}?download=1"
+                  data-preview-items-b64="{{ entry.attachment_items_b64 }}"
+                >
+                  <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                {% endif %}
                 </div>
               </td>
             </tr>
             <tr id="public-{{ entry.id }}" class="summary-row" hidden>
               <td colspan="8">
                 <div class="summary-card">
-                  <div class="grid2">
+                  <div style="display:flex; flex-wrap:wrap; gap:16px 24px; margin-bottom:10px;">
                     <div><strong>Mobile:</strong> {{ entry.mobile|default:"-" }}</div>
                     <div><strong>Gender:</strong> {{ entry.gender|default:"-" }}</div>
-                    {% if entry.female_status %}
-                      <div><strong>Female Status:</strong> {{ entry.get_female_status_display }}</div>
-                      <div></div>
-                    {% endif %}
+                    {% if entry.female_status %}<div><strong>Female Status:</strong> {{ entry.get_female_status_display }}</div>{% endif %}
+                    <div><strong>Handicapped Status:</strong> {% if entry.is_handicapped and entry.is_handicapped != "No" %}{{ entry.get_is_handicapped_display }}{% else %}No{% endif %}</div>
+                    <div><strong>Address:</strong> {{ entry.address|default:"-" }}</div>
                     <div><strong>Added On:</strong> {{ entry.created_at|date:"d/m/Y H:i" }}</div>
                     <div><strong>Modified On:</strong> {{ entry.updated_at|date:"d/m/Y H:i" }}</div>
-                    <div style="grid-column: span 2;"><strong>Address:</strong> {{ entry.address|default:"-" }}</div>
-                    <div style="grid-column: span 2;"><strong>Comments:</strong> {{ entry.notes|default:"-" }}</div>
                   </div>
+                  <div style="margin-bottom:10px;"><strong>Comments:</strong> {{ entry.notes|default:"-" }}</div>
+                  {% if entry.article.item_type == "Aid" or entry.cheque_rtgs_in_favour %}<div style="margin-bottom:10px;"><strong>Cheque / RTGS in Favour:</strong> {{ entry.cheque_rtgs_in_favour|default:"-" }}</div>{% endif %}
+                  {% if entry.public_history_summary %}
+                    <div><strong>Previous beneficiary history:</strong> {{ entry.public_history_summary }}</div>
+                  {% endif %}
                 </div>
               </td>
             </tr>
@@ -377,34 +374,11 @@
               <td>{{ row.created_at|date:"d/m/Y" }}</td>
               <td>
                 <div class="actions-inline">
-                {% if row.attachment_id %}
-                <button
-                  class="btn icon-btn js-attachment-preview"
-                  type="button"
-                  title="Preview attachment"
-                  aria-label="Preview attachment"
-                  data-preview-url="{{ row.attachment_preview_url }}"
-                  data-preview-title="{{ row.attachment_title }}"
-                  data-preview-source="{{ row.attachment_source }}"
-                  data-download-url="{{ row.attachment_preview_url }}?download=1"
-                >
-                  <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                </button>
-                <button
-                  class="btn icon-btn js-attachment-print"
-                  type="button"
-                  title="Print file"
-                  aria-label="Print file"
-                  data-print-url="{{ row.attachment_preview_url }}"
-                >
-                  <svg viewBox="0 0 24 24"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></svg>
-                </button>
-                {% endif %}
                 {% if row.status != "submitted" %}
                 <a class="btn btn-edit icon-btn" title="Modify" aria-label="Modify" href="{% url 'ui:master-entry-institution-edit' row.application_number %}">
                   <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
                 </a>
-                {% elif request.user.role == "admin" %}
+                {% elif request.user.role == "admin" and module_perms.application_entry.can_reopen %}
                   <form method="post" action="{% url 'ui:master-entry-institution-reopen' row.application_number %}" style="display: inline;" data-confirm-message="Reopen this institution application as draft?">
                     {% csrf_token %}
                     <button class="btn btn-reopen icon-btn" type="submit" title="Reopen" aria-label="Reopen">
@@ -420,6 +394,22 @@
                     </button>
                   </form>
                 {% endif %}
+                {% if row.attachment_count %}
+                <button
+                  class="btn icon-btn js-attachment-preview"
+                  type="button"
+                  onclick="return window.openAttachmentPreviewFromButton(this);"
+                  title="Preview attachment{% if row.attachment_count > 1 %}s{% endif %}"
+                  aria-label="Preview attachment{% if row.attachment_count > 1 %}s{% endif %}"
+                  data-preview-url="{{ row.attachment_preview_url }}"
+                  data-preview-title="{{ row.attachment_title }}"
+                  data-preview-source="{{ row.attachment_source }}"
+                  data-download-url="{{ row.attachment_preview_url }}?download=1"
+                  data-preview-items-b64="{{ row.attachment_items_b64 }}"
+                >
+                  <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                {% endif %}
                 </div>
               </td>
             </tr>
@@ -428,9 +418,11 @@
                 <div class="summary-card">
                   <div class="grid2" style="margin-bottom: 14px;">
                     <div><strong>Mobile:</strong> {{ row.mobile|default:"-" }}</div>
-                    <div></div>
-                    <div style="grid-column: span 2;"><strong>Address:</strong> {{ row.address|default:"-" }}</div>
+                    <div><strong>Address:</strong> {{ row.address|default:"-" }}</div>
                   </div>
+                  {% if row.internal_notes %}
+                    <div style="margin-bottom: 12px;"><strong>Internal Notes:</strong> {{ row.internal_notes }}</div>
+                  {% endif %}
                   <table class="summary-detail-table">
                     <thead>
                       <tr>
@@ -439,6 +431,7 @@
                         <th>Unit Cost</th>
                         <th>Total</th>
                         <th>Comments</th>
+                        <th>Cheque / RTGS in Favour</th>
                         <th>Added / Modified On</th>
                       </tr>
                     </thead>
@@ -450,6 +443,7 @@
                           <td>Rs.{{ item.unit_cost|rupees }}</td>
                           <td>Rs.{{ item.total_amount|rupees }}</td>
                           <td>{{ item.notes|default:"-" }}</td>
+                          <td>{{ item.cheque_rtgs_in_favour|default:"-" }}</td>
                           <td>{{ item.changed_at|date:"d/m/Y H:i" }}</td>
                         </tr>
                       {% endfor %}
@@ -479,7 +473,7 @@
       margin-bottom: 20px;
     }
     .master-count-pill {
-      background: #fffaf0;
+      background: #f8fbff;
       border-color: #ead9ac;
       padding: 10px 14px;
       border-radius: 14px;
@@ -496,7 +490,7 @@
       height: 28px;
       border: 0;
       background: transparent;
-      color: #8a7555;
+      color: #64748b;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -521,7 +515,7 @@
       padding: 12px 14px;
       border: 1px solid var(--border-color);
       border-radius: 18px;
-      background: linear-gradient(180deg, #fffef8 0%, #fff9ef 100%);
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
     }
     .beneficiary-switch-row {
       display: flex;
@@ -537,14 +531,14 @@
       min-width: 220px;
       max-width: 260px;
       padding: 10px 12px;
-      border: 1px solid #eddcb8;
+      border: 1px solid #dbe3f0;
       border-radius: 16px;
-      background: #fffdfa;
+      background: #ffffff;
     }
     .beneficiary-switch-capsule label {
       font-size: 0.8rem;
       font-weight: 600;
-      color: #8a7555;
+      color: #64748b;
       letter-spacing: 0.01em;
     }
     .beneficiary-switch-capsule .input {
@@ -570,7 +564,7 @@
     .filter-field label {
       font-size: 0.82rem;
       font-weight: 600;
-      color: #8a7555;
+      color: #64748b;
       letter-spacing: 0.01em;
     }
     .filter-search {
@@ -580,14 +574,14 @@
       min-height: 40px;
       padding: 8px 12px;
       border-radius: 12px;
-      background: #fffdfa;
-      border-color: #eddcb8;
+      background: #f8fafc;
+      border-color: #dbe3f0;
       box-shadow: none;
       font-size: 0.95rem;
     }
     .master-filter-card .input:focus {
-      border-color: #dfc88b;
-      box-shadow: 0 0 0 3px rgba(241, 180, 0, 0.12);
+      border-color: #93c5fd;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
       outline: none;
     }
     .filter-actions {
@@ -611,21 +605,22 @@
       height: 15px;
     }
     .compact-btn-primary {
-      background: linear-gradient(180deg, #f8c73f 0%, #efb20a 100%);
-      border-color: #e8c368;
+      background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+      border-color: #93c5fd;
     }
     .master-reset-btn {
-      background: #fffdf7;
-      border-color: #eddcb8;
-      color: #7a5a13;
+      background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+      border-color: #93c5fd;
+      color: #ffffff;
     }
     .master-reset-btn:hover {
-      background: #fff6df;
-      color: #6a4c0f;
+      background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+      border-color: var(--accent-hover);
+      color: #ffffff;
     }
     .filter-hint {
       margin-top: 8px;
-      color: #9a845f;
+      color: #64748b;
       font-size: 0.83rem;
     }
     .list-view-controls {
@@ -638,17 +633,26 @@
       min-width: 28px;
       height: 28px;
       border-radius: 8px;
-      border-color: #eed7a0;
-      background: #fffaf0;
-      color: #8a7555;
+      border-color: #dbe3f0;
+      background: #f8fafc;
+      color: #64748b;
     }
     .list-icon-btn svg {
       width: 14px;
       height: 14px;
     }
     .list-icon-btn:hover {
-      background: #fff4d2;
-      color: #6f4b00;
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+    .actions-inline {
+      flex-wrap: nowrap;
+      gap: 6px;
+    }
+    .actions-inline .icon-btn {
+      width: 36px;
+      min-width: 36px;
+      height: 36px;
     }
     .add-entry-btn {
       min-height: 36px;
@@ -675,8 +679,8 @@
       padding: 8px;
       border: 1px solid var(--border-color);
       border-radius: 14px;
-      background: #fffdf7;
-      box-shadow: 0 14px 28px rgba(17, 24, 39, 0.12);
+      background: #ffffff;
+      box-shadow: 0 14px 28px rgba(37, 99, 235, 0.12);
       z-index: 3;
     }
     .export-menu-panel a {
@@ -685,7 +689,7 @@
       color: var(--text-primary);
     }
     .export-menu-panel a:hover {
-      background: #fff4d2;
+      background: #eff6ff;
       text-decoration: none;
     }
     table thead th a {
@@ -703,7 +707,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(17, 24, 39, 0.18);
+      background: rgba(15, 23, 42, 0.2);
       z-index: 80;
     }
     .submit-popup-card {
@@ -711,20 +715,20 @@
       max-width: 420px;
       padding: 22px 28px;
       border-radius: 18px;
-      background: #fffdf7;
-      border: 1px solid #ead9ac;
-      box-shadow: 0 20px 60px rgba(82, 47, 0, 0.18);
+      background: #ffffff;
+      border: 1px solid #dbe3f0;
+      box-shadow: 0 20px 60px rgba(37, 99, 235, 0.16);
       text-align: center;
     }
     .submit-popup-label {
       font-size: 0.95rem;
-      color: #8a7555;
+      color: #64748b;
       margin-bottom: 8px;
     }
     .submit-popup-number {
       font-size: 2rem;
       font-weight: 700;
-      color: #6f4b00;
+      color: #1d4ed8;
       margin-bottom: 6px;
     }
     .submit-popup-name {
@@ -735,7 +739,7 @@
       cursor: pointer;
     }
     .summary-parent-row:hover td {
-      background: rgba(241, 180, 0, 0.06);
+      background: rgba(37, 99, 235, 0.06);
     }
     .summary-toggle {
       border: 0;
@@ -752,18 +756,18 @@
     .summary-arrow {
       display: inline-block;
       transition: transform 0.18s ease;
-      color: #6f6554;
+      color: #64748b;
     }
     .summary-toggle[aria-expanded="true"] .summary-arrow {
       transform: rotate(90deg);
     }
     .summary-row td {
-      background: #fffaf0;
+      background: #f8fbff;
       padding: 0;
     }
     .summary-card {
       padding: 16px;
-      border-top: 1px solid #f1e0b8;
+      border-top: 1px solid #dbe3f0;
     }
     .summary-detail-table {
       width: 100%;
@@ -789,25 +793,24 @@
       white-space: nowrap;
     }
     .status-pill {
-      display: inline-flex;
-      align-items: center;
-      padding: 5px 10px;
-      border-radius: 999px;
-      font-size: 0.82rem;
+      display: inline;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      font-size: 0.88rem;
       font-weight: 600;
-      border: 1px solid var(--border-color);
-      background: #fff7e6;
-      color: #6f4b00;
+      color: #64748b;
     }
     .status-pill.status-submitted {
-      background: #dcfce7;
-      color: #166534;
-      border-color: #86efac;
+      background: transparent;
+      color: #16a34a;
+      border-color: transparent;
     }
     .status-pill.status-draft {
-      background: #ffedd5;
-      color: #9a3412;
-      border-color: #fdba74;
+      background: transparent;
+      color: #f59e0b;
+      border-color: transparent;
     }
     @media (max-width: 1000px) {
       .master-filter-grid {
@@ -842,6 +845,48 @@
   </style>
   <script>
     (function() {
+      var filterForm = document.getElementById("applications-filter-form");
+      if (filterForm) {
+        var filterStorageKey = "applications-filter-focus-state";
+        filterForm.querySelectorAll('select[name="type"], select[name="status"], input[name="date_from"], input[name="date_to"]').forEach(function(field) {
+          field.addEventListener("change", function() {
+            filterForm.requestSubmit();
+          });
+        });
+
+        var searchInput = filterForm.querySelector('input[name="q"]');
+        if (searchInput) {
+          try {
+            var rawFilterState = sessionStorage.getItem(filterStorageKey);
+            if (rawFilterState) {
+              var filterState = JSON.parse(rawFilterState);
+              if (typeof filterState.value === "string") {
+                searchInput.focus();
+                var start = typeof filterState.selectionStart === "number" ? filterState.selectionStart : filterState.value.length;
+                var end = typeof filterState.selectionEnd === "number" ? filterState.selectionEnd : start;
+                searchInput.setSelectionRange(start, end);
+              }
+              sessionStorage.removeItem(filterStorageKey);
+            }
+          } catch (error) {}
+
+          var searchTimer = null;
+          searchInput.addEventListener("input", function() {
+            try {
+              sessionStorage.setItem(filterStorageKey, JSON.stringify({
+                value: searchInput.value,
+                selectionStart: searchInput.selectionStart,
+                selectionEnd: searchInput.selectionEnd
+              }));
+            } catch (error) {}
+            window.clearTimeout(searchTimer);
+            searchTimer = window.setTimeout(function() {
+              filterForm.requestSubmit();
+            }, 550);
+          });
+        }
+      }
+
       var submitPopups = Array.from(document.querySelectorAll(".submit-popup"));
       submitPopups.forEach(function(popup) {
         var closeButton = popup.querySelector(".submit-popup-close");
@@ -932,4 +977,5 @@
       });
     })();
   </script>
+  {% endwith %}
 {% endblock %}

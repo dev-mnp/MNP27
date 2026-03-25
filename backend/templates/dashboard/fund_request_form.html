@@ -1,131 +1,1459 @@
 {% extends "base.html" %}
 
 {% block content %}
-  <section class="card">
-    <h2 style="margin-top: 0;">
-      {% if object %}Edit Fund Request{% else %}New Fund Request{% endif %}
-    </h2>
+<section class="card">
+  <style>
+    .js-beneficiary-help:empty { display: none; }
+    .js-beneficiary-select { pointer-events: auto; -webkit-appearance: menulist; appearance: menulist; background-image: none; }
+    .upload-feedback {
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      display: none;
+    }
+    .upload-feedback.is-visible { display: block; }
+    .upload-feedback.success {
+      background: #ecfdf3;
+      border: 1px solid #86efac;
+      color: #166534;
+    }
+    .upload-feedback.warning {
+      background: #fff7ed;
+      border: 1px solid #fdba74;
+      color: #9a3412;
+    }
+    .excess-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 24px;
+    }
+    .excess-modal-backdrop.is-open { display: flex; }
+    .excess-modal {
+      width: min(640px, 100%);
+      background: #fff;
+      border: 1px solid #dbe7f4;
+      border-radius: 20px;
+      box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+      padding: 22px;
+    }
+    .excess-modal-list {
+      display: grid;
+      gap: 10px;
+      margin: 16px 0;
+    }
+    .excess-modal-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: #fff7ed;
+      border: 1px solid #fdba74;
+    }
+    .excess-modal-item-name {
+      color: #9a3412;
+      font-weight: 600;
+    }
+    .excess-modal-item-qty {
+      color: #b91c1c;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+  </style>
+  <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+    <div>
+      <h2 style="margin: 0 0 6px 0;">{% if object %}Edit Order &amp; Fund Request{% else %}New Order &amp; Fund Request{% endif %}</h2>
+      <div class="small" style="color: var(--text-secondary);">Draft requests reserve aid recipients but do not move anything to ordered. Only submitted requests update Inventory Planning.</div>
+    </div>
+    <a class="btn" href="{% url 'ui:fund-request-list' %}">Back</a>
+  </div>
 
-    <form method="post" enctype="multipart/form-data" {% if object %}data-confirm-message="Save changes to this fund request?"{% endif %}>
-      {% csrf_token %}
-      {% if form.errors %}
-        <div class="small" style="margin-bottom: 10px; color: #fecaca;">Please fix errors below.</div>
-      {% endif %}
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {% if form.errors or recipient_formset.errors or article_formset.errors %}
+      <div class="small" style="margin-bottom: 10px; color: #dc2626;">Please fix the highlighted fund request fields before saving.</div>
+    {% endif %}
 
-      <div class="grid2">
+    <div class="card" style="padding: 16px; background: var(--panel-bg-muted); margin-bottom: 16px;">
+      <div style="display:grid; gap: 14px;">
         <div>
-          <label>Request type</label>
-          {{ form.fund_request_type }}
+          <label>Request Type <span style="color:#dc2626;">*</span></label>
+          <div class="request-type-radios" style="display:flex; gap:18px; flex-wrap:wrap; margin-top:8px;">
+            {% for radio in form.fund_request_type %}
+              <label style="display:inline-flex; align-items:center; gap:8px; font-weight:500; cursor:pointer;">
+                {{ radio.tag }}
+                <span>{{ radio.choice_label }}</span>
+              </label>
+            {% endfor %}
+          </div>
         </div>
+        <div id="aid-type-wrap" hidden>
+          <label>Aid <span style="color:#dc2626;">*</span></label>
+          <select class="input" name="aid_type" id="id_aid_type">
+            <option value="">Select aid</option>
+            {% for label in aid_type_choices %}
+              <option value="{{ label }}" {% if form.instance.aid_type == label or form.data.aid_type == label %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% if object and object.fund_request_number %}
+          <div>
+            <label>Fund Request Number</label>
+            <div class="input" style="display:flex; align-items:center; min-height:44px; background:#f8fafc;">{{ object.fund_request_number }}</div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+<div id="aid-recipient-section" class="card" style="padding: 16px; background: var(--panel-bg-muted);">
+      <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">
         <div>
-          <label>Fund request number</label>
-          {{ form.fund_request_number }}
-          <div class="small">{{ form.fund_request_number.help_text }}</div>
+          <h3 style="margin: 0 0 4px 0;">Recipients</h3>
         </div>
-        <div>
-          <label>Aid type</label>
-          {{ form.aid_type }}
-        </div>
-        <div>
-          <label>GST number</label>
-          {{ form.gst_number }}
-        </div>
-        <div>
-          <label>Supplier</label>
-          {{ form.supplier_name }}
-        </div>
-        <div style="grid-column: 1 / -1;">
-          <label>Supplier address</label>
-          {{ form.supplier_address }}
-        </div>
-        <div>
-          <label>Supplier city</label>
-          {{ form.supplier_city }}
-        </div>
-        <div>
-          <label>Supplier state</label>
-          {{ form.supplier_state }}
-        </div>
-        <div>
-          <label>Pincode</label>
-          {{ form.supplier_pincode }}
-        </div>
-        <div>
-          <label>Purchase order number</label>
-          {{ form.purchase_order_number }}
-        </div>
-        <div style="grid-column: 1 / -1;">
-          <label>Notes</label>
-          {{ form.notes }}
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn" type="button" id="upload-aid-csv-trigger">Upload CSV</button>
+          <button class="btn" type="button" id="add-recipient-row">Add Recipient</button>
         </div>
       </div>
-
-      <h3 style="margin: 16px 0 8px 0;">Recipients</h3>
+      <div id="upload-aid-csv-feedback" class="upload-feedback" aria-live="polite"></div>
+      <div id="aid-quick-tools" class="card" style="padding: 12px; background:#fff; border:1px solid #dbe7f4; margin-bottom: 12px;" hidden>
+        <div style="display:grid; gap:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+            <button type="button" id="toggle-quick-populate" style="display:flex; align-items:center; gap:8px; padding:0; border:none; background:none; cursor:pointer; text-align:left;">
+              <span id="quick-populate-arrow" style="font-size:12px; color:var(--text-secondary);">▼</span>
+              <span style="font-weight:600;">Quick Populate</span>
+            </button>
+            <button type="button" class="btn" id="reset-recipients">Reset Recipients</button>
+          </div>
+          <div id="quick-populate-body" style="display:grid; gap:8px;">
+            <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; align-items:start;">
+              <div>
+                <div class="small" style="margin-bottom:6px; color: var(--text-secondary);">District</div>
+                <select class="input" id="populate-district-select" multiple size="5" style="min-height:140px;">
+                </select>
+                <button type="button" class="btn" id="populate-districts" style="margin-top:8px;">Add selected districts</button>
+              </div>
+              <div>
+                <div class="small" style="margin-bottom:6px; color: var(--text-secondary);">Institutions</div>
+                <select class="input" id="populate-institutions-select" multiple size="5" style="min-height:140px;">
+                </select>
+                <button type="button" class="btn" id="populate-institutions" style="margin-top:8px;">Add selected institutions</button>
+              </div>
+              <div>
+                <div class="small" style="margin-bottom:6px; color: var(--text-secondary);">Public</div>
+                <select class="input" id="populate-public-select" multiple size="7" style="min-height:180px;">
+                </select>
+                <button type="button" class="btn" id="populate-publics" style="margin-top:8px;">Add selected public</button>
+              </div>
+            </div>
+            <div class="small" style="color: var(--text-secondary);">Use Command/Ctrl to select multiple entries before adding them.</div>
+            <input type="file" id="upload-aid-csv-input" accept=".csv,text/csv" hidden />
+          </div>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin:-2px 0 10px 0;">
+        <button class="btn icon-btn" type="button" id="collapse-all-recipients" title="Collapse all" aria-label="Collapse all">
+          <svg viewBox="0 0 24 24">
+            <path d="M9 9H5V5"/>
+            <path d="M5 9l5-5"/>
+            <path d="M15 9h4V5"/>
+            <path d="M19 9l-5-5"/>
+            <path d="M9 15H5v4"/>
+            <path d="M5 15l5 5"/>
+            <path d="M15 15h4v4"/>
+            <path d="M19 15l-5 5"/>
+          </svg>
+        </button>
+        <button class="btn icon-btn" type="button" id="expand-all-recipients" title="Expand all" aria-label="Expand all">
+          <svg viewBox="0 0 24 24">
+            <path d="M10 10H5V5"/>
+            <path d="M5 5l6 6"/>
+            <path d="M14 10h5V5"/>
+            <path d="M19 5l-6 6"/>
+            <path d="M10 14H5v5"/>
+            <path d="M5 19l6-6"/>
+            <path d="M14 14h5v5"/>
+            <path d="M19 19l-6-6"/>
+          </svg>
+        </button>
+      </div>
       {{ recipient_formset.management_form }}
-      <table>
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Name</th>
-            <th>Who</th>
-            <th>Fund requested</th>
-            <th>Aadhar / Cheque</th>
-            <th>District</th>
-            <th>Delete</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in recipient_formset %}
-            <tr>
-              <td>{{ row.beneficiary_type }}</td>
-              <td>{{ row.recipient_name }}</td>
-              <td>{{ row.beneficiary }}</td>
-              <td>{{ row.fund_requested }}</td>
-              <td>{{ row.aadhar_number }} {{ row.cheque_no }}</td>
-              <td>{{ row.district_name }}</td>
-              <td>{{ row.DELETE }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-
-      <h3 style="margin: 16px 0 8px 0;">Articles</h3>
-      {{ article_formset.management_form }}
-      <table>
-        <thead>
-          <tr>
-            <th>Article</th>
-            <th>Beneficiary</th>
-            <th>Qty</th>
-            <th>Unit Price</th>
-            <th>Line Total</th>
-            <th>Chequeno</th>
-            <th>Delete</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in article_formset %}
-            <tr>
-              <td>
-                {{ row.article }}
-                <div>{{ row.article_name }}</div>
-              </td>
-              <td>{{ row.beneficiary }}</td>
-              <td>{{ row.quantity }}</td>
-              <td>{{ row.unit_price }}</td>
-              <td>{{ row.value }}</td>
-              <td>{{ row.cheque_no }}</td>
-              <td>{{ row.DELETE }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-
-      <div class="toolbar" style="margin-top: 12px;">
-        <button class="btn" type="submit" name="action" value="draft">Save Draft</button>
-        <button class="btn" type="submit" name="action" value="submit">Save &amp; Submit</button>
-        <a class="btn" href="{% url 'ui:fund-request-list' %}">Back</a>
+      <div id="recipient-rows" style="display:grid; gap: 12px;">
+        {% for row in recipient_formset.forms %}
+          <div class="card js-recipient-row" style="padding: 14px; background:#fff; border:1px solid #dbe7f4;">
+            {{ row.id }}<span hidden>{{ row.DELETE }}</span>{{ row.source_entry_id }}{{ row.recipient_name }}{{ row.notes }}{{ row.district_name }}{{ row.address }}{{ row.cheque_no }}
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:10px;">
+              <button type="button" class="js-recipient-toggle" style="display:flex; flex:1; justify-content:flex-start; align-items:center; gap:10px; padding:0; border:none; background:none; text-align:left; cursor:pointer;">
+                <span class="js-recipient-index" style="min-width:20px; font-size:0.75rem; line-height:1; font-weight:700; color:var(--text-primary); text-align:right;"></span>
+                <span class="js-recipient-arrow" style="font-size:15px; line-height:1; color:var(--text-secondary);">−</span>
+                <span class="js-recipient-summary small" style="color:var(--text-secondary);"></span>
+              </button>
+              <button type="button" class="btn icon-btn js-remove-row" title="Remove" aria-label="Remove">
+                <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+              </button>
+            </div>
+            <div class="js-recipient-body" style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items:start;">
+              <div>
+                <label>Beneficiary Type <span style="color:#dc2626;">*</span></label>
+                {{ row.beneficiary_type }}
+              </div>
+              <div style="grid-column: span 3;">
+                <label>Beneficiary <span style="color:#dc2626;">*</span></label>
+                {{ row.beneficiary }}
+                <div class="small js-beneficiary-help" style="margin-top:4px; color: var(--text-secondary);"></div>
+              </div>
+              <div>
+                <label>Fund Requested <span style="color:#dc2626;">*</span></label>
+                {{ row.fund_requested }}
+              </div>
+              <div>
+                <label>Name of Beneficiary <span style="color:#dc2626;">*</span></label>
+                {{ row.name_of_beneficiary }}
+              </div>
+              <div>
+                <label>Name of Institution <span style="color:#dc2626;">*</span></label>
+                {{ row.name_of_institution }}
+              </div>
+              <div>
+                <label class="js-aadhaar-label">Aadhaar Number</label>
+                {{ row.aadhar_number }}
+              </div>
+              <div style="grid-column: span 2;">
+                <label>Details <span style="color:#dc2626;">*</span></label>
+                {{ row.details }}
+              </div>
+              <div style="grid-column: span 2;">
+                <label>Cheque / RTGS in Favour <span style="color:#dc2626;">*</span></label>
+                {{ row.cheque_in_favour }}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
       </div>
-    </form>
-  </section>
+      <template id="recipient-empty-form">
+        <div class="card js-recipient-row" style="padding: 14px; background:#fff; border:1px solid #dbe7f4;">
+          {{ recipient_formset.empty_form.id }}<span hidden>{{ recipient_formset.empty_form.DELETE }}</span>{{ recipient_formset.empty_form.source_entry_id }}{{ recipient_formset.empty_form.recipient_name }}{{ recipient_formset.empty_form.notes }}{{ recipient_formset.empty_form.district_name }}{{ recipient_formset.empty_form.address }}{{ recipient_formset.empty_form.cheque_no }}
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:10px;">
+            <button type="button" class="js-recipient-toggle" style="display:flex; flex:1; justify-content:flex-start; align-items:center; gap:10px; padding:0; border:none; background:none; text-align:left; cursor:pointer;">
+              <span class="js-recipient-index" style="min-width:20px; font-size:0.75rem; line-height:1; font-weight:700; color:var(--text-primary); text-align:right;"></span>
+              <span class="js-recipient-arrow" style="font-size:15px; line-height:1; color:var(--text-secondary);">−</span>
+              <span class="js-recipient-summary small" style="color:var(--text-secondary);"></span>
+            </button>
+            <button type="button" class="btn icon-btn js-remove-row" title="Remove" aria-label="Remove">
+              <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+            </button>
+          </div>
+          <div class="js-recipient-body" style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items:start;">
+            <div>
+              <label>Beneficiary Type <span style="color:#dc2626;">*</span></label>
+              {{ recipient_formset.empty_form.beneficiary_type }}
+            </div>
+            <div style="grid-column: span 3;">
+              <label>Beneficiary <span style="color:#dc2626;">*</span></label>
+              {{ recipient_formset.empty_form.beneficiary }}
+              <div class="small js-beneficiary-help" style="margin-top:4px; color: var(--text-secondary);"></div>
+            </div>
+            <div>
+              <label>Fund Requested <span style="color:#dc2626;">*</span></label>
+              {{ recipient_formset.empty_form.fund_requested }}
+            </div>
+            <div>
+              <label>Name of Beneficiary <span style="color:#dc2626;">*</span></label>
+              {{ recipient_formset.empty_form.name_of_beneficiary }}
+            </div>
+            <div>
+              <label>Name of Institution <span style="color:#dc2626;">*</span></label>
+              {{ recipient_formset.empty_form.name_of_institution }}
+            </div>
+            <div>
+              <label class="js-aadhaar-label">Aadhaar Number</label>
+              {{ recipient_formset.empty_form.aadhar_number }}
+            </div>
+            <div style="grid-column: span 2;">
+              <label>Details <span style="color:#dc2626;">*</span></label>
+              {{ recipient_formset.empty_form.details }}
+            </div>
+            <div style="grid-column: span 2;">
+              <label>Cheque / RTGS in Favour <span style="color:#dc2626;">*</span></label>
+              {{ recipient_formset.empty_form.cheque_in_favour }}
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <div id="article-items-section" class="card" style="padding: 16px; background: var(--panel-bg-muted); margin-top: 16px;">
+      <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">
+        <div>
+          <h3 style="margin: 0 0 4px 0;">Items</h3>
+          <div class="small" style="color: var(--text-secondary);">Select the planning items to order. Duplicate rows are allowed for multiple vendors.</div>
+        </div>
+        <button class="btn" type="button" id="add-article-row">Add Item</button>
+      </div>
+      {{ article_formset.management_form }}
+      <div id="article-rows" style="display:grid; gap: 12px;">
+        {% for row in article_formset.forms %}
+          <div class="card js-article-row" style="padding: 10px 12px; background:#fff; border:1px solid #dbe7f4;">
+            {{ row.id }}<span hidden>{{ row.DELETE }}</span>{{ row.article }}{{ row.beneficiary }}{{ row.cumulative }}{{ row.price_including_gst }}{{ row.cheque_no }}
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span class="js-article-index" style="font-size:1.25rem; font-weight:700; color:var(--text-primary); min-width:1.5rem; display:inline-block;">1</span>
+                <span style="font-weight:600; color:var(--text-secondary);">Item</span>
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 10px; align-items:start;">
+              <div style="grid-column: span 6;">
+                <label>Article <span style="color:#dc2626;">*</span></label>
+                {{ row.article_name }}
+              </div>
+              <div style="grid-column: span 2;">
+                <label>Quantity <span style="color:#dc2626;">*</span></label>
+                {{ row.quantity }}
+              </div>
+              <div style="grid-column: span 2;">
+                <label>Unit Price <span style="color:#dc2626;">*</span></label>
+                {{ row.unit_price }}
+              </div>
+              <div style="grid-column: span 2;">
+                <label>Line Total</label>
+                {{ row.value }}
+              </div>
+              <div style="grid-column: span 4;">
+                <label>GST Number <span style="color:#dc2626;">*</span></label>
+                {{ row.gst_no }}
+              </div>
+              <div style="grid-column: span 8;">
+                <label>Cheque / RTGS in Favour <span style="color:#dc2626;">*</span></label>
+                {{ row.cheque_in_favour }}
+              </div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:6px;">
+              <button type="button" class="btn icon-btn js-remove-row" title="Remove" aria-label="Remove">
+                <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+              </button>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <template id="article-empty-form">
+        <div class="card js-article-row" style="padding: 10px 12px; background:#fff; border:1px solid #dbe7f4;">
+          {{ article_formset.empty_form.id }}<span hidden>{{ article_formset.empty_form.DELETE }}</span>{{ article_formset.empty_form.article }}{{ article_formset.empty_form.beneficiary }}{{ article_formset.empty_form.cumulative }}{{ article_formset.empty_form.price_including_gst }}{{ article_formset.empty_form.cheque_no }}
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="js-article-index" style="font-size:1.25rem; font-weight:700; color:var(--text-primary); min-width:1.5rem; display:inline-block;">1</span>
+              <span style="font-weight:600; color:var(--text-secondary);">Item</span>
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 10px; align-items:start;">
+            <div style="grid-column: span 6;">
+              <label>Article <span style="color:#dc2626;">*</span></label>
+              {{ article_formset.empty_form.article_name }}
+            </div>
+            <div style="grid-column: span 2;">
+              <label>Quantity <span style="color:#dc2626;">*</span></label>
+              {{ article_formset.empty_form.quantity }}
+            </div>
+            <div style="grid-column: span 2;">
+              <label>Unit Price <span style="color:#dc2626;">*</span></label>
+              {{ article_formset.empty_form.unit_price }}
+            </div>
+            <div style="grid-column: span 2;">
+              <label>Line Total</label>
+              {{ article_formset.empty_form.value }}
+            </div>
+            <div style="grid-column: span 4;">
+              <label>GST Number <span style="color:#dc2626;">*</span></label>
+              {{ article_formset.empty_form.gst_no }}
+            </div>
+            <div style="grid-column: span 8;">
+              <label>Cheque / RTGS in Favour <span style="color:#dc2626;">*</span></label>
+              {{ article_formset.empty_form.cheque_in_favour }}
+            </div>
+          </div>
+          <div style="display:flex; justify-content:flex-end; margin-top:6px;">
+            <button type="button" class="btn icon-btn js-remove-row" title="Remove" aria-label="Remove">
+              <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+            </button>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <div class="toolbar" style="margin-top: 12px;">
+      <button class="btn" type="submit" name="action" value="draft">Save as Draft</button>
+      <button class="btn" type="submit" name="action" value="submit">Submit</button>
+    </div>
+  </form>
+</section>
+
+<div id="excess-warning-modal" class="excess-modal-backdrop" aria-hidden="true">
+  <div class="excess-modal" role="dialog" aria-modal="true" aria-labelledby="excess-warning-title">
+    <h3 id="excess-warning-title" style="margin:0 0 8px 0;">Please verify excess quantity</h3>
+    <div style="color: var(--text-secondary);">
+      You are ordering more than the current pending requirement for these items:
+    </div>
+    <div id="excess-warning-list" class="excess-modal-list"></div>
+    <div style="color: var(--text-secondary); margin-bottom: 18px;">Please verify before continuing.</div>
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button type="button" class="btn" id="excess-warning-cancel">Cancel</button>
+      <button type="button" class="btn" id="excess-warning-confirm">Continue Submit</button>
+    </div>
+  </div>
+</div>
+
+<script id="article-request-choices-json" type="application/json">{{ article_request_choices_json|safe }}</script>
+<script>
+(function() {
+  const requestTypeRadios = Array.from(document.querySelectorAll('input[name="fund_request_type"]'));
+  const aidTypeSelect = document.getElementById('id_aid_type');
+  const aidSection = document.getElementById('aid-recipient-section');
+  const articleSection = document.getElementById('article-items-section');
+  const aidTypeWrap = document.getElementById('aid-type-wrap');
+  const articleChoices = JSON.parse(document.getElementById('article-request-choices-json').textContent || '[]');
+  const aidOptionsUrl = "{% url 'ui:fund-request-aid-options' %}";
+  const currentFundRequestId = "{{ current_fund_request_id }}";
+  const formEl = document.querySelector('section.card form');
+  const uploadAidCsvFeedback = document.getElementById('upload-aid-csv-feedback');
+  const excessWarningModal = document.getElementById('excess-warning-modal');
+  const excessWarningList = document.getElementById('excess-warning-list');
+  const excessWarningCancel = document.getElementById('excess-warning-cancel');
+  const excessWarningConfirm = document.getElementById('excess-warning-confirm');
+  const recipientContainer = document.getElementById('recipient-rows');
+  const articleContainer = document.getElementById('article-rows');
+  const recipientTotalInput = document.getElementById('id_recipients-TOTAL_FORMS');
+  const articleTotalInput = document.getElementById('id_articles-TOTAL_FORMS');
+  const addRecipientButton = document.getElementById('add-recipient-row');
+  const collapseAllRecipientsButton = document.getElementById('collapse-all-recipients');
+  const expandAllRecipientsButton = document.getElementById('expand-all-recipients');
+  const quickTools = document.getElementById('aid-quick-tools');
+  const toggleQuickPopulateButton = document.getElementById('toggle-quick-populate');
+  const quickPopulateArrow = document.getElementById('quick-populate-arrow');
+  const quickPopulateBody = document.getElementById('quick-populate-body');
+  const populateDistrictsButton = document.getElementById('populate-districts');
+  const populateDistrictSelect = document.getElementById('populate-district-select');
+  const populateInstitutionsSelect = document.getElementById('populate-institutions-select');
+  const populateInstitutionsButton = document.getElementById('populate-institutions');
+  const populatePublicSelect = document.getElementById('populate-public-select');
+  const populatePublicsButton = document.getElementById('populate-publics');
+  const resetRecipientsButton = document.getElementById('reset-recipients');
+  const uploadAidCsvTriggerButton = document.getElementById('upload-aid-csv-trigger');
+  const uploadAidCsvInput = document.getElementById('upload-aid-csv-input');
+  let availableBeneficiaryTypes = [];
+  let aidOptionsByType = {};
+  let blockedByType = {};
+  let bypassExcessWarning = false;
+
+  function showAidCsvFeedback(message, tone) {
+    if (!uploadAidCsvFeedback) return;
+    uploadAidCsvFeedback.textContent = message;
+    uploadAidCsvFeedback.className = 'upload-feedback is-visible ' + (tone || 'success');
+  }
+
+  function closeExcessWarning() {
+    if (!excessWarningModal) return;
+    excessWarningModal.classList.remove('is-open');
+    excessWarningModal.setAttribute('aria-hidden', 'true');
+    if (excessWarningList) {
+      excessWarningList.innerHTML = '';
+    }
+  }
+
+  function openExcessWarning(items, submitterValue) {
+    if (!excessWarningModal || !excessWarningList || !formEl) return;
+    excessWarningList.innerHTML = '';
+    items.forEach(function(item) {
+      const row = document.createElement('div');
+      row.className = 'excess-modal-item';
+      const name = document.createElement('div');
+      name.className = 'excess-modal-item-name';
+      name.textContent = 'Item ' + item.serial + ' - ' + item.name;
+      const qty = document.createElement('div');
+      qty.className = 'excess-modal-item-qty';
+      qty.textContent = 'Excess: ' + item.excess;
+      row.appendChild(name);
+      row.appendChild(qty);
+      excessWarningList.appendChild(row);
+    });
+    excessWarningModal.classList.add('is-open');
+    excessWarningModal.setAttribute('aria-hidden', 'false');
+
+    const cancelHandler = function() {
+      closeExcessWarning();
+      excessWarningCancel.removeEventListener('click', cancelHandler);
+      excessWarningConfirm.removeEventListener('click', confirmHandler);
+    };
+    const confirmHandler = function() {
+      closeExcessWarning();
+      excessWarningCancel.removeEventListener('click', cancelHandler);
+      excessWarningConfirm.removeEventListener('click', confirmHandler);
+      const existingActionInput = formEl.querySelector('input[name="action"][data-excess-submit="1"]');
+      if (existingActionInput) {
+        existingActionInput.remove();
+      }
+      const hiddenAction = document.createElement('input');
+      hiddenAction.type = 'hidden';
+      hiddenAction.name = 'action';
+      hiddenAction.value = submitterValue || 'submit';
+      hiddenAction.setAttribute('data-excess-submit', '1');
+      formEl.appendChild(hiddenAction);
+      bypassExcessWarning = true;
+      formEl.submit();
+    };
+    excessWarningCancel.addEventListener('click', cancelHandler);
+    excessWarningConfirm.addEventListener('click', confirmHandler);
+  }
+
+  function getSelectedRequestType() {
+    const checked = requestTypeRadios.find(function(radio) { return radio.checked; });
+    return checked ? checked.value : '';
+  }
+
+  function setRequestType(type) {
+    requestTypeRadios.forEach(function(radio) {
+      radio.checked = radio.value === type;
+    });
+    toggleSections();
+  }
+
+  function syncSectionValidation(section, enabled) {
+    if (!section) return;
+    section.querySelectorAll('input, select, textarea').forEach(function(field) {
+      const name = field.getAttribute('name') || '';
+      if (name.indexOf('-TOTAL_FORMS') !== -1 || name.indexOf('-INITIAL_FORMS') !== -1 || name.indexOf('-MIN_NUM_FORMS') !== -1 || name.indexOf('-MAX_NUM_FORMS') !== -1) {
+        return;
+      }
+      if (!field.dataset.wasRequired) {
+        field.dataset.wasRequired = field.required ? '1' : '0';
+      }
+      field.required = enabled && field.dataset.wasRequired === '1';
+    });
+  }
+
+  function toggleSections() {
+    const selectedType = getSelectedRequestType();
+    const isAid = selectedType === 'Aid';
+    const isArticle = selectedType === 'Article';
+    aidSection.hidden = !isAid;
+    articleSection.hidden = !isArticle;
+    aidTypeWrap.hidden = !isAid;
+    quickTools.hidden = !isAid || !aidTypeSelect.value;
+    addRecipientButton.disabled = !isAid || !aidTypeSelect.value;
+    syncSectionValidation(aidSection, isAid);
+    syncSectionValidation(articleSection, isArticle);
+  }
+
+  function formatQuantityLabel(value) {
+    return Number.isFinite(value) ? String(Math.max(0, Math.round(value))) : '0';
+  }
+
+  function getSelectedArticleQuantities() {
+    const totals = {};
+    articleContainer.querySelectorAll('.js-article-row').forEach(function(row) {
+      if (row.hidden) return;
+      const select = row.querySelector('select[name$="-article_name"]');
+      const qtyInput = row.querySelector('input[name$="-quantity"]');
+      const name = (select && select.value ? String(select.value).trim() : '');
+      if (!name) return;
+      const qty = parseFloat((qtyInput && qtyInput.value) || '0') || 0;
+      totals[name] = (totals[name] || 0) + qty;
+    });
+    return totals;
+  }
+
+  function articleChoiceLabel(choice, remainingQty) {
+    if (remainingQty < 0) {
+      return choice.name + ' (Excess: ' + formatQuantityLabel(Math.abs(remainingQty)) + ')';
+    }
+    return choice.name + ' (Pending: ' + formatQuantityLabel(remainingQty) + ')';
+  }
+
+  function fillArticleSelect(select, currentRow) {
+    const currentOption = select.selectedOptions && select.selectedOptions[0] ? select.selectedOptions[0] : null;
+    const hiddenArticle = currentRow ? currentRow.querySelector('input[name$="-article"]') : null;
+    let currentValue = select.value;
+    if (!currentValue && hiddenArticle && hiddenArticle.value) {
+      const matchedChoice = articleChoices.find(function(choice) {
+        return String(choice.article_id || '') === String(hiddenArticle.value || '');
+      });
+      if (matchedChoice) {
+        currentValue = matchedChoice.name;
+      }
+    }
+    const currentLabel = currentOption && currentOption.value ? currentOption.textContent : currentValue;
+    const selectedTotals = getSelectedArticleQuantities();
+    select.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Select article';
+    select.appendChild(placeholder);
+    articleChoices.forEach(function(choice) {
+      const currentRowQty = currentRow && currentValue === choice.name
+        ? (parseFloat((currentRow.querySelector('input[name$="-quantity"]') || {}).value || '0') || 0)
+        : 0;
+      const remainingQty = (parseFloat(choice.pending_qty || '0') || 0) - ((selectedTotals[choice.name] || 0) - currentRowQty);
+      const option = document.createElement('option');
+      option.value = choice.name;
+      option.textContent = articleChoiceLabel(choice, remainingQty);
+      option.setAttribute('data-article-id', choice.article_id);
+      option.setAttribute('data-default-price', choice.default_price || '0');
+      option.setAttribute('data-pending-qty', String(choice.pending_qty || 0));
+      option.setAttribute('data-remaining-qty', String(remainingQty));
+      if (choice.name === currentValue) {
+        option.selected = true;
+      }
+      select.appendChild(option);
+    });
+    if (currentValue && !Array.from(select.options).some(function(option) { return option.value === currentValue; })) {
+      const preserved = document.createElement('option');
+      preserved.value = currentValue;
+      preserved.textContent = currentLabel || currentValue;
+      preserved.selected = true;
+      select.appendChild(preserved);
+    }
+  }
+
+  function updateArticleBalance(row) {
+    const select = row.querySelector('select[name$="-article_name"]');
+    const helper = row.querySelector('.js-article-balance');
+    if (!select || !helper) return;
+    const option = select.options[select.selectedIndex];
+    if (!option || !option.value) {
+      helper.textContent = '';
+      return;
+    }
+    const remainingQty = parseFloat(option.getAttribute('data-remaining-qty') || '0') || 0;
+    if (remainingQty < 0) {
+      helper.textContent = 'You are ordering excess by ' + formatQuantityLabel(Math.abs(remainingQty)) + '.';
+      helper.style.color = '#15803d';
+    } else {
+      helper.textContent = 'Remaining pending: ' + formatQuantityLabel(remainingQty);
+      helper.style.color = 'var(--text-secondary)';
+    }
+  }
+
+  function refreshAllArticleSelects() {
+    articleContainer.querySelectorAll('.js-article-row').forEach(function(row) {
+      if (row.hidden) return;
+      const select = row.querySelector('select[name$="-article_name"]');
+      if (select) {
+        fillArticleSelect(select, row);
+      }
+      updateArticleBalance(row);
+    });
+  }
+
+  function updateArticleRow(row) {
+    const select = row.querySelector('select[name$="-article_name"]');
+    const hiddenArticle = row.querySelector('input[name$="-article"]');
+    const qtyInput = row.querySelector('input[name$="-quantity"]');
+    const unitInput = row.querySelector('input[name$="-unit_price"]');
+    const totalInput = row.querySelector('input[name$="-value"]');
+    if (!select || !hiddenArticle || !qtyInput || !unitInput || !totalInput) return;
+    const option = select.options[select.selectedIndex];
+    hiddenArticle.value = option ? (option.getAttribute('data-article-id') || '') : '';
+    const qty = parseFloat(qtyInput.value || '0') || 0;
+    if (option && option.value && unitInput && (!unitInput.value || unitInput.value === '0' || unitInput.value === '0.00')) {
+      const defaultPrice = parseFloat(option.getAttribute('data-default-price') || '0') || 0;
+      if (defaultPrice > 0) {
+        unitInput.value = defaultPrice.toFixed(2);
+      }
+    }
+    const unit = parseFloat(unitInput.value || '0') || 0;
+    totalInput.value = (qty * unit).toFixed(2);
+    refreshAllArticleSelects();
+  }
+
+  function initArticleRow(row) {
+    const select = row.querySelector('select[name$="-article_name"]');
+    if (select) {
+      fillArticleSelect(select, row);
+      select.addEventListener('change', function() { updateArticleRow(row); });
+    }
+    row.querySelectorAll('input[name$="-quantity"], input[name$="-unit_price"]').forEach(function(input) {
+      input.addEventListener('input', function() { updateArticleRow(row); });
+    });
+    updateArticleRow(row);
+  }
+
+  function selectedAidSourceKeys(currentRow) {
+    const keys = new Set();
+    recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
+      if (row === currentRow || row.hidden) return;
+      const type = row.querySelector('select[name$="-beneficiary_type"]');
+      const sourceId = row.querySelector('input[name$="-source_entry_id"]');
+      if (type && sourceId && type.value && sourceId.value) {
+        keys.add(type.value + ':' + sourceId.value);
+      }
+    });
+    return keys;
+  }
+
+  function clearRecipientPayload(row, keepIdentity) {
+    row.querySelector('input[name$="-source_entry_id"]').value = '';
+    row.querySelector('input[name$="-recipient_name"]').value = '';
+    row.querySelector('input[name$="-district_name"]').value = '';
+    const notesField = row.querySelector('input[name$="-notes"], textarea[name$="-notes"]');
+    if (notesField) notesField.value = '';
+    if (!keepIdentity) {
+      row.querySelector('input[name$="-name_of_beneficiary"]').value = '';
+      row.querySelector('input[name$="-name_of_institution"]').value = '';
+      row.querySelector('input[name$="-aadhar_number"]').value = '';
+    }
+    row.querySelector('textarea[name$="-details"]').value = '';
+    row.querySelector('input[name$="-fund_requested"]').value = '';
+    row.querySelector('textarea[name$="-cheque_in_favour"]').value = '';
+  }
+
+  function applyAidPayload(row, payload) {
+    row.querySelector('input[name$="-source_entry_id"]').value = payload.source_entry_id || '';
+    row.querySelector('input[name$="-recipient_name"]').value = payload.recipient_name || '';
+    row.querySelector('input[name$="-district_name"]').value = payload.district_name || '';
+    const notesField = row.querySelector('input[name$="-notes"], textarea[name$="-notes"]');
+    if (notesField) notesField.value = payload.details || '';
+    if (payload.name_of_beneficiary) row.querySelector('input[name$="-name_of_beneficiary"]').value = payload.name_of_beneficiary;
+    if (payload.name_of_institution) row.querySelector('input[name$="-name_of_institution"]').value = payload.name_of_institution;
+    if (payload.aadhar_number) row.querySelector('input[name$="-aadhar_number"]').value = payload.aadhar_number;
+    row.querySelector('textarea[name$="-details"]').value = payload.details || '';
+    row.querySelector('input[name$="-fund_requested"]').value = payload.fund_requested || '';
+    row.querySelector('textarea[name$="-cheque_in_favour"]').value = payload.cheque_in_favour || '';
+    updateRecipientSummary(row);
+  }
+
+  function populateBeneficiaryTypeSelect(row) {
+    const select = row.querySelector('select[name$="-beneficiary_type"]');
+    if (!select) return;
+    const currentValue = select.value;
+    const currentOption = select.selectedOptions && select.selectedOptions[0] ? select.selectedOptions[0] : null;
+    const currentLabel = currentOption && currentOption.value ? currentOption.textContent : currentValue;
+    select.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Select beneficiary type';
+    select.appendChild(placeholder);
+    availableBeneficiaryTypes.forEach(function(option) {
+      const choice = document.createElement('option');
+      choice.value = option.value;
+      choice.textContent = option.label + ' (' + option.count + ')';
+      if (option.value === currentValue) {
+        choice.selected = true;
+      }
+      select.appendChild(choice);
+    });
+    if (currentValue && !availableBeneficiaryTypes.some(function(option) { return option.value === currentValue; })) {
+      const preserved = document.createElement('option');
+      preserved.value = currentValue;
+      preserved.textContent = currentLabel || currentValue;
+      preserved.selected = true;
+      select.appendChild(preserved);
+    }
+  }
+
+  async function loadAidAvailability() {
+    availableBeneficiaryTypes = [];
+    aidOptionsByType = {};
+    blockedByType = {};
+    if (!aidTypeSelect.value) {
+      recipientContainer.querySelectorAll('.js-recipient-row').forEach(populateBeneficiaryTypeSelect);
+      quickTools.hidden = true;
+      addRecipientButton.disabled = true;
+      refreshQuickPopulateSelectors();
+      return;
+    }
+    const url = new URL(aidOptionsUrl, window.location.origin);
+    url.searchParams.set('aid_type', aidTypeSelect.value);
+    if (currentFundRequestId) url.searchParams.set('fund_request_id', currentFundRequestId);
+    const response = await fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    const data = await response.json();
+    availableBeneficiaryTypes = data.available_types || [];
+    aidOptionsByType = data.options_by_type || {};
+    blockedByType = data.blocked_by_type || {};
+    quickTools.hidden = false;
+    refreshQuickPopulateSelectors();
+    recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
+      populateBeneficiaryTypeSelect(row);
+      const typeField = row.querySelector('select[name$="-beneficiary_type"]');
+      if (typeField && typeField.value) {
+        loadAidOptions(row, true);
+      }
+    });
+    addRecipientButton.disabled = availableBeneficiaryTypes.length === 0;
+  }
+
+  async function loadAidOptions(row, preserveExisting) {
+    const typeSelect = row.querySelector('select[name$="-beneficiary_type"]');
+    const beneficiarySelect = row.querySelector('select[name$="-beneficiary"]');
+    const help = row.querySelector('.js-beneficiary-help');
+    if (!typeSelect || !beneficiarySelect) return;
+    if (!aidTypeSelect.value || !typeSelect.value) {
+      beneficiarySelect.innerHTML = '';
+      const empty = document.createElement('option');
+      empty.value = '';
+      empty.textContent = 'Select beneficiary';
+      beneficiarySelect.appendChild(empty);
+      help.textContent = '';
+      return;
+    }
+    const currentValue = row.querySelector('input[name$="-source_entry_id"]').value || beneficiarySelect.value;
+    const currentSourceId = row.querySelector('input[name$="-source_entry_id"]').value;
+    const currentOption = beneficiarySelect.selectedOptions && beneficiarySelect.selectedOptions[0] ? beneficiarySelect.selectedOptions[0] : null;
+    const currentLabel = currentOption && currentOption.value ? currentOption.textContent : '';
+    const url = new URL(aidOptionsUrl, window.location.origin);
+    url.searchParams.set('aid_type', aidTypeSelect.value);
+    url.searchParams.set('beneficiary_type', typeSelect.value);
+    if (currentFundRequestId) url.searchParams.set('fund_request_id', currentFundRequestId);
+    const response = await fetch(url.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    const data = await response.json();
+    const dataOptions = data.options || [];
+    const blocked = data.blocked || [];
+    const taken = selectedAidSourceKeys(row);
+    const filtered = dataOptions.filter(function(option) {
+      const key = typeSelect.value + ':' + option.source_entry_id;
+      return !taken.has(key) || String(option.source_entry_id) === String(currentSourceId || '');
+    });
+    row._aidOptions = {};
+    beneficiarySelect.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = filtered.length ? 'Select beneficiary' : 'No remaining beneficiaries';
+    beneficiarySelect.appendChild(placeholder);
+    filtered.forEach(function(option) {
+      const optionValue = String(option.source_entry_id || '');
+      row._aidOptions[optionValue] = option;
+      const choice = document.createElement('option');
+      choice.value = optionValue;
+      choice.textContent = option.display_text;
+      if (String(currentValue) === optionValue) {
+        choice.selected = true;
+      }
+      beneficiarySelect.appendChild(choice);
+    });
+    if (currentValue && !row._aidOptions[String(currentValue)]) {
+      const preserved = document.createElement('option');
+      preserved.value = String(currentValue);
+      preserved.textContent = currentLabel || String(currentValue);
+      preserved.selected = true;
+      beneficiarySelect.appendChild(preserved);
+    }
+    help.textContent = blocked.length ? ('Hidden because already present in: ' + blocked.join(', ')) : '';
+    const hasExistingSavedValues = Boolean(
+      currentSourceId && (
+        ((row.querySelector('input[name$="-name_of_beneficiary"]') || {}).value || '') ||
+        ((row.querySelector('input[name$="-name_of_institution"]') || {}).value || '') ||
+        ((row.querySelector('textarea[name$="-details"]') || {}).value || '') ||
+        ((row.querySelector('textarea[name$="-cheque_in_favour"]') || {}).value || '') ||
+        ((row.querySelector('input[name$="-fund_requested"]') || {}).value || '')
+      )
+    );
+    if (beneficiarySelect.value && row._aidOptions[beneficiarySelect.value]) {
+      if (preserveExisting && hasExistingSavedValues) {
+        updateRecipientSummary(row);
+      } else {
+        applyAidPayload(row, row._aidOptions[beneficiarySelect.value]);
+      }
+    } else if (!currentValue) {
+      clearRecipientPayload(row, true);
+    }
+    updateRecipientFieldRules(row);
+    updateRecipientSummary(row);
+  }
+
+  function initRecipientRow(row) {
+    const typeSelect = row.querySelector('select[name$="-beneficiary_type"]');
+    const beneficiarySelect = row.querySelector('select[name$="-beneficiary"]');
+    populateBeneficiaryTypeSelect(row);
+    updateRecipientFieldRules(row);
+    updateRecipientSummary(row);
+    if (!row.dataset.recipientToggleBound) {
+      row.dataset.recipientToggleBound = '1';
+      const toggleButton = row.querySelector('.js-recipient-toggle');
+      if (toggleButton) {
+        toggleButton.addEventListener('click', function() {
+          const body = row.querySelector('.js-recipient-body');
+          const isCollapsed = body && body.style.display === 'none';
+          setRecipientRowExpanded(row, isCollapsed);
+        });
+      }
+    }
+    if (typeSelect) {
+      typeSelect.addEventListener('change', function() {
+        clearRecipientPayload(row, false);
+        loadAidOptions(row, false);
+        updateRecipientSummary(row);
+      });
+    }
+    if (beneficiarySelect) {
+      beneficiarySelect.addEventListener('change', function() {
+        const payload = row._aidOptions ? row._aidOptions[beneficiarySelect.value] : null;
+        if (payload) {
+          applyAidPayload(row, payload);
+        } else {
+          clearRecipientPayload(row, true);
+        }
+        updateRecipientFieldRules(row);
+        updateRecipientSummary(row);
+      });
+    }
+    row.querySelectorAll('input[name$="-fund_requested"], input[name$="-name_of_beneficiary"], input[name$="-name_of_institution"], textarea[name$="-details"], textarea[name$="-cheque_in_favour"]').forEach(function(field) {
+      field.addEventListener('input', function() {
+        updateRecipientSummary(row);
+      });
+    });
+  }
+
+  function addRow(container, totalInput, templateId) {
+    const index = parseInt(totalInput.value, 10);
+    const template = document.getElementById(templateId).innerHTML.replace(/__prefix__/g, index);
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = template.trim();
+    const row = wrapper.firstElementChild;
+    container.appendChild(row);
+    totalInput.value = String(index + 1);
+    return row;
+  }
+
+  function setRecipientRowExpanded(row, expanded) {
+    const body = row.querySelector('.js-recipient-body');
+    const arrow = row.querySelector('.js-recipient-arrow');
+    if (!body) return;
+    body.style.display = expanded ? 'grid' : 'none';
+    if (arrow) {
+      arrow.textContent = expanded ? '−' : '+';
+    }
+  }
+
+  function refreshRecipientLabels() {
+    let serial = 1;
+    recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
+      if (row.hidden) return;
+      const indexNode = row.querySelector('.js-recipient-index');
+      if (indexNode) {
+        indexNode.textContent = serial;
+      }
+      serial += 1;
+    });
+  }
+
+  function refreshArticleLabels() {
+    let serial = 1;
+    articleContainer.querySelectorAll('.js-article-row').forEach(function(row) {
+      if (row.hidden) return;
+      const indexNode = row.querySelector('.js-article-index');
+      if (indexNode) {
+        indexNode.textContent = serial;
+      }
+      serial += 1;
+    });
+  }
+
+  function updateRecipientSummary(row) {
+    const summaryNode = row.querySelector('.js-recipient-summary');
+    if (!summaryNode) return;
+    const nameValue = (row.querySelector('input[name$="-name_of_beneficiary"]') || {}).value || '';
+    const institutionValue = (row.querySelector('input[name$="-name_of_institution"]') || {}).value || '';
+    const recipientValue = (row.querySelector('input[name$="-recipient_name"]') || {}).value || '';
+    const districtValue = (row.querySelector('input[name$="-district_name"]') || {}).value || '';
+    const amountValue = (row.querySelector('input[name$="-fund_requested"]') || {}).value || '';
+    const aidValue = aidTypeSelect ? aidTypeSelect.value : '';
+    const identity = nameValue || institutionValue || recipientValue || districtValue || 'Not selected';
+    const parts = [identity];
+    if (amountValue) parts.push('Rs.' + amountValue);
+    if (aidValue) parts.push(aidValue);
+    summaryNode.textContent = parts.join(' • ');
+  }
+
+  function setQuickPopulateExpanded(expanded) {
+    if (!quickPopulateBody) return;
+    quickPopulateBody.style.display = expanded ? 'grid' : 'none';
+    if (quickPopulateArrow) {
+      quickPopulateArrow.textContent = expanded ? '▼' : '▶';
+    }
+  }
+
+  function getAidOptionsForType(typeValue) {
+    return aidOptionsByType[String(typeValue)] || [];
+  }
+
+  function getRemainingAidOptions(typeValue) {
+    const taken = selectedAidSourceKeys(null);
+    return getAidOptionsForType(typeValue).filter(function(option) {
+      return !taken.has(typeValue + ':' + option.source_entry_id);
+    });
+  }
+
+  function getDistrictGroupLabel(option) {
+    return String(
+      option.district_name ||
+      option.recipient_name ||
+      option.name_of_beneficiary ||
+      option.name_of_institution ||
+      option.display_text ||
+      ''
+    ).trim();
+  }
+
+  function getInstitutionGroupLabel(option) {
+    return String(
+      option.name_of_institution ||
+      option.recipient_name ||
+      option.name_of_beneficiary ||
+      option.display_text ||
+      ''
+    ).trim();
+  }
+
+  function getPublicOptionLabel(option) {
+    return String(option.display_text || option.recipient_name || '').trim();
+  }
+
+  function setSelectOptions(select, items, selectedValues, emptyText) {
+    if (!select) return;
+    const selected = new Set(selectedValues || []);
+    select.innerHTML = '';
+    if (!items.length) {
+      const empty = document.createElement('option');
+      empty.value = '';
+      empty.textContent = emptyText;
+      empty.disabled = true;
+      select.appendChild(empty);
+      select.disabled = true;
+      return;
+    }
+    select.disabled = false;
+    items.forEach(function(item) {
+      const option = document.createElement('option');
+      option.value = item.value;
+      option.textContent = item.label;
+      option.selected = selected.has(item.value);
+      select.appendChild(option);
+    });
+  }
+
+  function getSelectedValues(select) {
+    if (!select) return [];
+    return Array.from(select.selectedOptions || []).map(function(option) {
+      return option.value;
+    }).filter(Boolean);
+  }
+
+  function refreshQuickPopulateSelectors() {
+    const selectedDistricts = getSelectedValues(populateDistrictSelect);
+    const selectedInstitutions = getSelectedValues(populateInstitutionsSelect);
+    const selectedPublics = getSelectedValues(populatePublicSelect);
+
+    const districtCounts = {};
+    getRemainingAidOptions('District').forEach(function(option) {
+      const label = getDistrictGroupLabel(option);
+      if (!label) return;
+      districtCounts[label] = (districtCounts[label] || 0) + 1;
+    });
+    const districtItems = Object.keys(districtCounts).sort(function(a, b) {
+      return a.localeCompare(b);
+    }).map(function(label) {
+      return { value: label, label: label + ' (' + districtCounts[label] + ')' };
+    });
+    setSelectOptions(populateDistrictSelect, districtItems, selectedDistricts, 'No districts remaining');
+
+    const institutionCounts = {};
+    getRemainingAidOptions('Institutions').forEach(function(option) {
+      const label = getInstitutionGroupLabel(option);
+      if (!label) return;
+      institutionCounts[label] = (institutionCounts[label] || 0) + 1;
+    });
+    const institutionItems = Object.keys(institutionCounts).sort(function(a, b) {
+      return a.localeCompare(b);
+    }).map(function(label) {
+      return { value: label, label: label + ' (' + institutionCounts[label] + ')' };
+    });
+    setSelectOptions(populateInstitutionsSelect, institutionItems, selectedInstitutions, 'No institutions remaining');
+
+    const publicItems = getRemainingAidOptions('Public').map(function(option) {
+      const value = String(option.source_entry_id || '');
+      return { value: value, label: getPublicOptionLabel(option) || value };
+    });
+    setSelectOptions(populatePublicSelect, publicItems, selectedPublics, 'No public beneficiaries remaining');
+
+    populateDistrictsButton.disabled = getSelectedValues(populateDistrictSelect).length === 0;
+    populateInstitutionsButton.disabled = getSelectedValues(populateInstitutionsSelect).length === 0;
+    populatePublicsButton.disabled = getSelectedValues(populatePublicSelect).length === 0;
+  }
+
+  function populateRecipientRowFromPayload(row, typeValue, payload) {
+    const typeSelect = row.querySelector('select[name$="-beneficiary_type"]');
+    const beneficiarySelect = row.querySelector('select[name$="-beneficiary"]');
+    if (!typeSelect || !beneficiarySelect || !payload) return;
+    typeSelect.value = typeValue;
+    row._aidOptions = row._aidOptions || {};
+    row._aidOptions[String(payload.source_entry_id)] = payload;
+    beneficiarySelect.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Select beneficiary';
+    beneficiarySelect.appendChild(placeholder);
+    const option = document.createElement('option');
+    option.value = String(payload.source_entry_id || '');
+    option.textContent = payload.display_text;
+    option.selected = true;
+    beneficiarySelect.appendChild(option);
+    applyAidPayload(row, payload);
+    updateRecipientFieldRules(row);
+  }
+
+  function populateAidRecipients(typeValue, limit) {
+    const options = getAidOptionsForType(typeValue);
+    if (!options.length) return;
+    let remaining = getRemainingAidOptions(typeValue);
+    if (typeof limit === 'number') {
+      remaining = remaining.slice(0, limit);
+    }
+    remaining.forEach(function(payload) {
+      const row = addRow(recipientContainer, recipientTotalInput, 'recipient-empty-form');
+      initRecipientRow(row);
+      populateRecipientRowFromPayload(row, typeValue, payload);
+    });
+    refreshRecipientLabels();
+    refreshQuickPopulateSelectors();
+  }
+
+  function populateAidRecipientsForLabels(typeValue, labels, labelGetter) {
+    if (!labels.length) return;
+    const selectedLabels = new Set(labels);
+    const remaining = getRemainingAidOptions(typeValue).filter(function(option) {
+      return selectedLabels.has(labelGetter(option));
+    });
+    remaining.forEach(function(payload) {
+      const row = addRow(recipientContainer, recipientTotalInput, 'recipient-empty-form');
+      initRecipientRow(row);
+      populateRecipientRowFromPayload(row, typeValue, payload);
+    });
+    refreshRecipientLabels();
+    refreshQuickPopulateSelectors();
+  }
+
+  function populateAidRecipientsBySourceIds(typeValue, sourceIds) {
+    if (!sourceIds.length) return;
+    const selectedIds = new Set(sourceIds.map(String));
+    getRemainingAidOptions(typeValue).forEach(function(payload) {
+      if (!selectedIds.has(String(payload.source_entry_id || ''))) return;
+      const row = addRow(recipientContainer, recipientTotalInput, 'recipient-empty-form');
+      initRecipientRow(row);
+      populateRecipientRowFromPayload(row, typeValue, payload);
+    });
+    refreshRecipientLabels();
+    refreshQuickPopulateSelectors();
+  }
+
+  function normalizeCsvHeader(value) {
+    return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  }
+
+  function parseCsv(text) {
+    const rows = [];
+    let current = '';
+    let row = [];
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i];
+      const next = text[i + 1];
+      if (ch === '"') {
+        if (inQuotes && next === '"') {
+          current += '"';
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch === ',' && !inQuotes) {
+        row.push(current);
+        current = '';
+      } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+        if (ch === '\r' && next === '\n') i += 1;
+        row.push(current);
+        current = '';
+        if (row.some(function(cell) { return String(cell).trim() !== ''; })) {
+          rows.push(row);
+        }
+        row = [];
+      } else {
+        current += ch;
+      }
+    }
+    row.push(current);
+    if (row.some(function(cell) { return String(cell).trim() !== ''; })) {
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  function findAidPayloadFromCsv(record) {
+    const typeValue = record.beneficiary_type || '';
+    const options = getAidOptionsForType(typeValue);
+    const sourceEntryId = String(record.source_entry_id || '').trim();
+    if (sourceEntryId) {
+      const exact = options.find(function(option) { return String(option.source_entry_id) === sourceEntryId; });
+      if (exact) return { typeValue: typeValue, payload: exact };
+    }
+    const applicationNumber = String(record.application_number || '').trim().toLowerCase();
+    const nameOfBeneficiary = String(record.name_of_beneficiary || '').trim().toLowerCase();
+    const nameOfInstitution = String(record.name_of_institution || '').trim().toLowerCase();
+    const beneficiary = String(record.beneficiary || '').trim().toLowerCase();
+    const matched = options.find(function(option) {
+      if (applicationNumber && String(option.application_number || '').trim().toLowerCase() !== applicationNumber) {
+        return false;
+      }
+      if (nameOfBeneficiary && String(option.name_of_beneficiary || option.recipient_name || '').trim().toLowerCase() !== nameOfBeneficiary) {
+        return false;
+      }
+      if (nameOfInstitution && String(option.name_of_institution || '').trim().toLowerCase() !== nameOfInstitution) {
+        return false;
+      }
+      if (beneficiary) {
+        const candidate = String(option.recipient_name || option.district_name || option.name_of_institution || '').trim().toLowerCase();
+        if (candidate !== beneficiary) return false;
+      }
+      return true;
+    });
+    return matched ? { typeValue: typeValue, payload: matched } : null;
+  }
+
+  function applyCsvRecordToRow(row, record, typeValue, payload) {
+    populateRecipientRowFromPayload(row, typeValue, payload);
+    const fundRequestedField = row.querySelector('input[name$="-fund_requested"]');
+    const nameField = row.querySelector('input[name$="-name_of_beneficiary"]');
+    const institutionField = row.querySelector('input[name$="-name_of_institution"]');
+    const aadharField = row.querySelector('input[name$="-aadhar_number"]');
+    const detailsField = row.querySelector('textarea[name$="-details"]');
+    const chequeField = row.querySelector('textarea[name$="-cheque_in_favour"]');
+    if (record.fund_requested && fundRequestedField) fundRequestedField.value = record.fund_requested;
+    if (record.name_of_beneficiary && nameField) nameField.value = record.name_of_beneficiary;
+    if (record.name_of_institution && institutionField) institutionField.value = record.name_of_institution;
+    if (record.aadhar_number && aadharField) aadharField.value = record.aadhar_number;
+    if (record.details && detailsField) detailsField.value = record.details;
+    if (record.cheque_rtgs_in_favour && chequeField) chequeField.value = record.cheque_rtgs_in_favour;
+  }
+
+  function updateRecipientFieldRules(row) {
+    const typeSelect = row.querySelector('select[name$="-beneficiary_type"]');
+    const aadhaarInput = row.querySelector('input[name$="-aadhar_number"]');
+    const aadhaarLabel = row.querySelector('.js-aadhaar-label');
+    if (!typeSelect || !aadhaarInput || !aadhaarLabel) return;
+    const isDistrict = typeSelect.value === 'District';
+    aadhaarInput.required = !isDistrict;
+    aadhaarLabel.innerHTML = isDistrict ? 'Aadhaar Number' : 'Aadhaar Number <span style="color:#dc2626;">*</span>';
+  }
+
+  addRecipientButton.addEventListener('click', function() {
+    const row = addRow(recipientContainer, recipientTotalInput, 'recipient-empty-form');
+    initRecipientRow(row);
+    setRecipientRowExpanded(row, true);
+    refreshRecipientLabels();
+    refreshQuickPopulateSelectors();
+  });
+
+  collapseAllRecipientsButton.addEventListener('click', function() {
+    recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
+      if (row.hidden) return;
+      setRecipientRowExpanded(row, false);
+    });
+  });
+
+  expandAllRecipientsButton.addEventListener('click', function() {
+    recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
+      if (row.hidden) return;
+      setRecipientRowExpanded(row, true);
+    });
+  });
+
+  toggleQuickPopulateButton.addEventListener('click', function() {
+    const isCollapsed = quickPopulateBody && quickPopulateBody.style.display === 'none';
+    setQuickPopulateExpanded(isCollapsed);
+  });
+
+  [populateDistrictSelect, populateInstitutionsSelect, populatePublicSelect].forEach(function(select) {
+    select.addEventListener('change', function() {
+      populateDistrictsButton.disabled = getSelectedValues(populateDistrictSelect).length === 0;
+      populateInstitutionsButton.disabled = getSelectedValues(populateInstitutionsSelect).length === 0;
+      populatePublicsButton.disabled = getSelectedValues(populatePublicSelect).length === 0;
+    });
+  });
+
+  populateDistrictsButton.addEventListener('click', function() {
+    populateAidRecipientsForLabels('District', getSelectedValues(populateDistrictSelect), getDistrictGroupLabel);
+  });
+  populateInstitutionsButton.addEventListener('click', function() {
+    populateAidRecipientsForLabels('Institutions', getSelectedValues(populateInstitutionsSelect), getInstitutionGroupLabel);
+  });
+  populatePublicsButton.addEventListener('click', function() {
+    populateAidRecipientsBySourceIds('Public', getSelectedValues(populatePublicSelect));
+  });
+  resetRecipientsButton.addEventListener('click', function() {
+    recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
+      if (row.hidden) return;
+      const deleteField = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+      if (deleteField) {
+        deleteField.checked = true;
+      }
+      row.hidden = true;
+    });
+    refreshRecipientLabels();
+    refreshQuickPopulateSelectors();
+  });
+  uploadAidCsvTriggerButton.addEventListener('click', function() {
+    if (!aidTypeSelect.value) {
+      showAidCsvFeedback('Select an aid first before uploading a CSV.', 'warning');
+      return;
+    }
+    uploadAidCsvInput.click();
+  });
+  uploadAidCsvInput.addEventListener('change', function() {
+    const file = uploadAidCsvInput.files && uploadAidCsvInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function() {
+      const rows = parseCsv(String(reader.result || ''));
+      if (!rows.length) {
+        showAidCsvFeedback('The selected CSV is empty.', 'warning');
+        return;
+      }
+      const headers = rows[0].map(normalizeCsvHeader);
+      let importedCount = 0;
+      let skippedCount = 0;
+      rows.slice(1).forEach(function(rawRow) {
+        const record = {};
+        headers.forEach(function(header, index) {
+          record[header] = String(rawRow[index] || '').trim();
+        });
+        if (!record.cheque_rtgs_in_favour && record.cheque_in_favour) {
+          record.cheque_rtgs_in_favour = record.cheque_in_favour;
+        }
+        const resolved = findAidPayloadFromCsv(record);
+        if (!resolved) {
+          skippedCount += 1;
+          return;
+        }
+        const row = addRow(recipientContainer, recipientTotalInput, 'recipient-empty-form');
+        initRecipientRow(row);
+        applyCsvRecordToRow(row, record, resolved.typeValue, resolved.payload);
+        importedCount += 1;
+      });
+      uploadAidCsvInput.value = '';
+      refreshRecipientLabels();
+      refreshQuickPopulateSelectors();
+      if (importedCount && skippedCount) {
+        showAidCsvFeedback('Imported ' + importedCount + ' row(s). Skipped ' + skippedCount + ' row(s) that could not be matched to the selected aid.', 'warning');
+      } else if (importedCount) {
+        showAidCsvFeedback('Imported ' + importedCount + ' row(s) successfully.', 'success');
+      } else {
+        showAidCsvFeedback('No rows were imported. Check the aid type and CSV values.', 'warning');
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  document.getElementById('add-article-row').addEventListener('click', function() {
+    const row = addRow(articleContainer, articleTotalInput, 'article-empty-form');
+    initArticleRow(row);
+    refreshArticleLabels();
+    refreshAllArticleSelects();
+  });
+
+  document.addEventListener('click', function(event) {
+    const button = event.target.closest('.js-remove-row');
+    if (!button) return;
+    const row = button.closest('.js-recipient-row, .js-article-row');
+    if (!row) return;
+    const deleteField = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+    if (deleteField) deleteField.checked = true;
+    row.hidden = true;
+    if (row.classList.contains('js-recipient-row')) {
+      refreshRecipientLabels();
+      refreshQuickPopulateSelectors();
+    } else {
+      refreshArticleLabels();
+      refreshAllArticleSelects();
+    }
+  });
+
+  requestTypeRadios.forEach(function(radio) { radio.addEventListener('change', function() { setRequestType(radio.value); }); });
+  aidTypeSelect.addEventListener('change', async function() {
+    await loadAidAvailability();
+    recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
+      if (!row.hidden) loadAidOptions(row, false);
+    });
+  });
+
+  recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
+    initRecipientRow(row);
+    setRecipientRowExpanded(row, true);
+  });
+  refreshRecipientLabels();
+  articleContainer.querySelectorAll('.js-article-row').forEach(initArticleRow);
+  refreshArticleLabels();
+  refreshAllArticleSelects();
+  setQuickPopulateExpanded(true);
+  toggleSections();
+  loadAidAvailability().then(function() {
+    recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
+      const typeField = row.querySelector('select[name$="-beneficiary_type"]');
+      if (aidTypeSelect.value && typeField && typeField.value) {
+        loadAidOptions(row, true);
+      }
+    });
+  });
+
+  if (formEl) formEl.addEventListener('submit', function(event) {
+    if (bypassExcessWarning) {
+      bypassExcessWarning = false;
+      return;
+    }
+    const submitter = event.submitter;
+    if (!submitter || submitter.value !== 'submit' || !articleSection || articleSection.hidden) {
+      return;
+    }
+    const articleRunningTotals = {};
+    const excessItems = [];
+    articleContainer.querySelectorAll('.js-article-row').forEach(function(row) {
+      if (row.hidden) return;
+      const select = row.querySelector('select[name$="-article_name"]');
+      const qtyInput = row.querySelector('input[name$="-quantity"]');
+      const name = (select && select.value ? String(select.value).trim() : '');
+      if (!name) return;
+      const qty = parseFloat((qtyInput && qtyInput.value) || '0') || 0;
+      const choice = articleChoices.find(function(item) { return item.name === name; });
+      if (!choice) return;
+      const pendingQty = parseFloat(choice.pending_qty || '0') || 0;
+      const usedQty = articleRunningTotals[name] || 0;
+      const remainingBeforeThisRow = pendingQty - usedQty;
+      const excessQty = qty - Math.max(remainingBeforeThisRow, 0);
+      articleRunningTotals[name] = usedQty + qty;
+      if (excessQty <= 0) return;
+      const serialNode = row.querySelector('.js-article-index');
+      const serial = serialNode ? serialNode.textContent.trim() : '';
+      excessItems.push({
+        serial: serial || '?',
+        name: name,
+        excess: formatQuantityLabel(excessQty),
+      });
+    });
+    if (!excessItems.length) {
+      return;
+    }
+    event.preventDefault();
+    openExcessWarning(excessItems, submitter.value);
+  });
+
+  if (excessWarningModal) {
+    excessWarningModal.addEventListener('click', function(event) {
+      if (event.target === excessWarningModal) {
+        closeExcessWarning();
+      }
+    });
+  }
+})();
+</script>
 {% endblock %}
