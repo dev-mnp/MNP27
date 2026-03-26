@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+    <div>
+      <h2 style="margin: 0 0 6px 0;">{% if object %}Edit Purchase Order{% else %}New Purchase Order{% endif %}</h2>
+      <div class="small" style="color: var(--text-secondary);">Purchase Orders are independent from Fund Requests and use the article master list directly.</div>
+    </div>
+    <a class="btn" href="{% url 'ui:purchase-order-list' %}">Back</a>
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    {% if form.errors or item_formset.errors %}
+      <div class="small" style="margin-bottom: 10px; color: #dc2626;">Please fix the highlighted purchase order fields before saving.</div>
+    {% endif %}
+
+    <div class="card" style="padding: 16px; background: var(--panel-bg-muted); margin-bottom: 16px;">
+      <div style="display:grid; gap:14px;">
+        {% if object and object.purchase_order_number %}
+          <div>
+            <label>PO Number</label>
+            <div class="input" style="display:flex; align-items:center; min-height:44px; background:#f8fafc;">{{ object.purchase_order_number }}</div>
+          </div>
+        {% endif %}
+        <div>
+          <label>Vendor Name <span style="color:#dc2626;">*</span></label>
+          {{ form.vendor_name }}
+        </div>
+        <div>
+          <label>Vendor Address <span style="color:#dc2626;">*</span></label>
+          {{ form.vendor_address }}
+        </div>
+        <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px;">
+          <div>
+            <label>City <span style="color:#dc2626;">*</span></label>
+            {{ form.vendor_city }}
+          </div>
+          <div>
+            <label>State <span style="color:#dc2626;">*</span></label>
+            {{ form.vendor_state }}
+          </div>
+          <div>
+            <label>Pincode <span style="color:#dc2626;">*</span></label>
+            {{ form.vendor_pincode }}
+          </div>
+        </div>
+        <div>
+          <label>Comments or Special Instructions</label>
+          {{ form.comments }}
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding: 16px; background: var(--panel-bg-muted);">
+      <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">
+        <div>
+          <h3 style="margin: 0 0 4px 0;">Items</h3>
+          <div class="small" style="color: var(--text-secondary);">Pick articles from the article master list and enter supplier-side item details.</div>
+        </div>
+        <button class="btn" type="button" id="add-item-row">Add Item</button>
+      </div>
+
+      {{ item_formset.management_form }}
+      <div id="item-rows" style="display:grid; gap: 12px;">
+        {% for row in item_formset.forms %}
+          <div class="card js-item-row" style="padding: 10px 12px; background:#fff; border:1px solid #dbe7f4;">
+            {{ row.id }}<span hidden>{{ row.DELETE }}</span>{{ row.article }}
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span class="js-item-index" style="font-size:1.25rem; font-weight:700; color:var(--text-primary); min-width:1.5rem; display:inline-block;">1</span>
+                <span style="font-weight:600; color:var(--text-secondary);">Item</span>
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 10px; align-items:start;">
+              <div style="grid-column: span 6;">
+                <label>Article <span style="color:#dc2626;">*</span></label>
+                {{ row.article_name }}
+              </div>
+              <div style="grid-column: span 2;">
+                <label>Quantity <span style="color:#dc2626;">*</span></label>
+                {{ row.quantity }}
+              </div>
+              <div style="grid-column: span 2;">
+                <label>Unit Price <span style="color:#dc2626;">*</span></label>
+                {{ row.unit_price }}
+              </div>
+              <div style="grid-column: span 2;">
+                <label>Line Total</label>
+                {{ row.total_value }}
+              </div>
+              <div style="grid-column: span 6;">
+                <label>Supplier Article Name <span style="color:#dc2626;">*</span></label>
+                {{ row.supplier_article_name }}
+              </div>
+              <div style="grid-column: span 6;">
+                <label>Description <span style="color:#dc2626;">*</span></label>
+                {{ row.description }}
+              </div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:6px;">
+              <button type="button" class="btn icon-btn js-remove-row" title="Remove" aria-label="Remove">
+                <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+              </button>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <template id="item-empty-form">
+        <div class="card js-item-row" style="padding: 10px 12px; background:#fff; border:1px solid #dbe7f4;">
+          {{ item_formset.empty_form.id }}<span hidden>{{ item_formset.empty_form.DELETE }}</span>{{ item_formset.empty_form.article }}
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="js-item-index" style="font-size:1.25rem; font-weight:700; color:var(--text-primary); min-width:1.5rem; display:inline-block;">1</span>
+              <span style="font-weight:600; color:var(--text-secondary);">Item</span>
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 10px; align-items:start;">
+            <div style="grid-column: span 6;">
+              <label>Article <span style="color:#dc2626;">*</span></label>
+              {{ item_formset.empty_form.article_name }}
+            </div>
+            <div style="grid-column: span 2;">
+              <label>Quantity <span style="color:#dc2626;">*</span></label>
+              {{ item_formset.empty_form.quantity }}
+            </div>
+            <div style="grid-column: span 2;">
+              <label>Unit Price <span style="color:#dc2626;">*</span></label>
+              {{ item_formset.empty_form.unit_price }}
+            </div>
+            <div style="grid-column: span 2;">
+              <label>Line Total</label>
+              {{ item_formset.empty_form.total_value }}
+            </div>
+            <div style="grid-column: span 6;">
+              <label>Supplier Article Name <span style="color:#dc2626;">*</span></label>
+              {{ item_formset.empty_form.supplier_article_name }}
+            </div>
+            <div style="grid-column: span 6;">
+              <label>Description <span style="color:#dc2626;">*</span></label>
+              {{ item_formset.empty_form.description }}
+            </div>
+          </div>
+          <div style="display:flex; justify-content:flex-end; margin-top:6px;">
+            <button type="button" class="btn icon-btn js-remove-row" title="Remove" aria-label="Remove">
+              <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+            </button>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <div class="toolbar" style="margin-top: 12px;">
+      <button class="btn" type="submit" name="action" value="draft">Save as Draft</button>
+      <button class="btn" type="submit" name="action" value="submit">Submit</button>
+    </div>
+  </form>
+</section>
+
+<script id="article-request-choices-json" type="application/json">{{ article_request_choices_json|safe }}</script>
+<script>
+(function() {
+  const articleChoices = JSON.parse(document.getElementById('article-request-choices-json').textContent || '[]');
+  const itemContainer = document.getElementById('item-rows');
+  const totalInput = document.getElementById('id_items-TOTAL_FORMS');
+  const addButton = document.getElementById('add-item-row');
+  const emptyTemplate = document.getElementById('item-empty-form');
+
+  function refreshIndexes() {
+    Array.from(itemContainer.querySelectorAll('.js-item-row')).forEach(function(row, index) {
+      if (row.hidden) return;
+      const indexEl = row.querySelector('.js-item-index');
+      if (indexEl) indexEl.textContent = String(index + 1);
+    });
+  }
+
+  function updateLineTotal(row) {
+    const quantityInput = row.querySelector('input[name$="-quantity"]');
+    const unitPriceInput = row.querySelector('input[name$="-unit_price"]');
+    const totalValueInput = row.querySelector('input[name$="-total_value"]');
+    if (!quantityInput || !unitPriceInput || !totalValueInput) return;
+    const quantity = parseFloat(quantityInput.value || '0') || 0;
+    const unitPrice = parseFloat(unitPriceInput.value || '0') || 0;
+    totalValueInput.value = (quantity * unitPrice).toFixed(2);
+  }
+
+  function refreshArticleOptions(select) {
+    const currentValue = select.value;
+    select.innerHTML = '';
+    const emptyOption = document.createElement('option');
+    emptyOption.value = '';
+    emptyOption.textContent = 'Select article';
+    select.appendChild(emptyOption);
+    articleChoices.forEach(function(choice) {
+      const option = document.createElement('option');
+      option.value = choice.article_name;
+      option.textContent = choice.article_name;
+      option.dataset.articleId = choice.id || '';
+      option.dataset.defaultPrice = choice.cost_per_unit || '0';
+      select.appendChild(option);
+    });
+    if (currentValue) select.value = currentValue;
+  }
+
+  function wireRow(row) {
+    const articleSelect = row.querySelector('select[name$="-article_name"]');
+    const articleHidden = row.querySelector('input[name$="-article"]');
+    const quantityInput = row.querySelector('input[name$="-quantity"]');
+    const unitPriceInput = row.querySelector('input[name$="-unit_price"]');
+    const removeButton = row.querySelector('.js-remove-row');
+    const deleteInput = row.querySelector('input[name$="-DELETE"]');
+
+    if (articleSelect) {
+      refreshArticleOptions(articleSelect);
+      articleSelect.addEventListener('change', function() {
+        const selected = articleSelect.options[articleSelect.selectedIndex];
+        if (articleHidden) {
+          articleHidden.value = selected && selected.dataset.articleId ? selected.dataset.articleId : '';
+        }
+        if (unitPriceInput && (!unitPriceInput.value || parseFloat(unitPriceInput.value) === 0)) {
+          unitPriceInput.value = selected && selected.dataset.defaultPrice ? selected.dataset.defaultPrice : '';
+        }
+        updateLineTotal(row);
+      });
+    }
+
+    [quantityInput, unitPriceInput].forEach(function(input) {
+      if (!input) return;
+      input.addEventListener('input', function() { updateLineTotal(row); });
+    });
+
+    if (removeButton) {
+      removeButton.addEventListener('click', function() {
+        if (deleteInput) {
+          deleteInput.checked = true;
+          row.hidden = true;
+        } else {
+          row.remove();
+          totalInput.value = String(Math.max(parseInt(totalInput.value || '0', 10) - 1, 0));
+        }
+        refreshIndexes();
+      });
+    }
+
+    updateLineTotal(row);
+  }
+
+  function addRow() {
+    const index = parseInt(totalInput.value || '0', 10);
+    const html = emptyTemplate.innerHTML.replace(/__prefix__/g, String(index));
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html.trim();
+    const row = wrapper.firstElementChild;
+    itemContainer.appendChild(row);
+    totalInput.value = String(index + 1);
+    wireRow(row);
+    refreshIndexes();
+  }
+
+  Array.from(itemContainer.querySelectorAll('.js-item-row')).forEach(function(row) { wireRow(row); });
+  refreshIndexes();
+  addButton.addEventListener('click', addRow);
+})();
+</script>
+{% endblock %}

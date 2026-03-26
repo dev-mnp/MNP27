@@ -141,6 +141,10 @@
                   </div>
                   <div class="cheque-wrap" {% if row.item_type != "Aid" %}hidden{% endif %}>
                     <div class="item-row-subfield">
+                      <div class="item-row-subfield-label">Name of Institution</div>
+                      <input class="input institution-name-input" name="name_of_institution" value="{{ row.name_of_institution }}" placeholder="Optional">
+                    </div>
+                    <div class="item-row-subfield">
                       <div class="item-row-subfield-label">Cheque / RTGS in Favour</div>
                       <textarea class="textarea cheque-input" name="cheque_rtgs_in_favour" rows="2">{{ row.cheque_rtgs_in_favour }}</textarea>
                     </div>
@@ -195,6 +199,10 @@
                 <input class="input notes-input item-notes" name="notes" value="" placeholder="Comments">
               </div>
               <div class="cheque-wrap" hidden>
+                <div class="item-row-subfield">
+                  <div class="item-row-subfield-label">Name of Institution</div>
+                  <input class="input institution-name-input" name="name_of_institution" value="" placeholder="Optional">
+                </div>
                 <div class="item-row-subfield">
                   <div class="item-row-subfield-label">Cheque / RTGS in Favour</div>
                   <textarea class="textarea cheque-input" name="cheque_rtgs_in_favour" rows="2"></textarea>
@@ -430,9 +438,13 @@
           notesInput.required = itemType === "Aid";
           if (chequeWrap) {
             const showCheque = itemType === "Aid";
+            const institutionNameInput = row.querySelector(".institution-name-input");
             chequeWrap.hidden = !showCheque;
             if (!showCheque && chequeInput) {
               chequeInput.value = "";
+            }
+            if (!showCheque && institutionNameInput) {
+              institutionNameInput.value = "";
             }
           }
           if (articleCost > 0) {

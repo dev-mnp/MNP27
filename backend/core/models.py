@@ -10,6 +10,29 @@ from django.db import models
 from django.utils import timezone
 
 
+def parse_fund_request_sequence(value) -> int | None:
+    raw = str(value or "").strip().upper()
+    if not raw:
+        return None
+    if not raw.startswith("FR"):
+        return None
+    suffix = raw[2:]
+    if suffix.startswith("-"):
+        suffix = suffix[1:]
+    if not suffix.isdigit():
+        return None
+    return int(suffix)
+
+
+def format_fund_request_number(value) -> str:
+    if value in {None, ""}:
+        return ""
+    sequence = parse_fund_request_sequence(value)
+    if sequence is None:
+        return str(value).strip()
+    return f"FR-{sequence:03d}"
+
+
 class RoleChoices(models.TextChoices):
     ADMIN = "admin", "Admin"
     EDITOR = "editor", "Editor"
@@ -27,6 +50,7 @@ class ModuleKeyChoices(models.TextChoices):
     BASE_FILES = "base_files", "Base Files"
     INVENTORY_PLANNING = "inventory_planning", "Inventory Planning"
     ORDER_FUND_REQUEST = "order_fund_request", "Order & Fund Request"
+    PURCHASE_ORDER = "purchase_order", "Purchase Order"
     AUDIT_LOGS = "audit_logs", "Audit Logs"
     USER_MANAGEMENT = "user_management", "User Management"
 
@@ -71,6 +95,11 @@ MODULE_PERMISSION_DEFINITIONS = [
         "actions": ("view", "create_edit", "delete", "submit", "reopen"),
     },
     {
+        "key": ModuleKeyChoices.PURCHASE_ORDER,
+        "label": "Purchase Order",
+        "actions": ("view", "create_edit", "delete", "submit", "reopen"),
+    },
+    {
         "key": ModuleKeyChoices.AUDIT_LOGS,
         "label": "Audit Logs",
         "actions": ("view",),
@@ -93,6 +122,7 @@ ROLE_MODULE_PERMISSION_DEFAULTS = {
         ModuleKeyChoices.BASE_FILES: {"view", "upload_replace"},
         ModuleKeyChoices.INVENTORY_PLANNING: {"view", "export"},
         ModuleKeyChoices.ORDER_FUND_REQUEST: {"view", "create_edit", "submit", "reopen"},
+        ModuleKeyChoices.PURCHASE_ORDER: {"view", "create_edit", "submit", "reopen"},
         ModuleKeyChoices.AUDIT_LOGS: set(),
         ModuleKeyChoices.USER_MANAGEMENT: set(),
     },
@@ -102,6 +132,7 @@ ROLE_MODULE_PERMISSION_DEFAULTS = {
         ModuleKeyChoices.BASE_FILES: {"view"},
         ModuleKeyChoices.INVENTORY_PLANNING: {"view"},
         ModuleKeyChoices.ORDER_FUND_REQUEST: {"view"},
+        ModuleKeyChoices.PURCHASE_ORDER: {"view"},
         ModuleKeyChoices.AUDIT_LOGS: set(),
         ModuleKeyChoices.USER_MANAGEMENT: set(),
     },
@@ -466,7 +497,11 @@ class FundRequest(BaseTimestampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.fund_request_type} {self.fund_request_number}"
+        return f"{self.fund_request_type} {self.formatted_fund_request_number}"
+
+    @property
+    def formatted_fund_request_number(self) -> str:
+        return format_fund_request_number(self.fund_request_number)
 
 
 class Vendor(BaseTimestampedModel):
@@ -609,6 +644,77 @@ class FundRequestDocument(BaseTimestampedModel):
         return self.file_name
 
 
+PURCHASE_ORDER_DEFAULT_COMMENTS = (
+    "Purchase order issued with reference to:\n"
+    "Delivery Period - Within a Week.\n"
+    "Payment Terms - Immediate after delivery.\n"
+    "Transport Cost - Inclusive."
+)
+
+
+class PurchaseOrder(BaseTimestampedModel):
+    purchase_order_number = models.CharField(max_length=80, unique=True, blank=True, null=True)
+    status = models.CharField(max_length=12, choices=FundRequestStatusChoices.choices, default=FundRequestStatusChoices.DRAFT)
+    vendor_name = models.CharField(max_length=255)
+    vendor_address = models.TextField()
+    vendor_city = models.CharField(max_length=120)
+    vendor_state = models.CharField(max_length=120)
+    vendor_pincode = models.CharField(max_length=20)
+    comments = models.TextField(blank=True, null=True)
+    total_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    created_by = models.ForeignKey(
+        "core.AppUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="purchase_orders",
+    )
+
+    class Meta:
+        db_table = "purchase_order"
+        verbose_name = "Purchase Order"
+        verbose_name_plural = "Purchase Orders"
+        indexes = [
+            models.Index(fields=["purchase_order_number"]),
+            models.Index(fields=["status"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.purchase_order_number or f"Purchase Order #{self.pk}"
+
+
+class PurchaseOrderItem(BaseTimestampedModel):
+    purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name="items")
+    article = models.ForeignKey(Article, on_delete=models.RESTRICT, related_name="purchase_order_items")
+    article_name = models.CharField(max_length=255)
+    supplier_article_name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    quantity = models.PositiveIntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_value = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+
+    class Meta:
+        db_table = "purchase_order_items"
+        verbose_name = "Purchase Order Item"
+        verbose_name_plural = "Purchase Order Items"
+        indexes = [
+            models.Index(fields=["purchase_order"]),
+            models.Index(fields=["article"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.article_name} ({self.quantity})"
+
+    def recompute_totals(self) -> None:
+        quantity = max(int(self.quantity or 0), 0)
+        unit_price = non_negative_decimal(self.unit_price)
+        self.quantity = quantity
+        self.unit_price = unit_price
+        self.total_value = unit_price * quantity
+        self.save(update_fields=["quantity", "unit_price", "total_value"])
+
+
 class DistrictBeneficiaryEntry(BaseTimestampedModel):
     district = models.ForeignKey(DistrictMaster, on_delete=models.RESTRICT, related_name="beneficiaries")
     application_number = models.CharField(max_length=120, blank=True, null=True, db_index=True)
@@ -616,6 +722,7 @@ class DistrictBeneficiaryEntry(BaseTimestampedModel):
     article_cost_per_unit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     quantity = models.PositiveIntegerField(default=1)
     total_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    name_of_institution = models.CharField(max_length=255, blank=True, null=True)
     cheque_rtgs_in_favour = models.CharField(max_length=255, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     internal_notes = models.TextField(blank=True, null=True)
@@ -663,6 +770,7 @@ class PublicBeneficiaryEntry(BaseTimestampedModel):
     article_cost_per_unit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     quantity = models.PositiveIntegerField(default=1)
     total_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    name_of_institution = models.CharField(max_length=255, blank=True, null=True)
     cheque_rtgs_in_favour = models.CharField(max_length=255, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=10, choices=BeneficiaryStatusChoices.choices, default=BeneficiaryStatusChoices.PENDING)
@@ -709,6 +817,7 @@ class InstitutionsBeneficiaryEntry(BaseTimestampedModel):
     article_cost_per_unit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     quantity = models.PositiveIntegerField(default=1)
     total_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    name_of_institution = models.CharField(max_length=255, blank=True, null=True)
     cheque_rtgs_in_favour = models.CharField(max_length=255, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     internal_notes = models.TextField(blank=True, null=True)

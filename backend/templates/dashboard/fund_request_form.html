@@ -69,10 +69,22 @@
   </style>
   <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
     <div>
-      <h2 style="margin: 0 0 6px 0;">{% if object %}Edit Order &amp; Fund Request{% else %}New Order &amp; Fund Request{% endif %}</h2>
-      <div class="small" style="color: var(--text-secondary);">Draft requests reserve aid recipients but do not move anything to ordered. Only submitted requests update Inventory Planning.</div>
+      <h2 style="margin: 0 0 6px 0;">
+        {% if purchase_order_mode %}
+          {% if object %}Edit Purchase Order{% else %}New Purchase Order{% endif %}
+        {% else %}
+          {% if object %}Edit Order &amp; Fund Request{% else %}New Order &amp; Fund Request{% endif %}
+        {% endif %}
+      </h2>
+      <div class="small" style="color: var(--text-secondary);">
+        {% if purchase_order_mode %}
+          Draft purchase orders do not move anything to ordered. Only submitted purchase orders update Inventory Planning.
+        {% else %}
+          Draft requests reserve aid recipients but do not move anything to ordered. Only submitted requests update Inventory Planning.
+        {% endif %}
+      </div>
     </div>
-    <a class="btn" href="{% url 'ui:fund-request-list' %}">Back</a>
+    <a class="btn" href="{{ back_url }}">Back</a>
   </div>
 
   <form method="post" enctype="multipart/form-data">
@@ -83,17 +95,21 @@
 
     <div class="card" style="padding: 16px; background: var(--panel-bg-muted); margin-bottom: 16px;">
       <div style="display:grid; gap: 14px;">
-        <div>
-          <label>Request Type <span style="color:#dc2626;">*</span></label>
-          <div class="request-type-radios" style="display:flex; gap:18px; flex-wrap:wrap; margin-top:8px;">
-            {% for radio in form.fund_request_type %}
-              <label style="display:inline-flex; align-items:center; gap:8px; font-weight:500; cursor:pointer;">
-                {{ radio.tag }}
-                <span>{{ radio.choice_label }}</span>
-              </label>
-            {% endfor %}
+        {% if purchase_order_mode %}
+          <input type="hidden" name="fund_request_type" value="Article" />
+        {% else %}
+          <div>
+            <label>Request Type <span style="color:#dc2626;">*</span></label>
+            <div class="request-type-radios" style="display:flex; gap:18px; flex-wrap:wrap; margin-top:8px;">
+              {% for radio in form.fund_request_type %}
+                <label style="display:inline-flex; align-items:center; gap:8px; font-weight:500; cursor:pointer;">
+                  {{ radio.tag }}
+                  <span>{{ radio.choice_label }}</span>
+                </label>
+              {% endfor %}
+            </div>
           </div>
-        </div>
+        {% endif %}
         <div id="aid-type-wrap" hidden>
           <label>Aid <span style="color:#dc2626;">*</span></label>
           <select class="input" name="aid_type" id="id_aid_type">
@@ -105,8 +121,14 @@
         </div>
         {% if object and object.fund_request_number %}
           <div>
-            <label>Fund Request Number</label>
-            <div class="input" style="display:flex; align-items:center; min-height:44px; background:#f8fafc;">{{ object.fund_request_number }}</div>
+            <label>{% if purchase_order_mode %}Fund Request Number{% else %}Fund Request Number{% endif %}</label>
+            <div class="input" style="display:flex; align-items:center; min-height:44px; background:#f8fafc;">{{ object.formatted_fund_request_number }}</div>
+          </div>
+        {% endif %}
+        {% if purchase_order_mode and object and object.purchase_order_number %}
+          <div>
+            <label>Purchase Order Number</label>
+            <div class="input" style="display:flex; align-items:center; min-height:44px; background:#f8fafc;">{{ object.purchase_order_number }}</div>
           </div>
         {% endif %}
       </div>
@@ -121,6 +143,9 @@
           <button class="btn" type="button" id="upload-aid-csv-trigger">Upload CSV</button>
           <button class="btn" type="button" id="add-recipient-row">Add Recipient</button>
         </div>
+      </div>
+      <div class="small" style="margin-bottom: 10px; color: var(--text-secondary);">
+        CSV import matches by beneficiary type plus application/name fields. `source_entry_id` is not needed.
       </div>
       <div id="upload-aid-csv-feedback" class="upload-feedback" aria-live="polite"></div>
       <div id="aid-quick-tools" class="card" style="padding: 12px; background:#fff; border:1px solid #dbe7f4; margin-bottom: 12px;" hidden>
@@ -290,6 +315,38 @@
     </div>
 
     <div id="article-items-section" class="card" style="padding: 16px; background: var(--panel-bg-muted); margin-top: 16px;">
+      <div class="card" style="padding: 16px; background:#fff; border:1px solid #dbe7f4; margin-bottom: 14px;">
+        <div style="display:grid; gap:14px;">
+          <div>
+            <label>{% if purchase_order_mode %}Vendor Name{% else %}Supplier Name{% endif %} <span style="color:#dc2626;">*</span></label>
+            {{ form.supplier_name }}
+          </div>
+          {% if not purchase_order_mode %}
+            <div>
+              <label>GST Number <span style="color:#dc2626;">*</span></label>
+              {{ form.gst_number }}
+            </div>
+          {% endif %}
+          <div>
+            <label>{% if purchase_order_mode %}Vendor Address{% else %}Address{% endif %} <span style="color:#dc2626;">*</span></label>
+            {{ form.supplier_address }}
+          </div>
+          <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px;">
+            <div>
+              <label>City <span style="color:#dc2626;">*</span></label>
+              {{ form.supplier_city }}
+            </div>
+            <div>
+              <label>State <span style="color:#dc2626;">*</span></label>
+              {{ form.supplier_state }}
+            </div>
+            <div>
+              <label>Pincode <span style="color:#dc2626;">*</span></label>
+              {{ form.supplier_pincode }}
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">
         <div>
           <h3 style="margin: 0 0 4px 0;">Items</h3>
@@ -325,13 +382,23 @@
                 <label>Line Total</label>
                 {{ row.value }}
               </div>
-              <div style="grid-column: span 4;">
-                <label>GST Number <span style="color:#dc2626;">*</span></label>
-                {{ row.gst_no }}
+              {% if not purchase_order_mode %}
+                <div style="grid-column: span 4;">
+                  <label>GST Number <span style="color:#dc2626;">*</span></label>
+                  {{ row.gst_no }}
+                </div>
+                <div style="grid-column: span 8;">
+                  <label>Cheque / RTGS in Favour <span style="color:#dc2626;">*</span></label>
+                  {{ row.cheque_in_favour }}
+                </div>
+              {% endif %}
+              <div style="grid-column: span 6;">
+                <label>Supplier Article Name <span style="color:#dc2626;">*</span></label>
+                {{ row.supplier_article_name }}
               </div>
-              <div style="grid-column: span 8;">
-                <label>Cheque / RTGS in Favour <span style="color:#dc2626;">*</span></label>
-                {{ row.cheque_in_favour }}
+              <div style="grid-column: span 6;">
+                <label>Description <span style="color:#dc2626;">*</span></label>
+                {{ row.description }}
               </div>
             </div>
             <div style="display:flex; justify-content:flex-end; margin-top:6px;">
@@ -368,13 +435,23 @@
               <label>Line Total</label>
               {{ article_formset.empty_form.value }}
             </div>
-            <div style="grid-column: span 4;">
-              <label>GST Number <span style="color:#dc2626;">*</span></label>
-              {{ article_formset.empty_form.gst_no }}
+            {% if not purchase_order_mode %}
+              <div style="grid-column: span 4;">
+                <label>GST Number <span style="color:#dc2626;">*</span></label>
+                {{ article_formset.empty_form.gst_no }}
+              </div>
+              <div style="grid-column: span 8;">
+                <label>Cheque / RTGS in Favour <span style="color:#dc2626;">*</span></label>
+                {{ article_formset.empty_form.cheque_in_favour }}
+              </div>
+            {% endif %}
+            <div style="grid-column: span 6;">
+              <label>Supplier Article Name <span style="color:#dc2626;">*</span></label>
+              {{ article_formset.empty_form.supplier_article_name }}
             </div>
-            <div style="grid-column: span 8;">
-              <label>Cheque / RTGS in Favour <span style="color:#dc2626;">*</span></label>
-              {{ article_formset.empty_form.cheque_in_favour }}
+            <div style="grid-column: span 6;">
+              <label>Description <span style="color:#dc2626;">*</span></label>
+              {{ article_formset.empty_form.description }}
             </div>
           </div>
           <div style="display:flex; justify-content:flex-end; margin-top:6px;">
@@ -412,6 +489,7 @@
 <script>
 (function() {
   const requestTypeRadios = Array.from(document.querySelectorAll('input[name="fund_request_type"]'));
+  const purchaseOrderMode = {{ purchase_order_mode|yesno:"true,false" }};
   const aidTypeSelect = document.getElementById('id_aid_type');
   const aidSection = document.getElementById('aid-recipient-section');
   const articleSection = document.getElementById('article-items-section');
@@ -449,6 +527,7 @@
   let aidOptionsByType = {};
   let blockedByType = {};
   let bypassExcessWarning = false;
+  let aidAvailabilityPromise = null;
 
   function showAidCsvFeedback(message, tone) {
     if (!uploadAidCsvFeedback) return;
@@ -511,11 +590,16 @@
   }
 
   function getSelectedRequestType() {
+    if (purchaseOrderMode) return 'Article';
     const checked = requestTypeRadios.find(function(radio) { return radio.checked; });
     return checked ? checked.value : '';
   }
 
   function setRequestType(type) {
+    if (purchaseOrderMode) {
+      toggleSections();
+      return;
+    }
     requestTypeRadios.forEach(function(radio) {
       radio.checked = radio.value === type;
     });
@@ -712,14 +796,19 @@
   }
 
   function applyAidPayload(row, payload) {
+    row.querySelector('input[name$="-recipient_name"]').value = '';
+    row.querySelector('input[name$="-district_name"]').value = '';
+    row.querySelector('input[name$="-name_of_beneficiary"]').value = '';
+    row.querySelector('input[name$="-name_of_institution"]').value = '';
+    row.querySelector('input[name$="-aadhar_number"]').value = '';
     row.querySelector('input[name$="-source_entry_id"]').value = payload.source_entry_id || '';
     row.querySelector('input[name$="-recipient_name"]').value = payload.recipient_name || '';
     row.querySelector('input[name$="-district_name"]').value = payload.district_name || '';
     const notesField = row.querySelector('input[name$="-notes"], textarea[name$="-notes"]');
     if (notesField) notesField.value = payload.details || '';
-    if (payload.name_of_beneficiary) row.querySelector('input[name$="-name_of_beneficiary"]').value = payload.name_of_beneficiary;
-    if (payload.name_of_institution) row.querySelector('input[name$="-name_of_institution"]').value = payload.name_of_institution;
-    if (payload.aadhar_number) row.querySelector('input[name$="-aadhar_number"]').value = payload.aadhar_number;
+    row.querySelector('input[name$="-name_of_beneficiary"]').value = payload.name_of_beneficiary || '';
+    row.querySelector('input[name$="-name_of_institution"]').value = payload.name_of_institution || '';
+    row.querySelector('input[name$="-aadhar_number"]').value = payload.aadhar_number || '';
     row.querySelector('textarea[name$="-details"]').value = payload.details || '';
     row.querySelector('input[name$="-fund_requested"]').value = payload.fund_requested || '';
     row.querySelector('textarea[name$="-cheque_in_favour"]').value = payload.cheque_in_favour || '';
@@ -784,6 +873,19 @@
       }
     });
     addRecipientButton.disabled = availableBeneficiaryTypes.length === 0;
+  }
+
+  function ensureAidAvailabilityLoaded() {
+    if (!aidTypeSelect.value) {
+      return Promise.resolve();
+    }
+    if (aidAvailabilityPromise) {
+      return aidAvailabilityPromise;
+    }
+    aidAvailabilityPromise = loadAidAvailability().finally(function() {
+      aidAvailabilityPromise = null;
+    });
+    return aidAvailabilityPromise;
   }
 
   async function loadAidOptions(row, preserveExisting) {
@@ -1153,6 +1255,26 @@
     return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
   }
 
+  function normalizeAidCsvBeneficiaryType(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if (!raw) return '';
+    if (raw === 'district' || raw === 'districts') return 'District';
+    if (raw === 'public' || raw === 'publics') return 'Public';
+    if (raw === 'institution' || raw === 'institutions' || raw === 'others' || raw === 'other') return 'Institutions';
+    return String(value || '').trim();
+  }
+
+  function normalizeAidCsvText(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function normalizeAidCsvAmount(value) {
+    const raw = String(value || '').replace(/,/g, '').trim();
+    if (!raw) return '';
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? String(parsed) : raw;
+  }
+
   function parseCsv(text) {
     const rows = [];
     let current = '';
@@ -1191,34 +1313,80 @@
   }
 
   function findAidPayloadFromCsv(record) {
-    const typeValue = record.beneficiary_type || '';
+    const typeValue = normalizeAidCsvBeneficiaryType(record.beneficiary_type);
     const options = getAidOptionsForType(typeValue);
-    const sourceEntryId = String(record.source_entry_id || '').trim();
-    if (sourceEntryId) {
-      const exact = options.find(function(option) { return String(option.source_entry_id) === sourceEntryId; });
-      if (exact) return { typeValue: typeValue, payload: exact };
-    }
+    if (!options.length) return null;
     const applicationNumber = String(record.application_number || '').trim().toLowerCase();
-    const nameOfBeneficiary = String(record.name_of_beneficiary || '').trim().toLowerCase();
-    const nameOfInstitution = String(record.name_of_institution || '').trim().toLowerCase();
-    const beneficiary = String(record.beneficiary || '').trim().toLowerCase();
-    const matched = options.find(function(option) {
-      if (applicationNumber && String(option.application_number || '').trim().toLowerCase() !== applicationNumber) {
-        return false;
+    const nameOfBeneficiary = normalizeAidCsvText(record.name_of_beneficiary);
+    const nameOfInstitution = normalizeAidCsvText(record.name_of_institution);
+    const beneficiary = normalizeAidCsvText(record.beneficiary);
+    const details = normalizeAidCsvText(record.details);
+    const fundRequested = normalizeAidCsvAmount(record.fund_requested);
+    const candidates = options.map(function(option) {
+      let score = 0;
+      const optionApplicationNumber = normalizeAidCsvText(option.application_number);
+      const optionStoredBeneficiaryName = normalizeAidCsvText(option.name_of_beneficiary);
+      const optionInstitutionName = normalizeAidCsvText(option.name_of_institution);
+      const optionBeneficiary = normalizeAidCsvText(option.recipient_name || option.district_name || option.name_of_institution);
+      const optionDetails = normalizeAidCsvText(option.details);
+      const optionFundRequested = normalizeAidCsvAmount(option.fund_requested);
+
+      if (applicationNumber) {
+        if (optionApplicationNumber !== applicationNumber) {
+          return null;
+        }
+        score += 10;
       }
-      if (nameOfBeneficiary && String(option.name_of_beneficiary || option.recipient_name || '').trim().toLowerCase() !== nameOfBeneficiary) {
-        return false;
+      if (nameOfBeneficiary) {
+        if (optionStoredBeneficiaryName && optionStoredBeneficiaryName !== nameOfBeneficiary) {
+          return null;
+        }
+        if (optionStoredBeneficiaryName === nameOfBeneficiary) {
+          score += 4;
+        }
       }
-      if (nameOfInstitution && String(option.name_of_institution || '').trim().toLowerCase() !== nameOfInstitution) {
-        return false;
+      if (nameOfInstitution) {
+        if (optionInstitutionName && optionInstitutionName !== nameOfInstitution) {
+          return null;
+        }
+        if (optionInstitutionName === nameOfInstitution) {
+          score += 4;
+        }
       }
       if (beneficiary) {
-        const candidate = String(option.recipient_name || option.district_name || option.name_of_institution || '').trim().toLowerCase();
-        if (candidate !== beneficiary) return false;
+        if (optionBeneficiary !== beneficiary) {
+          return null;
+        }
+        score += 3;
       }
-      return true;
+      if (details) {
+        if (optionDetails !== details) {
+          return null;
+        }
+        score += 5;
+      }
+      if (fundRequested) {
+        if (optionFundRequested !== fundRequested) {
+          return null;
+        }
+        score += 5;
+      }
+      return score > 0 ? { option: option, score: score } : null;
+    }).filter(Boolean);
+
+    if (!candidates.length) {
+      return null;
+    }
+    candidates.sort(function(a, b) {
+      return b.score - a.score;
     });
-    return matched ? { typeValue: typeValue, payload: matched } : null;
+    if (candidates.length === 1) {
+      return { typeValue: typeValue, payload: candidates[0].option };
+    }
+    if (candidates[0].score === candidates[1].score) {
+      return null;
+    }
+    return { typeValue: typeValue, payload: candidates[0].option };
   }
 
   function applyCsvRecordToRow(row, record, typeValue, payload) {
@@ -1308,11 +1476,13 @@
       showAidCsvFeedback('Select an aid first before uploading a CSV.', 'warning');
       return;
     }
+    ensureAidAvailabilityLoaded();
     uploadAidCsvInput.click();
   });
-  uploadAidCsvInput.addEventListener('change', function() {
+  uploadAidCsvInput.addEventListener('change', async function() {
     const file = uploadAidCsvInput.files && uploadAidCsvInput.files[0];
     if (!file) return;
+    await ensureAidAvailabilityLoaded();
     const reader = new FileReader();
     reader.onload = function() {
       const rows = parseCsv(String(reader.result || ''));
@@ -1380,12 +1550,14 @@
   });
 
   requestTypeRadios.forEach(function(radio) { radio.addEventListener('change', function() { setRequestType(radio.value); }); });
-  aidTypeSelect.addEventListener('change', async function() {
-    await loadAidAvailability();
-    recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
-      if (!row.hidden) loadAidOptions(row, false);
+  if (aidTypeSelect) {
+    aidTypeSelect.addEventListener('change', async function() {
+      await ensureAidAvailabilityLoaded();
+      recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
+        if (!row.hidden) loadAidOptions(row, false);
+      });
     });
-  });
+  }
 
   recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
     initRecipientRow(row);
@@ -1397,7 +1569,7 @@
   refreshAllArticleSelects();
   setQuickPopulateExpanded(true);
   toggleSections();
-  loadAidAvailability().then(function() {
+  ensureAidAvailabilityLoaded().then(function() {
     recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
       const typeField = row.querySelector('select[name$="-beneficiary_type"]');
       if (aidTypeSelect.value && typeField && typeField.value) {

@@ -243,6 +243,8 @@
         </div>
 
         <div style="grid-column: span 2;" id="public-cheque-wrap" {% if public_entry.article.item_type != "Aid" and public_form_data.article_id %}hidden{% endif %}>
+          <label>Name of Institution</label>
+          <input class="input" type="text" name="name_of_institution" id="public-name-of-institution" value="{{ public_form_data.name_of_institution }}" placeholder="Optional" style="margin-bottom:10px;">
           <label>Cheque / RTGS in Favour</label>
           <textarea class="textarea" name="cheque_rtgs_in_favour" id="public-cheque-rtgs" rows="2">{{ public_form_data.cheque_rtgs_in_favour }}</textarea>
         </div>
@@ -512,9 +514,13 @@
         const quantity = Number(quantityInput.value || 0);
         if (chequeWrap) {
           const showCheque = itemType === "Aid";
+          const institutionNameInput = document.getElementById("public-name-of-institution");
           chequeWrap.hidden = !showCheque;
           if (!showCheque && chequeInput) {
             chequeInput.value = "";
+          }
+          if (!showCheque && institutionNameInput) {
+            institutionNameInput.value = "";
           }
         }
         const cost = Number(unitCostInput.value || 0);

@@ -3,7 +3,7 @@
 {% block content %}
   <section class="card" style="max-width: 620px;">
     <h2 style="margin-top: 0;">Delete fund request</h2>
-    <p>Delete {{ object.fund_request_number|default:"this draft fund request" }}?</p>
+    <p>Delete {{ object.formatted_fund_request_number|default:"this draft fund request" }}?</p>
     <form method="post" data-confirm-message="Delete this fund request?">
       {% csrf_token %}
       <button class="btn btn-danger" type="submit">Delete</button>

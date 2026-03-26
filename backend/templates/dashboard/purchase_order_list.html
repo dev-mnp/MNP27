@@ -1,0 +1,492 @@
+{% extends "base.html" %}
+{% load currency %}
+
+{% block content %}
+  <section class="card">
+    <style>
+      .purchase-order-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        justify-content: flex-start;
+        flex-wrap: nowrap;
+      }
+      .purchase-order-actions form {
+        display: inline-flex;
+        margin: 0;
+      }
+      .purchase-order-actions .icon-btn {
+        width: 28px;
+        min-width: 28px;
+        height: 28px;
+        padding: 0;
+        border: none;
+        background: transparent;
+        box-shadow: none;
+      }
+      .purchase-order-actions .icon-btn svg {
+        width: 14px;
+        height: 14px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .purchase-order-actions .po-download-btn,
+      .purchase-order-actions .po-edit-btn,
+      .purchase-order-actions .po-reopen-btn {
+        color: #2563eb;
+      }
+      .purchase-order-actions .po-submit-btn {
+        color: #16a34a;
+      }
+      .purchase-order-actions .po-delete-btn {
+        color: #dc2626;
+      }
+      .purchase-order-actions .icon-btn:hover {
+        background: transparent;
+        transform: none;
+        box-shadow: none;
+      }
+      .purchase-order-sort-link {
+        color: inherit;
+        text-decoration: none;
+      }
+      .purchase-order-sort-link:hover {
+        color: inherit;
+        text-decoration: none;
+      }
+      .purchase-order-filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .purchase-order-search {
+        flex: 1 1 260px;
+        min-width: 260px;
+        max-width: 420px;
+      }
+      .purchase-order-status-filter {
+        min-width: 140px;
+        width: 140px;
+      }
+      .list-view-controls {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .list-text-btn {
+        min-height: 30px;
+        padding: 6px 10px;
+        border-radius: 8px;
+        border-color: #dbe3f0;
+        background: #f8fafc;
+        color: #64748b;
+        font-size: 0.82rem;
+        font-weight: 600;
+      }
+      .list-text-btn:hover {
+        background: #eff6ff;
+        color: #1d4ed8;
+      }
+      .summary-parent-row {
+        cursor: pointer;
+      }
+      .summary-parent-row:hover td {
+        background: rgba(37, 99, 235, 0.06);
+      }
+      .summary-toggle {
+        border: 0;
+        background: transparent;
+        padding: 0;
+        color: inherit;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font: inherit;
+        pointer-events: none;
+      }
+      .summary-arrow {
+        display: inline-block;
+        transition: transform 0.18s ease;
+        color: #64748b;
+      }
+      .summary-toggle[aria-expanded="true"] .summary-arrow {
+        transform: rotate(90deg);
+      }
+      .summary-row td {
+        background: #f8fbff;
+        padding: 0;
+        text-align: left;
+      }
+      .summary-card {
+        padding: 16px;
+        border-top: 1px solid #dbe3f0;
+      }
+      .summary-meta-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px 18px;
+        margin-bottom: 16px;
+      }
+      .summary-meta-item {
+        display: grid;
+        gap: 4px;
+      }
+      .summary-meta-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #64748b;
+      }
+      .summary-section-title {
+        margin: 14px 0 8px;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--text-primary);
+      }
+      .summary-comments {
+        padding: 12px 14px;
+        background: #fff;
+        border: 1px solid #dbe7f4;
+        border-radius: 12px;
+        white-space: pre-wrap;
+        line-height: 1.45;
+      }
+      .summary-detail-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        text-align: left;
+      }
+      .summary-detail-table th,
+      .summary-detail-table td {
+        vertical-align: top;
+        text-align: left;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        line-height: 1.35;
+        padding: 10px 14px;
+      }
+      .summary-detail-table th {
+        font-size: 0.84rem;
+        font-weight: 700;
+      }
+      .summary-detail-table td {
+        font-size: 0.82rem;
+      }
+      .summary-detail-table th:first-child,
+      .summary-detail-table td:first-child {
+        padding-left: 0;
+      }
+      .summary-detail-table th:last-child,
+      .summary-detail-table td:last-child {
+        padding-right: 0;
+      }
+      .purchase-order-table {
+        table-layout: auto;
+      }
+      .purchase-order-table th,
+      .purchase-order-table td {
+        padding: 8px 6px;
+        text-align: left;
+      }
+      .purchase-order-table th:nth-child(1),
+      .purchase-order-table td:nth-child(1) {
+        width: 150px;
+        min-width: 150px;
+      }
+      .purchase-order-table th:nth-child(2),
+      .purchase-order-table td:nth-child(2) {
+        width: 180px;
+        min-width: 180px;
+      }
+      .purchase-order-table th:nth-child(3),
+      .purchase-order-table td:nth-child(3) {
+        width: 90px;
+        min-width: 90px;
+      }
+      .purchase-order-table th:nth-child(4),
+      .purchase-order-table td:nth-child(4) {
+        width: 100px;
+        min-width: 100px;
+      }
+      .purchase-order-table th:nth-child(5),
+      .purchase-order-table td:nth-child(5) {
+        width: 90px;
+        min-width: 90px;
+      }
+      .purchase-order-table th:nth-child(6),
+      .purchase-order-table td:nth-child(6) {
+        width: 120px;
+        min-width: 120px;
+      }
+      .purchase-order-table th:last-child,
+      .purchase-order-table td:last-child {
+        width: 72px;
+        min-width: 72px;
+        white-space: nowrap;
+      }
+      .purchase-order-table td:last-child {
+        text-align: left;
+      }
+      @media (max-width: 900px) {
+        .summary-meta-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+    </style>
+
+    <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
+      <div>
+        <h2 style="margin: 0 0 6px 0;">Purchase Order</h2>
+      </div>
+      {% if can_create_edit %}
+        <a class="btn" href="{% url 'ui:purchase-order-create' %}">Create</a>
+      {% endif %}
+    </div>
+
+    <form method="get" class="purchase-order-filter-bar">
+      <input class="input purchase-order-search" type="search" name="q" value="{{ filters.q }}" placeholder="Search everything: PO no, vendor, item, supplier article, description, comments">
+      <select class="input purchase-order-status-filter" name="status">
+        {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn" type="submit">Filter</button>
+      <a class="btn" href="{% url 'ui:purchase-order-list' %}">Clear</a>
+    </form>
+
+    <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">
+      <div class="list-view-controls">
+        <button class="btn list-text-btn" type="button" data-expand-all>Expand All</button>
+        <button class="btn list-text-btn" type="button" data-collapse-all>Collapse All</button>
+      </div>
+    </div>
+
+    <table class="purchase-order-table">
+      <thead>
+        <tr>
+          <th><a class="purchase-order-sort-link" href="?{{ sort_querystrings.purchase_order_number }}">PO # {% if current_sort == 'purchase_order_number' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+          <th><a class="purchase-order-sort-link" href="?{{ sort_querystrings.vendor_name }}">Vendor {% if current_sort == 'vendor_name' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+          <th>Items</th>
+          <th><a class="purchase-order-sort-link" href="?{{ sort_querystrings.total_amount }}">Total {% if current_sort == 'total_amount' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+          <th><a class="purchase-order-sort-link" href="?{{ sort_querystrings.status }}">Status {% if current_sort == 'status' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+          <th><a class="purchase-order-sort-link" href="?{{ sort_querystrings.created_at }}">Created {% if current_sort == 'created_at' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+          <th style="text-align:left;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for purchase_order in purchase_orders %}
+          <tr class="summary-parent-row" data-summary-parent>
+            <td>
+              <button class="summary-toggle" type="button" aria-expanded="false" data-summary-toggle>
+                <span class="summary-arrow">▶</span>
+                <span>{{ purchase_order.purchase_order_number|default:"-" }}</span>
+              </button>
+            </td>
+            <td>
+              <div>{{ purchase_order.vendor_name|default:"-" }}</div>
+              <div class="small" style="color: var(--text-secondary);">
+                {% if purchase_order.vendor_city or purchase_order.vendor_state %}
+                  {{ purchase_order.vendor_city|default:"" }}{% if purchase_order.vendor_city and purchase_order.vendor_state %}, {% endif %}{{ purchase_order.vendor_state|default:"" }}
+                {% else %}
+                  -
+                {% endif %}
+              </div>
+            </td>
+            <td>{{ purchase_order.item_count }} item(s)</td>
+            <td>Rs.{{ purchase_order.total_amount|rupees }}</td>
+            <td>{{ purchase_order.get_status_display }}</td>
+            <td>{{ purchase_order.created_at|date:"d/m/Y H:i" }}</td>
+            <td style="text-align:left;">
+              <div class="purchase-order-actions">
+                <a class="btn icon-btn po-download-btn" href="{% url 'ui:purchase-order-pdf' purchase_order.id %}" title="Download Purchase Order PDF" aria-label="Download Purchase Order PDF" target="_blank" rel="noopener">
+                  <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                </a>
+                {% if can_create_edit and purchase_order.status == 'draft' %}
+                  <a class="btn icon-btn po-edit-btn" href="{% url 'ui:purchase-order-edit' purchase_order.id %}" title="Edit" aria-label="Edit">
+                    <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  </a>
+                {% endif %}
+                {% if can_submit and purchase_order.status == 'draft' %}
+                  <form method="post" action="{% url 'ui:purchase-order-submit' purchase_order.id %}">
+                    {% csrf_token %}
+                    <button class="btn icon-btn po-submit-btn" type="submit" title="Submit" aria-label="Submit">
+                      <svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                    </button>
+                  </form>
+                {% endif %}
+                {% if can_reopen and request.user.role == 'admin' and purchase_order.status == 'submitted' %}
+                  <form method="post" action="{% url 'ui:purchase-order-reopen' purchase_order.id %}">
+                    {% csrf_token %}
+                    <button class="btn icon-btn po-reopen-btn" type="submit" title="Reopen" aria-label="Reopen">
+                      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.708"/><path d="M3 3v6h6"/></svg>
+                    </button>
+                  </form>
+                {% endif %}
+                {% if can_delete and request.user.role == 'admin' %}
+                  <a class="btn icon-btn po-delete-btn" href="{% url 'ui:purchase-order-delete' purchase_order.id %}" title="Delete" aria-label="Delete">
+                    <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                  </a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          <tr class="summary-row" data-summary-row hidden>
+            <td colspan="7">
+              <div class="summary-card">
+                <div class="summary-meta-grid">
+                  <div class="summary-meta-item">
+                    <span class="summary-meta-label">PO Number</span>
+                    <span>{{ purchase_order.purchase_order_number|default:"-" }}</span>
+                  </div>
+                  <div class="summary-meta-item">
+                    <span class="summary-meta-label">Vendor Name</span>
+                    <span>{{ purchase_order.vendor_name|default:"-" }}</span>
+                  </div>
+                  <div class="summary-meta-item">
+                    <span class="summary-meta-label">Status</span>
+                    <span>{{ purchase_order.get_status_display }}</span>
+                  </div>
+                  <div class="summary-meta-item">
+                    <span class="summary-meta-label">Created</span>
+                    <span>{{ purchase_order.created_at|date:"d/m/Y H:i" }}</span>
+                  </div>
+                  <div class="summary-meta-item">
+                    <span class="summary-meta-label">Vendor Address</span>
+                    <span>{{ purchase_order.vendor_address|default:"-" }}</span>
+                  </div>
+                  <div class="summary-meta-item">
+                    <span class="summary-meta-label">City</span>
+                    <span>{{ purchase_order.vendor_city|default:"-" }}</span>
+                  </div>
+                  <div class="summary-meta-item">
+                    <span class="summary-meta-label">State</span>
+                    <span>{{ purchase_order.vendor_state|default:"-" }}</span>
+                  </div>
+                  <div class="summary-meta-item">
+                    <span class="summary-meta-label">Pincode</span>
+                    <span>{{ purchase_order.vendor_pincode|default:"-" }}</span>
+                  </div>
+                  <div class="summary-meta-item">
+                    <span class="summary-meta-label">Created By</span>
+                    <span>
+                      {% if purchase_order.created_by %}
+                        {{ purchase_order.created_by.get_full_name|default:purchase_order.created_by.email }}
+                      {% else %}
+                        -
+                      {% endif %}
+                    </span>
+                  </div>
+                  <div class="summary-meta-item">
+                    <span class="summary-meta-label">Item Count</span>
+                    <span>{{ purchase_order.item_count }}</span>
+                  </div>
+                  <div class="summary-meta-item">
+                    <span class="summary-meta-label">Total Quantity</span>
+                    <span>{{ purchase_order.items_total_quantity }}</span>
+                  </div>
+                  <div class="summary-meta-item">
+                    <span class="summary-meta-label">Total Amount</span>
+                    <span>Rs.{{ purchase_order.total_amount|rupees }}</span>
+                  </div>
+                </div>
+
+                <div class="summary-section-title">Comments or Special Instructions</div>
+                <div class="summary-comments">{{ purchase_order.display_comments }}</div>
+
+                <div class="summary-section-title">Items</div>
+                <table class="summary-detail-table">
+                  <colgroup>
+                    <col style="width: 18%;">
+                    <col style="width: 20%;">
+                    <col style="width: 28%;">
+                    <col style="width: 8%;">
+                    <col style="width: 13%;">
+                    <col style="width: 13%;">
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th>Article</th>
+                      <th>Supplier Article Name</th>
+                      <th>Description</th>
+                      <th>Qty</th>
+                      <th>Unit Price</th>
+                      <th>Line Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for item in purchase_order.items.all %}
+                      <tr>
+                        <td>{{ item.article_name|default:"-" }}</td>
+                        <td>{{ item.supplier_article_name|default:"-" }}</td>
+                        <td>{{ item.description|default:"-" }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>Rs.{{ item.unit_price|rupees }}</td>
+                        <td>Rs.{{ item.total_value|rupees }}</td>
+                      </tr>
+                    {% empty %}
+                      <tr>
+                        <td colspan="6">No items added yet.</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7">No purchase orders found.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <script>
+    (function() {
+      const parentRows = Array.from(document.querySelectorAll('[data-summary-parent]'));
+
+      function setRowExpanded(parentRow, expanded) {
+        const toggle = parentRow.querySelector('[data-summary-toggle]');
+        const detailRow = parentRow.nextElementSibling;
+        if (!toggle || !detailRow || !detailRow.hasAttribute('data-summary-row')) return;
+        toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        detailRow.hidden = !expanded;
+      }
+
+      parentRows.forEach(function(parentRow) {
+        parentRow.addEventListener('click', function(event) {
+          if (event.target.closest('a, button, form')) {
+            if (!event.target.closest('[data-summary-toggle]')) {
+              return;
+            }
+          }
+          const toggle = parentRow.querySelector('[data-summary-toggle]');
+          const expanded = toggle && toggle.getAttribute('aria-expanded') === 'true';
+          setRowExpanded(parentRow, !expanded);
+        });
+      });
+
+      const expandAllButton = document.querySelector('[data-expand-all]');
+      if (expandAllButton) {
+        expandAllButton.addEventListener('click', function() {
+          parentRows.forEach(function(row) { setRowExpanded(row, true); });
+        });
+      }
+
+      const collapseAllButton = document.querySelector('[data-collapse-all]');
+      if (collapseAllButton) {
+        collapseAllButton.addEventListener('click', function() {
+          parentRows.forEach(function(row) { setRowExpanded(row, false); });
+        });
+      }
+    })();
+  </script>
+{% endblock %}

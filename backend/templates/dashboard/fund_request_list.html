@@ -6,23 +6,28 @@
     <style>
       .fund-request-actions {
         flex-wrap: nowrap;
-        gap: 6px !important;
+        gap: 2px !important;
         align-items: center;
+        justify-content: flex-end;
       }
       .fund-request-actions form {
         display: inline-flex;
         margin: 0;
       }
       .fund-request-actions .icon-btn {
-        width: 36px;
-        min-width: 36px;
-        height: 36px;
+        width: 28px;
+        min-width: 28px;
+        height: 28px;
       }
       .fund-request-actions .icon-btn {
         border: none;
         background: transparent;
         box-shadow: none;
         padding: 0;
+      }
+      .fund-request-actions .icon-btn svg {
+        width: 14px;
+        height: 14px;
       }
       .fund-request-actions .icon-btn svg { stroke: currentColor; }
       .fund-request-actions .fund-request-neutral-action.icon-btn {
@@ -41,6 +46,231 @@
       }
       .fund-request-actions .btn-reopen.icon-btn:hover {
         color: #1d4ed8;
+      }
+      .fund-request-actions .fund-request-delete-btn.icon-btn {
+        width: 36px;
+        min-width: 36px;
+        height: 36px;
+        padding: 0;
+        border-radius: 999px;
+        background: transparent;
+        border: none;
+        color: #dc2626;
+      }
+      .fund-request-actions .fund-request-delete-btn.icon-btn:hover {
+        background: transparent;
+        color: #b91c1c;
+      }
+      .list-view-controls {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .list-icon-btn {
+        width: 28px;
+        min-width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        border-color: #dbe3f0;
+        background: #f8fafc;
+        color: #64748b;
+      }
+      .list-icon-btn svg {
+        width: 14px;
+        height: 14px;
+      }
+      .list-icon-btn:hover {
+        background: #eff6ff;
+        color: #1d4ed8;
+      }
+      .summary-parent-row {
+        cursor: pointer;
+      }
+      .summary-parent-row:hover td {
+        background: rgba(37, 99, 235, 0.06);
+      }
+      .summary-toggle {
+        border: 0;
+        background: transparent;
+        padding: 0;
+        color: inherit;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font: inherit;
+        pointer-events: none;
+      }
+      .summary-arrow {
+        display: inline-block;
+        transition: transform 0.18s ease;
+        color: #64748b;
+      }
+      .summary-toggle[aria-expanded="true"] .summary-arrow {
+        transform: rotate(90deg);
+      }
+      .summary-row td {
+        background: #f8fbff;
+        padding: 0;
+        text-align: left;
+      }
+      .summary-card {
+        padding: 16px;
+        border-top: 1px solid #dbe3f0;
+      }
+      .summary-detail-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        text-align: left;
+      }
+      .summary-detail-table th,
+      .summary-detail-table td {
+        vertical-align: top;
+        text-align: left;
+        max-width: 0;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        line-height: 1.35;
+        padding: 10px 14px;
+      }
+      .summary-detail-table th {
+        font-size: 0.84rem;
+        font-weight: 700;
+      }
+      .summary-detail-table td {
+        font-size: 0.82rem;
+      }
+      .summary-detail-table th:first-child,
+      .summary-detail-table td:first-child {
+        padding-left: 0;
+      }
+      .summary-detail-table th:last-child,
+      .summary-detail-table td:last-child {
+        padding-right: 0;
+        text-align: left;
+      }
+      .summary-detail-table .summary-col-tight {
+        white-space: nowrap;
+      }
+      .summary-detail-table .summary-col-wrap {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+      .summary-cell-wrap {
+        display: block;
+        max-width: 220px;
+        text-align: left;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+      .summary-detail-table--aid col:nth-child(6) {
+        width: 13% !important;
+      }
+      .summary-detail-table--aid col:nth-child(7) {
+        width: 17% !important;
+      }
+      .summary-detail-table--article col:nth-child(6) {
+        width: 22% !important;
+      }
+      .summary-detail-table .summary-col-wide {
+        min-width: 180px;
+      }
+      .summary-detail-table .summary-col-medium {
+        min-width: 140px;
+      }
+      .summary-meta-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px 18px;
+        margin-bottom: 14px;
+      }
+      .summary-meta-item {
+        display: grid;
+        gap: 4px;
+      }
+      .summary-meta-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #64748b;
+      }
+      .summary-section-title {
+        margin: 14px 0 8px;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--text-primary);
+      }
+      .summary-section-meta {
+        margin: 0 0 10px;
+        color: #64748b;
+        font-size: 0.9rem;
+      }
+      .fund-request-table {
+        table-layout: auto;
+      }
+      .fund-request-table th,
+      .fund-request-table td {
+        padding: 8px 6px;
+      }
+      .fund-request-table th:nth-child(1),
+      .fund-request-table td:nth-child(1) {
+        width: 120px;
+        min-width: 120px;
+      }
+      .fund-request-table th:nth-child(2),
+      .fund-request-table td:nth-child(2) {
+        width: 60px;
+        min-width: 60px;
+      }
+      .fund-request-table th:nth-child(3),
+      .fund-request-table td:nth-child(3) {
+        width: 130px;
+        min-width: 130px;
+      }
+      .fund-request-table th:nth-child(4),
+      .fund-request-table td:nth-child(4) {
+        width: 90px;
+        min-width: 90px;
+      }
+      .fund-request-table th:nth-child(5),
+      .fund-request-table td:nth-child(5) {
+        width: 90px;
+        min-width: 90px;
+      }
+      .fund-request-table th:nth-child(6),
+      .fund-request-table td:nth-child(6) {
+        width: 90px;
+        min-width: 90px;
+      }
+      .fund-request-table th:nth-child(7),
+      .fund-request-table td:nth-child(7) {
+        width: 120px;
+        min-width: 120px;
+      }
+      .fund-request-table th:last-child,
+      .fund-request-table td:last-child {
+        width: 68px;
+        min-width: 68px;
+        white-space: nowrap;
+      }
+      .fund-request-table td:last-child {
+        text-align: right;
+      }
+      @media (max-width: 900px) {
+        .summary-meta-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 640px) {
+        .summary-card {
+          padding: 12px;
+        }
+        .summary-meta-grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
     <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
@@ -67,37 +297,60 @@
     </div>
     <form method="get" class="card" id="fund-request-filter-form" style="margin-bottom: 16px; padding: 16px; background: var(--panel-bg-muted);">
       <div class="toolbar" style="gap: 10px; flex-wrap: wrap; margin-bottom: 0;">
-      <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Search request number or item type" style="min-width: 280px; flex: 1 1 280px;" />
+      <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Search everything: request #, PO, supplier, notes, recipient, article..." style="min-width: 320px; flex: 1 1 320px;" />
+      <input class="input" type="text" name="supplier" value="{{ filters.supplier }}" placeholder="Filter supplier" style="width: 220px;" />
       <select class="input" name="request_type" style="width: 180px;">
         <option value="">All Types</option>
         {% for value, label in request_type_choices %}
           <option value="{{ value }}" {% if filters.request_type == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
-      {% if filters.status %}
-        <input type="hidden" name="status" value="{{ filters.status }}" />
-      {% endif %}
-      <a class="btn" href="{% url 'ui:fund-request-list' %}{% if filters.status %}?status={{ filters.status }}{% endif %}">Clear All</a>
+      <select class="input" name="status" style="width: 180px;">
+        <option value="">All Statuses</option>
+        {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <input type="hidden" name="sort" value="{{ current_sort }}" />
+      <input type="hidden" name="dir" value="{{ current_dir }}" />
+      <a class="btn" href="{% url 'ui:fund-request-list' %}">Clear All</a>
       </div>
     </form>
-    <table>
+    <div class="toolbar" style="justify-content: space-between;">
+      <div class="toolbar" style="margin-bottom: 0;">
+        <div class="list-view-controls" aria-label="Fund request expand controls">
+          <button class="icon-btn list-icon-btn" type="button" data-expand-all="fund-request" title="Expand all" aria-label="Expand all">
+            <svg viewBox="0 0 24 24"><path d="M7 3H3v4"/><path d="M17 3h4v4"/><path d="M21 17v4h-4"/><path d="M3 17v4h4"/><path d="M8 8l-5-5"/><path d="M16 8l5-5"/><path d="M8 16l-5 5"/><path d="M16 16l5 5"/></svg>
+          </button>
+          <button class="icon-btn list-icon-btn" type="button" data-collapse-all="fund-request" title="Collapse all" aria-label="Collapse all">
+            <svg viewBox="0 0 24 24"><path d="M9 3H3v6"/><path d="M15 3h6v6"/><path d="M21 15v6h-6"/><path d="M3 15v6h6"/><path d="M3 9l6-6"/><path d="M21 9l-6-6"/><path d="M3 15l6 6"/><path d="M21 15l-6 6"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+    <table class="fund-request-table">
       <thead>
         <tr>
-          <th>Request #</th>
-          <th>Type</th>
-          <th>Item Type</th>
+          <th><a href="?{{ sort_querystrings.fund_request_number }}">Request #</a></th>
+          <th><a href="?{{ sort_querystrings.fund_request_type }}">Type</a></th>
+          <th><a href="?{{ sort_querystrings.item_type }}">Item Type</a></th>
           <th>Recipients / Items</th>
-          <th>Total</th>
-          <th>Status</th>
-          <th>Created</th>
+          <th><a href="?{{ sort_querystrings.total_amount }}">Total</a></th>
+          <th><a href="?{{ sort_querystrings.status }}">Status</a></th>
+          <th><a href="?{{ sort_querystrings.created_at }}">Created</a></th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody>
         {% with module_perms=request.user.get_module_permission_map %}
         {% for fr in fund_requests %}
-          <tr>
-            <td>{{ fr.fund_request_number|default:"Draft" }}</td>
+          <tr class="summary-parent-row" data-target="fund-request-extra-{{ fr.id }}">
+            <td>
+              <button class="summary-toggle" type="button" data-target="fund-request-extra-{{ fr.id }}">
+                <span class="summary-arrow">▸</span>
+                <span>{{ fr.formatted_fund_request_number|default:"Draft" }}</span>
+              </button>
+            </td>
             <td>{{ fr.get_fund_request_type_display }}</td>
             <td>{% if fr.fund_request_type == "Aid" %}{{ fr.aid_type|default:"-" }}{% else %}Articles{% endif %}</td>
             <td>{% if fr.fund_request_type == "Aid" %}{{ fr.recipients.count }} recipient(s){% else %}{{ fr.articles.count }} item(s){% endif %}</td>
@@ -106,9 +359,6 @@
             <td>{{ fr.created_at|date:"d/m/Y H:i" }}</td>
             <td>
               <div class="actions-inline fund-request-actions">
-              <a class="btn icon-btn fund-request-neutral-action" title="View" aria-label="View" href="{% url 'ui:fund-request-detail' fr.id %}">
-                <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-              </a>
               <a class="btn icon-btn fund-request-neutral-action" title="Download PDF" aria-label="Download PDF" href="{% url 'ui:fund-request-pdf' fr.id %}" target="_blank" rel="noopener">
                 <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
               </a>
@@ -125,11 +375,96 @@
                   </button>
                 </form>
               {% endif %}
-              {% if request.user.role == "admin" %}
-                <a class="btn btn-danger icon-btn" title="Delete" aria-label="Delete" href="{% url 'ui:fund-request-delete' fr.id %}">
+              {% if request.user.role == "admin" and module_perms.order_fund_request.can_delete %}
+                <a class="btn icon-btn fund-request-delete-btn" title="Delete" aria-label="Delete" href="{% url 'ui:fund-request-delete' fr.id %}">
                   <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
                 </a>
               {% endif %}
+              </div>
+            </td>
+          </tr>
+          <tr id="fund-request-extra-{{ fr.id }}" class="summary-row" hidden>
+            <td colspan="8">
+              <div class="summary-card">
+                {% if fr.fund_request_type == "Article" %}
+                  {% if fr.articles.all %}
+                    <table class="summary-detail-table summary-detail-table--article">
+                      <colgroup>
+                        <col style="width: 26%;">
+                        <col style="width: 10%;">
+                        <col style="width: 12%;">
+                        <col style="width: 12%;">
+                        <col style="width: 14%;">
+                        <col style="width: 26%;">
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th>Article</th>
+                          <th class="summary-col-tight">Quantity</th>
+                          <th class="summary-col-tight">Unit Price</th>
+                          <th class="summary-col-tight">Line Total</th>
+                          <th>GST Number</th>
+                          <th class="summary-col-wrap">Cheque / RTGS in Favour</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for article in fr.articles.all %}
+                          <tr>
+                            <td>{{ article.article_name }}</td>
+                            <td class="summary-col-tight">{{ article.quantity }}</td>
+                            <td class="summary-col-tight">Rs.{{ article.unit_price|rupees }}</td>
+                            <td class="summary-col-tight">Rs.{{ article.value|rupees }}</td>
+                            <td>{{ article.gst_no|default:"-" }}</td>
+                            <td class="summary-col-wrap"><div class="summary-cell-wrap">{{ article.cheque_in_favour|default:"-" }}</div></td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  {% endif %}
+                {% else %}
+                  {% if fr.recipients.all %}
+                    <table class="summary-detail-table summary-detail-table--aid">
+                      <colgroup>
+                        <col style="width: 12%;">
+                        <col style="width: 12%;">
+                        <col style="width: 16%;">
+                        <col style="width: 16%;">
+                        <col style="width: 14%;">
+                        <col style="width: 15%;">
+                        <col style="width: 15%;">
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th>Beneficiary Type</th>
+                          <th class="summary-col-tight">Fund Requested</th>
+                          <th>Name of Beneficiary</th>
+                          <th>Name of Institution</th>
+                          <th class="summary-col-tight">Aadhaar Number</th>
+                          <th class="summary-col-wrap">Details</th>
+                          <th class="summary-col-wrap">Cheque / RTGS in Favour</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for recipient in fr.recipients.all %}
+                          <tr>
+                            <td>{{ recipient.beneficiary_type|default:"-" }}</td>
+                            <td class="summary-col-tight">Rs.{{ recipient.fund_requested|rupees }}</td>
+                            <td>{{ recipient.name_of_beneficiary|default:"-" }}</td>
+                            <td>{{ recipient.name_of_institution|default:"-" }}</td>
+                            <td class="summary-col-tight">{{ recipient.aadhar_number|default:"-" }}</td>
+                            <td class="summary-col-wrap"><div class="summary-cell-wrap">{{ recipient.details|default:"-" }}</div></td>
+                            <td class="summary-col-wrap"><div class="summary-cell-wrap">{{ recipient.cheque_in_favour|default:"-" }}</div></td>
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  {% endif %}
+                {% endif %}
+
+                {% if fr.notes %}
+                  <div class="summary-section-title">Notes</div>
+                  <div>{{ fr.notes }}</div>
+                {% endif %}
               </div>
             </td>
           </tr>
@@ -180,11 +515,83 @@
         }, 550);
       });
 
-      ['select[name="request_type"]'].forEach(function(selector) {
+      ['select[name="request_type"]', 'select[name="status"]', 'input[name="supplier"]'].forEach(function(selector) {
         var field = filterForm.querySelector(selector);
         if (!field) return;
-        field.addEventListener("change", function() {
+        var eventName = field.tagName === "INPUT" ? "input" : "change";
+        field.addEventListener(eventName, function() {
           filterForm.requestSubmit();
+        });
+      });
+
+      var toggles = Array.from(document.querySelectorAll(".summary-toggle"));
+      var parentRows = Array.from(document.querySelectorAll(".summary-parent-row"));
+
+      function setExpanded(button, expanded) {
+        var target = document.getElementById(button.dataset.target);
+        if (!target) return;
+        if (expanded) {
+          target.removeAttribute("hidden");
+          button.setAttribute("aria-expanded", "true");
+        } else {
+          target.setAttribute("hidden", "");
+          button.setAttribute("aria-expanded", "false");
+        }
+      }
+
+      function collapseOtherRows(activeButton) {
+        toggles.forEach(function(button) {
+          if (button !== activeButton) {
+            setExpanded(button, false);
+          }
+        });
+      }
+
+      function toggleFromButton(button) {
+        var isExpanded = button.getAttribute("aria-expanded") === "true";
+        if (!isExpanded) {
+          collapseOtherRows(button);
+        }
+        setExpanded(button, !isExpanded);
+      }
+
+      toggles.forEach(function(button) {
+        button.setAttribute("aria-expanded", "false");
+      });
+
+      parentRows.forEach(function(row) {
+        row.setAttribute("tabindex", "0");
+        row.setAttribute("role", "button");
+        row.setAttribute("aria-label", "Toggle fund request summary");
+        row.addEventListener("click", function(event) {
+          if (event.target.closest("a, button, input, select, textarea, label, form, summary")) return;
+          var toggle = row.querySelector(".summary-toggle");
+          if (!toggle) return;
+          toggleFromButton(toggle);
+        });
+        row.addEventListener("keydown", function(event) {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          if (event.target.closest("a, button, input, select, textarea, label, form, summary")) return;
+          event.preventDefault();
+          var toggle = row.querySelector(".summary-toggle");
+          if (!toggle) return;
+          toggleFromButton(toggle);
+        });
+      });
+
+      document.querySelectorAll("[data-expand-all]").forEach(function(button) {
+        button.addEventListener("click", function() {
+          toggles.forEach(function(toggle) {
+            setExpanded(toggle, true);
+          });
+        });
+      });
+
+      document.querySelectorAll("[data-collapse-all]").forEach(function(button) {
+        button.addEventListener("click", function() {
+          toggles.forEach(function(toggle) {
+            setExpanded(toggle, false);
+          });
         });
       });
     })();

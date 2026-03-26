@@ -15,8 +15,9 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib import messages
-from django.db import transaction
-from django.db.models import Q
+from django.db import IntegrityError, transaction
+from django.db.models import CharField, Q
+from django.db.models.functions import Cast
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -46,6 +47,8 @@ from .forms import (
     FundRequestArticleForm,
     FundRequestRecipientForm,
     MasterDataUploadForm,
+    PurchaseOrderForm,
+    PurchaseOrderItemForm,
 )
 
 FEMALE_STATUS_DESCRIPTIONS = {
@@ -820,6 +823,7 @@ class ApplicationAuditLogListView(LoginRequiredMixin, AdminRequiredMixin, ListVi
                 | Q(action_type__icontains=q)
                 | Q(user__email__icontains=q)
                 | Q(user__first_name__icontains=q)
+                | Q(user__last_name__icontains=q)
             )
         if application_type:
             queryset = queryset.filter(entity_type=application_type)
@@ -1143,6 +1147,7 @@ def _district_audit_snapshot(district):
                 "quantity": entry.quantity,
                 "unit_cost": str(entry.article_cost_per_unit or 0),
                 "total_amount": str(entry.total_amount or 0),
+                "name_of_institution": entry.name_of_institution or "",
                 "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour or "",
                 "notes": entry.notes or "",
             }
@@ -1168,6 +1173,7 @@ def _public_audit_snapshot(entry):
         "quantity": entry.quantity,
         "unit_cost": str(entry.article_cost_per_unit or 0),
         "total_amount": str(entry.total_amount or 0),
+        "name_of_institution": entry.name_of_institution or "",
         "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour or "",
         "notes": entry.notes or "",
         "status": entry.status or "",
@@ -1201,6 +1207,7 @@ def _institution_audit_snapshot(application_number):
                 "quantity": entry.quantity,
                 "unit_cost": str(entry.article_cost_per_unit or 0),
                 "total_amount": str(entry.total_amount or 0),
+                "name_of_institution": entry.name_of_institution or "",
                 "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour or "",
                 "notes": entry.notes or "",
             }
@@ -1405,7 +1412,7 @@ def _public_export_rows(filtered_entries):
             "Article Category": entry.article.category or "",
             "Super Category Article": entry.article.master_category or "",
             "Token Name": entry.article.article_name_tk or "",
-            "Internal Notes": entry.internal_notes or "",
+            "Internal Notes": "",
             "Comments": entry.notes or "",
         })
     return rows
@@ -1542,6 +1549,7 @@ def _build_district_entry_summaries():
                         "quantity": entry.quantity,
                         "unit_cost": entry.article_cost_per_unit,
                         "total_amount": entry.total_amount,
+                        "name_of_institution": entry.name_of_institution,
                         "notes": entry.notes,
                         "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour,
                         "changed_at": entry.updated_at,
@@ -1563,6 +1571,14 @@ def _filter_sort_district_summaries(summaries, *, search_query="", date_from="",
             or query in (row["district_name"] or "").lower()
             or query in (row.get("article_names") or "").lower()
             or query in (row.get("internal_notes") or "").lower()
+            or query in (row.get("status") or "").lower()
+            or any(
+                query in str(item.get("article_name") or "").lower()
+                or query in str(item.get("name_of_institution") or "").lower()
+                or query in str(item.get("notes") or "").lower()
+                or query in str(item.get("cheque_rtgs_in_favour") or "").lower()
+                for item in row.get("detail_items", [])
+            )
         ]
 
     if date_from:
@@ -1610,9 +1626,10 @@ def _parse_district_rows(post_data):
     quantities = post_data.getlist("quantity")
     unit_costs = post_data.getlist("unit_cost")
     notes_list = post_data.getlist("notes")
+    name_of_institution_list = post_data.getlist("name_of_institution")
     cheque_rtgs_list = post_data.getlist("cheque_rtgs_in_favour")
     rows = []
-    max_len = max(len(article_ids), len(quantities), len(unit_costs), len(notes_list), len(cheque_rtgs_list), 0)
+    max_len = max(len(article_ids), len(quantities), len(unit_costs), len(notes_list), len(name_of_institution_list), len(cheque_rtgs_list), 0)
     for idx in range(max_len):
         rows.append(
             {
@@ -1620,6 +1637,7 @@ def _parse_district_rows(post_data):
                 "quantity": (quantities[idx] if idx < len(quantities) else "").strip(),
                 "unit_cost": (unit_costs[idx] if idx < len(unit_costs) else "").strip(),
                 "notes": (notes_list[idx] if idx < len(notes_list) else "").strip(),
+                "name_of_institution": (name_of_institution_list[idx] if idx < len(name_of_institution_list) else "").strip(),
                 "cheque_rtgs_in_favour": (cheque_rtgs_list[idx] if idx < len(cheque_rtgs_list) else "").strip(),
             }
         )
@@ -1682,6 +1700,7 @@ def _validate_and_build_district_entries(district, raw_rows, *, internal_notes="
                 "article_cost_per_unit": unit_cost,
                 "quantity": quantity,
                 "total_amount": total_amount,
+                "name_of_institution": row["name_of_institution"] or None,
                 "cheque_rtgs_in_favour": row["cheque_rtgs_in_favour"] or None,
                 "notes": row["notes"] or None,
                 "internal_notes": internal_notes or None,
@@ -1773,6 +1792,7 @@ class DistrictMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, TemplateVi
                         "quantity": row["quantity"],
                         "unit_cost": row["unit_cost"],
                         "notes": row["notes"],
+                        "name_of_institution": row.get("name_of_institution", ""),
                         "cheque_rtgs_in_favour": row.get("cheque_rtgs_in_favour", ""),
                         "article_name": article.article_name if article else "",
                         "item_type": article.item_type if article else "",
@@ -1871,6 +1891,7 @@ class DistrictMasterEntryUpdateView(DistrictMasterEntryBaseView):
                 "quantity": entry.quantity,
                 "unit_cost": entry.article_cost_per_unit,
                 "notes": entry.notes or "",
+                "name_of_institution": entry.name_of_institution or "",
                 "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour or "",
                 "article_name": entry.article.article_name,
                 "item_type": entry.article.item_type,
@@ -2031,6 +2052,7 @@ def _build_public_form_data(post_data):
         "article_id": (post_data.get("article_id") or "").strip(),
         "article_cost_per_unit": (post_data.get("article_cost_per_unit") or "").strip(),
         "quantity": (post_data.get("quantity") or "").strip(),
+        "name_of_institution": (post_data.get("name_of_institution") or "").strip(),
         "cheque_rtgs_in_favour": (post_data.get("cheque_rtgs_in_favour") or "").strip(),
         "notes": (post_data.get("notes") or "").strip(),
     }
@@ -2155,6 +2177,7 @@ def _build_institution_entry_summaries():
                         "quantity": entry.quantity,
                         "unit_cost": entry.article_cost_per_unit,
                         "total_amount": entry.total_amount,
+                        "name_of_institution": entry.name_of_institution,
                         "notes": entry.notes,
                         "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour,
                         "changed_at": entry.updated_at,
@@ -2173,9 +2196,12 @@ def _filter_sort_public_entries(queryset, *, search_query="", date_from="", date
             Q(application_number__icontains=search_query)
             | Q(name__icontains=search_query)
             | Q(aadhar_number__icontains=search_query)
+            | Q(address__icontains=search_query)
             | Q(mobile__icontains=search_query)
             | Q(article__article_name__icontains=search_query)
-            | Q(internal_notes__icontains=search_query)
+            | Q(name_of_institution__icontains=search_query)
+            | Q(notes__icontains=search_query)
+            | Q(cheque_rtgs_in_favour__icontains=search_query)
         )
     if date_from:
         queryset = queryset.filter(created_at__date__gte=date_from)
@@ -2205,8 +2231,19 @@ def _filter_sort_institution_summaries(summaries, *, search_query="", date_from=
             row for row in summaries
             if query in (row["application_number"] or "").lower()
             or query in (row["institution_name"] or "").lower()
+            or query in (row.get("institution_type") or "").lower()
             or query in (row.get("article_names") or "").lower()
             or query in (row.get("internal_notes") or "").lower()
+            or query in (row.get("address") or "").lower()
+            or query in (row.get("mobile") or "").lower()
+            or query in (row.get("status") or "").lower()
+            or any(
+                query in str(item.get("article_name") or "").lower()
+                or query in str(item.get("name_of_institution") or "").lower()
+                or query in str(item.get("notes") or "").lower()
+                or query in str(item.get("cheque_rtgs_in_favour") or "").lower()
+                for item in row.get("detail_items", [])
+            )
         ]
 
     if date_from:
@@ -2304,6 +2341,7 @@ def _validate_institution_rows(raw_rows, *, require_complete=True, internal_note
                 "article_cost_per_unit": unit_cost,
                 "quantity": quantity,
                 "total_amount": unit_cost * quantity,
+                "name_of_institution": row.get("name_of_institution") or None,
                 "cheque_rtgs_in_favour": row.get("cheque_rtgs_in_favour") or None,
                 "notes": row["notes"] or None,
                 "internal_notes": internal_notes or None,
@@ -2342,6 +2380,9 @@ def _sync_district_entries(existing_entries, built_rows, user):
             changed = True
         if match.total_amount != built["total_amount"]:
             match.total_amount = built["total_amount"]
+            changed = True
+        if match.name_of_institution != built.get("name_of_institution"):
+            match.name_of_institution = built.get("name_of_institution")
             changed = True
         if match.cheque_rtgs_in_favour != built.get("cheque_rtgs_in_favour"):
             match.cheque_rtgs_in_favour = built.get("cheque_rtgs_in_favour")
@@ -2417,6 +2458,9 @@ def _sync_institution_entries(existing_entries, built_rows, user, *, application
             changed = True
         if match.total_amount != built["total_amount"]:
             match.total_amount = built["total_amount"]
+            changed = True
+        if match.name_of_institution != built.get("name_of_institution"):
+            match.name_of_institution = built.get("name_of_institution")
             changed = True
         if match.cheque_rtgs_in_favour != built.get("cheque_rtgs_in_favour"):
             match.cheque_rtgs_in_favour = built.get("cheque_rtgs_in_favour")
@@ -2522,6 +2566,7 @@ class PublicMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, TemplateView
         entry.article_cost_per_unit = unit_cost
         entry.quantity = quantity
         entry.total_amount = unit_cost * quantity
+        entry.name_of_institution = form_data["name_of_institution"] or None
         entry.cheque_rtgs_in_favour = form_data["cheque_rtgs_in_favour"] or None
         entry.notes = form_data["notes"] or None
         if target_status == models.BeneficiaryStatusChoices.SUBMITTED and (not entry.application_number or str(entry.application_number).startswith("DRAFT-PUB-")):
@@ -2610,6 +2655,7 @@ class PublicMasterEntryUpdateView(PublicMasterEntryBaseView):
                 "article_id": str(entry.article_id),
                 "article_cost_per_unit": str(entry.article_cost_per_unit),
                 "quantity": str(entry.quantity),
+                "name_of_institution": entry.name_of_institution or "",
                 "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour or "",
                 "notes": entry.notes or "",
             },
@@ -2768,6 +2814,7 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                         "quantity": row["quantity"],
                         "unit_cost": row["unit_cost"],
                         "notes": row["notes"],
+                        "name_of_institution": row.get("name_of_institution", ""),
                         "cheque_rtgs_in_favour": row.get("cheque_rtgs_in_favour", ""),
                         "article_name": article.article_name if article else "",
                         "item_type": article.item_type if article else "",
@@ -2902,6 +2949,7 @@ class InstitutionsMasterEntryUpdateView(InstitutionsMasterEntryBaseView):
                 "quantity": entry.quantity,
                 "unit_cost": entry.article_cost_per_unit,
                 "notes": entry.notes or "",
+                "name_of_institution": entry.name_of_institution or "",
                 "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour or "",
                 "article_name": entry.article.article_name,
                 "item_type": entry.article.item_type,
@@ -3826,6 +3874,14 @@ def _is_editable_by_user(user, fr):
     return fr.status == models.FundRequestStatusChoices.DRAFT
 
 
+def _is_editable_purchase_order(user, purchase_order):
+    if not user or not user.is_authenticated:
+        return False
+    if user.role not in {"admin", "editor"}:
+        return False
+    return purchase_order.status == models.FundRequestStatusChoices.DRAFT
+
+
 FundRequestRecipientFormSet = inlineformset_factory(
     models.FundRequest,
     models.FundRequestRecipient,
@@ -3838,6 +3894,14 @@ FundRequestArticleFormSet = inlineformset_factory(
     models.FundRequest,
     models.FundRequestArticle,
     form=FundRequestArticleForm,
+    extra=0,
+    can_delete=True,
+)
+
+PurchaseOrderItemFormSet = inlineformset_factory(
+    models.PurchaseOrder,
+    models.PurchaseOrderItem,
+    form=PurchaseOrderItemForm,
     extra=0,
     can_delete=True,
 )
@@ -3860,26 +3924,225 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
         queryset = (
             models.FundRequest.objects.select_related("created_by")
             .prefetch_related("recipients", "articles", "documents")
-            .order_by("-created_at")
         )
+        self._sort_key = (self.request.GET.get("sort") or "created_at").strip()
+        self._sort_dir = (self.request.GET.get("dir") or "desc").strip().lower()
         if q := (self.request.GET.get("q") or "").strip():
-            queryset = queryset.filter(Q(fund_request_number__icontains=q) | Q(aid_type__icontains=q) | Q(supplier_name__icontains=q))
+            fund_request_number_q = Q(fund_request_number__icontains=q)
+            parsed_request_number = models.parse_fund_request_sequence(q)
+            if parsed_request_number is not None:
+                alternate_terms = {
+                    models.format_fund_request_number(f"FR-{parsed_request_number}"),
+                    f"FR-{parsed_request_number}",
+                    f"FR{parsed_request_number}",
+                }
+                for term in alternate_terms:
+                    fund_request_number_q |= Q(fund_request_number__icontains=term)
+            matching_ids = (
+                models.FundRequest.objects.select_related("created_by")
+                .annotate(
+                    total_amount_text=Cast("total_amount", output_field=CharField()),
+                    created_at_text=Cast("created_at", output_field=CharField()),
+                    recipient_source_entry_id_text=Cast("recipients__source_entry_id", output_field=CharField()),
+                    recipient_fund_requested_text=Cast("recipients__fund_requested", output_field=CharField()),
+                    article_sl_no_text=Cast("articles__sl_no", output_field=CharField()),
+                    article_quantity_text=Cast("articles__quantity", output_field=CharField()),
+                    article_unit_price_text=Cast("articles__unit_price", output_field=CharField()),
+                    article_price_including_gst_text=Cast("articles__price_including_gst", output_field=CharField()),
+                    article_value_text=Cast("articles__value", output_field=CharField()),
+                    article_cumulative_text=Cast("articles__cumulative", output_field=CharField()),
+                    document_generated_at_text=Cast("documents__generated_at", output_field=CharField()),
+                )
+                .filter(
+                    fund_request_number_q
+                    | Q(fund_request_type__icontains=q)
+                    | Q(status__icontains=q)
+                    | Q(aid_type__icontains=q)
+                    | Q(notes__icontains=q)
+                    | Q(total_amount_text__icontains=q)
+                    | Q(created_at_text__icontains=q)
+                    | Q(gst_number__icontains=q)
+                    | Q(supplier_name__icontains=q)
+                    | Q(supplier_address__icontains=q)
+                    | Q(supplier_city__icontains=q)
+                    | Q(supplier_state__icontains=q)
+                    | Q(supplier_pincode__icontains=q)
+                    | Q(purchase_order_number__icontains=q)
+                    | Q(created_by__email__icontains=q)
+                    | Q(created_by__first_name__icontains=q)
+                    | Q(created_by__last_name__icontains=q)
+                    | Q(recipients__recipient_name__icontains=q)
+                    | Q(recipients__name_of_beneficiary__icontains=q)
+                    | Q(recipients__name_of_institution__icontains=q)
+                    | Q(recipients__beneficiary_type__icontains=q)
+                    | Q(recipients__beneficiary__icontains=q)
+                    | Q(recipients__details__icontains=q)
+                    | Q(recipients__address__icontains=q)
+                    | Q(recipients__cheque_in_favour__icontains=q)
+                    | Q(recipients__cheque_no__icontains=q)
+                    | Q(recipients__notes__icontains=q)
+                    | Q(recipients__district_name__icontains=q)
+                    | Q(recipient_source_entry_id_text__icontains=q)
+                    | Q(recipient_fund_requested_text__icontains=q)
+                    | Q(recipients__aadhar_number__icontains=q)
+                    | Q(articles__article_name__icontains=q)
+                    | Q(articles__beneficiary__icontains=q)
+                    | Q(articles__vendor_name__icontains=q)
+                    | Q(articles__gst_no__icontains=q)
+                    | Q(articles__vendor_address__icontains=q)
+                    | Q(articles__vendor_city__icontains=q)
+                    | Q(articles__vendor_state__icontains=q)
+                    | Q(articles__vendor_pincode__icontains=q)
+                    | Q(articles__cheque_in_favour__icontains=q)
+                    | Q(articles__cheque_no__icontains=q)
+                    | Q(articles__supplier_article_name__icontains=q)
+                    | Q(articles__description__icontains=q)
+                    | Q(article_sl_no_text__icontains=q)
+                    | Q(article_quantity_text__icontains=q)
+                    | Q(article_unit_price_text__icontains=q)
+                    | Q(article_price_including_gst_text__icontains=q)
+                    | Q(article_value_text__icontains=q)
+                    | Q(article_cumulative_text__icontains=q)
+                    | Q(documents__file_name__icontains=q)
+                    | Q(documents__file_path__icontains=q)
+                    | Q(documents__document_type__icontains=q)
+                    | Q(document_generated_at_text__icontains=q)
+                    | Q(documents__generated_by__email__icontains=q)
+                    | Q(documents__generated_by__first_name__icontains=q)
+                    | Q(documents__generated_by__last_name__icontains=q)
+                )
+                .values_list("pk", flat=True)
+                .distinct()
+            )
+            queryset = queryset.filter(pk__in=matching_ids)
         if request_type := (self.request.GET.get("request_type") or "").strip():
             queryset = queryset.filter(fund_request_type=request_type)
         if status := (self.request.GET.get("status") or "").strip():
             queryset = queryset.filter(status=status)
+        if supplier := (self.request.GET.get("supplier") or "").strip():
+            queryset = queryset.filter(supplier_name__icontains=supplier)
+        sort_fields = {
+            "fund_request_number": "fund_request_number",
+            "fund_request_type": "fund_request_type",
+            "item_type": "aid_type",
+            "total_amount": "total_amount",
+            "status": "status",
+            "created_at": "created_at",
+            "supplier_name": "supplier_name",
+        }
+        sort_field = sort_fields.get(self._sort_key, "created_at")
+        sort_prefix = "" if self._sort_dir == "asc" else "-"
+        if sort_field == "fund_request_number":
+            queryset = queryset.order_by(f"{sort_prefix}created_at", f"{sort_prefix}id")
+            queryset = sorted(
+                queryset,
+                key=lambda fr: (
+                    models.parse_fund_request_sequence(fr.fund_request_number) is None,
+                    models.parse_fund_request_sequence(fr.fund_request_number) or 0,
+                    fr.created_at,
+                    fr.id,
+                ),
+                reverse=(self._sort_dir == "desc"),
+            )
+            return queryset
+        queryset = queryset.order_by(f"{sort_prefix}{sort_field}", "-id")
         return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        def clean_option_name(raw_value: str) -> str:
+            text = str(raw_value or "").strip()
+            if not text:
+                return "-"
+            parts = [part.strip() for part in text.split(" - ") if part.strip()]
+            if len(parts) >= 2:
+                return parts[1]
+            return parts[0] if parts else text
+
+        def beneficiary_option_display(recipient) -> str:
+            raw_value = str(recipient.beneficiary or "").strip()
+            if raw_value and " - " in raw_value:
+                return raw_value
+            source_entry_id = getattr(recipient, "source_entry_id", None)
+            beneficiary_type = getattr(recipient, "beneficiary_type", None)
+            if source_entry_id and beneficiary_type:
+                source_entry = None
+                if beneficiary_type == models.RecipientTypeChoices.DISTRICT:
+                    source_entry = models.DistrictBeneficiaryEntry.objects.select_related("district").filter(pk=source_entry_id).first()
+                elif beneficiary_type == models.RecipientTypeChoices.PUBLIC:
+                    source_entry = models.PublicBeneficiaryEntry.objects.filter(pk=source_entry_id).first()
+                elif beneficiary_type in {
+                    models.RecipientTypeChoices.INSTITUTIONS,
+                    models.RecipientTypeChoices.OTHERS,
+                }:
+                    source_entry = models.InstitutionsBeneficiaryEntry.objects.filter(pk=source_entry_id).first()
+                if source_entry:
+                    payload = _build_aid_option_payload(source_entry, beneficiary_type)
+                    display_text = str(payload.get("display_text") or "").strip()
+                    if display_text:
+                        return display_text
+            if raw_value and not raw_value.isdigit():
+                return raw_value
+            return (
+                getattr(recipient, "display_name", "")
+                or getattr(recipient, "recipient_name", "")
+                or "-"
+            )
+
+        for fr in context["fund_requests"]:
+            recipients = list(fr.recipients.all())
+            articles = list(fr.articles.all())
+            for recipient in recipients:
+                recipient.display_name = (
+                    recipient.name_of_beneficiary
+                    or recipient.name_of_institution
+                    or recipient.district_name
+                    or clean_option_name(recipient.beneficiary)
+                    or clean_option_name(recipient.recipient_name)
+                )
+                recipient.beneficiary_display = beneficiary_option_display(recipient)
+            fr.district_recipient_count = sum(
+                1 for recipient in recipients if recipient.beneficiary_type == models.RecipientTypeChoices.DISTRICT
+            )
+            fr.public_recipient_count = sum(
+                1 for recipient in recipients if recipient.beneficiary_type == models.RecipientTypeChoices.PUBLIC
+            )
+            fr.institutions_recipient_count = sum(
+                1 for recipient in recipients if recipient.beneficiary_type == models.RecipientTypeChoices.INSTITUTIONS
+            )
+            fr.others_recipient_count = sum(
+                1 for recipient in recipients if recipient.beneficiary_type == models.RecipientTypeChoices.OTHERS
+            )
+            fr.article_total_quantity = sum(int(article.quantity or 0) for article in articles)
+        current_sort = getattr(self, "_sort_key", "created_at")
+        current_dir = getattr(self, "_sort_dir", "desc")
+        def build_sort_params(column):
+            params = self.request.GET.copy()
+            params.pop("page", None)
+            next_dir = "asc"
+            if current_sort == column and current_dir == "asc":
+                next_dir = "desc"
+            params["sort"] = column
+            params["dir"] = next_dir
+            return params.urlencode()
         context["request_type_choices"] = models.FundRequestTypeChoices.choices
         context["status_choices"] = models.FundRequestStatusChoices.choices
         context["filters"] = {
             "q": self.request.GET.get("q", ""),
             "request_type": self.request.GET.get("request_type", ""),
             "status": self.request.GET.get("status", ""),
+            "supplier": self.request.GET.get("supplier", ""),
         }
-        context["query_string_without_page"] = self.request.GET.urlencode()
+        context["current_sort"] = current_sort
+        context["current_dir"] = current_dir
+        context["sort_querystrings"] = {
+            "fund_request_number": build_sort_params("fund_request_number"),
+            "fund_request_type": build_sort_params("fund_request_type"),
+            "item_type": build_sort_params("item_type"),
+            "total_amount": build_sort_params("total_amount"),
+            "status": build_sort_params("status"),
+            "created_at": build_sort_params("created_at"),
+        }
         return context
 
     def _event_birthday_number(self, event_year: int) -> int:
@@ -3917,6 +4180,7 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
             queryset = [
                 fr for fr in queryset
                 if q.lower() in str(fr.fund_request_number or "").lower()
+                or q.lower() in str(fr.formatted_fund_request_number or "").lower()
                 or q.lower() in str(fr.aid_type or "").lower()
                 or q.lower() in str(fr.supplier_name or "").lower()
             ]
@@ -3929,13 +4193,11 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
             queryset = [fr for fr in queryset if fr.status == export_status]
 
         def _fr_sort_key(fr):
+            sequence = models.parse_fund_request_sequence(fr.fund_request_number)
+            if sequence is not None:
+                return (0, sequence)
             raw = str(fr.fund_request_number or "").strip()
-            if raw.startswith("FR-"):
-                try:
-                    return (0, int(raw.replace("FR-", "", 1)))
-                except ValueError:
-                    return (1, raw)
-            return (2, raw)
+            return (1, raw)
 
         queryset.sort(key=_fr_sort_key)
 
@@ -4026,7 +4288,7 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
                     all_rows.append(
                         {
                             "fr_id": fr.id,
-                            "fund_request_number": fr.fund_request_number or "",
+                            "fund_request_number": fr.formatted_fund_request_number or "",
                             "request_type": fr.aid_type or "Aid",
                             "beneficiary": self._beneficiary_display_for_export(recipient, fr.fund_request_type),
                             "name_beneficiary_article": recipient.recipient_name or recipient.name_of_beneficiary or "",
@@ -4052,7 +4314,7 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
                     all_rows.append(
                         {
                             "fr_id": fr.id,
-                            "fund_request_number": fr.fund_request_number or "",
+                            "fund_request_number": fr.formatted_fund_request_number or "",
                             "request_type": "Article",
                             "beneficiary": beneficiary,
                             "name_beneficiary_article": article.supplier_article_name or article.article_name or "",
@@ -4232,7 +4494,7 @@ def _build_aid_option_payload(entry, beneficiary_type):
             'display_text': f"{entry.application_number or ''} - {beneficiary_name} - Rs.{amount_display} - {details_display}",
             'recipient_name': beneficiary_name,
             'name_of_beneficiary': '',
-            'name_of_institution': '',
+            'name_of_institution': entry.name_of_institution or '',
             'details': entry.notes or '',
             'fund_requested': amount,
             'aadhar_number': '',
@@ -4248,7 +4510,7 @@ def _build_aid_option_payload(entry, beneficiary_type):
             'display_text': f"{entry.application_number or ''} - {beneficiary_name} - Rs.{amount_display} - {details_display}",
             'recipient_name': beneficiary_name,
             'name_of_beneficiary': beneficiary_name,
-            'name_of_institution': '',
+            'name_of_institution': entry.name_of_institution or '',
             'details': entry.notes or '',
             'fund_requested': amount,
             'aadhar_number': entry.aadhar_number or '',
@@ -4263,7 +4525,7 @@ def _build_aid_option_payload(entry, beneficiary_type):
         'display_text': f"{entry.application_number or ''} - {beneficiary_name} - Rs.{amount_display} - {details_display}",
         'recipient_name': beneficiary_name,
         'name_of_beneficiary': '',
-        'name_of_institution': beneficiary_name,
+        'name_of_institution': entry.name_of_institution or beneficiary_name,
         'details': entry.notes or '',
         'fund_requested': amount,
         'aadhar_number': '',
@@ -4286,7 +4548,7 @@ def _get_aid_beneficiary_options(aid_type, beneficiary_type, current_fund_reques
 
     for entry in _aid_entry_queryset(aid_type, beneficiary_type).order_by('application_number', 'created_at'):
         if entry.fund_request_id and (not current_fund_request or entry.fund_request_id != current_fund_request.id):
-            label = entry.fund_request.fund_request_number if entry.fund_request and entry.fund_request.fund_request_number else f'Draft #{entry.fund_request_id}'
+            label = entry.fund_request.formatted_fund_request_number if entry.fund_request and entry.fund_request.fund_request_number else f'Draft #{entry.fund_request_id}'
             if entry.fund_request:
                 blocked.add(f"{label} ({entry.fund_request.get_status_display()})")
             else:
@@ -4356,6 +4618,9 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
     def _can_edit(self, fr: models.FundRequest):
         return _is_editable_by_user(self.request.user, fr)
 
+    def is_purchase_order_mode(self):
+        return False
+
     def dispatch(self, request, *args, **kwargs):
         self.object = getattr(self, 'object', None)
         if self.object and not self._can_edit(self.object):
@@ -4371,6 +4636,8 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
         context['aid_type_choices'] = _fund_request_aid_type_choices()
         context['article_request_choices_json'] = json.dumps(_fund_request_article_choices(self.object))
         context['current_fund_request_id'] = getattr(self.object, 'pk', '') or ''
+        context['purchase_order_mode'] = self.is_purchase_order_mode()
+        context['back_url'] = reverse('ui:purchase-order-list') if self.is_purchase_order_mode() else reverse('ui:fund-request-list')
         return context
 
     def _collect_totals(self, instance: models.FundRequest):
@@ -4420,7 +4687,7 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
         if not entry:
             return False, 'This beneficiary is no longer available.'
         if entry.fund_request_id and (not current_fund_request or entry.fund_request_id != current_fund_request.id):
-            label = entry.fund_request.fund_request_number if entry.fund_request and entry.fund_request.fund_request_number else f'Draft #{entry.fund_request_id}'
+            label = entry.fund_request.formatted_fund_request_number if entry.fund_request and entry.fund_request.fund_request_number else f'Draft #{entry.fund_request_id}'
             if entry.fund_request:
                 return False, f'Already present in {label} ({entry.fund_request.get_status_display()}).'
             return False, f'Already present in {label}.'
@@ -4473,12 +4740,33 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
                 return False
             if action == 'submit':
                 for form in active_forms:
-                    for field_name in ['article_name', 'gst_no', 'quantity', 'unit_price', 'cheque_in_favour']:
+                    required_fields = ['article_name', 'supplier_article_name', 'description', 'quantity', 'unit_price']
+                    if not self.is_purchase_order_mode():
+                        required_fields.extend(['gst_no', 'cheque_in_favour'])
+                    for field_name in required_fields:
                         value = form.cleaned_data.get(field_name)
                         if value in (None, '', 0, '0'):
                             form.add_error(field_name, 'Required for submit.')
                             is_valid = False
         return is_valid
+
+    def _validate_article_header_fields(self, form, fr, action):
+        if action != 'submit' or fr.fund_request_type != models.FundRequestTypeChoices.ARTICLE:
+            return True
+        valid = True
+        labels = [
+            ('supplier_name', 'Vendor Name' if self.is_purchase_order_mode() else 'Supplier Name'),
+            ('supplier_address', 'Vendor Address' if self.is_purchase_order_mode() else 'Address'),
+            ('supplier_city', 'City'),
+            ('supplier_state', 'State'),
+            ('supplier_pincode', 'Pincode'),
+        ]
+        for field_name, label in labels:
+            value = getattr(fr, field_name, None)
+            if not str(value or '').strip():
+                form.add_error(field_name, f'{label} is required for submit.')
+                valid = False
+        return valid
 
     def _set_fund_request_status(self, fr, action):
         if action == 'submit':
@@ -4493,13 +4781,22 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
             return HttpResponseRedirect(self.get_success_url())
 
         fr = form.save(commit=False)
+        if self.is_purchase_order_mode():
+            fr.fund_request_type = models.FundRequestTypeChoices.ARTICLE
+            fr.aid_type = None
+        if self.object and self.object.fund_request_number:
+            fr.fund_request_number = self.object.fund_request_number
+        if self.object and self.object.purchase_order_number:
+            fr.purchase_order_number = self.object.purchase_order_number
         if not fr.created_by:
             fr.created_by = self.request.user
         self._set_fund_request_status(fr, action)
 
+        header_ok = self._validate_article_header_fields(form, fr, action)
+
         recipient_formset, article_formset = self._build_formsets(fr)
         formsets_ok = recipient_formset.is_valid() and article_formset.is_valid()
-        if not formsets_ok or not self._validate_fund_request_formsets(fr, action, recipient_formset, article_formset):
+        if not header_ok or not formsets_ok or not self._validate_fund_request_formsets(fr, action, recipient_formset, article_formset):
             messages.error(self.request, 'Please fix errors in recipients/articles before saving.')
             return self.render_to_response(
                 self.get_context_data(
@@ -4509,59 +4806,99 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
                 )
             )
 
-        with transaction.atomic():
-            if action == 'submit' and not fr.fund_request_number:
-                fr.fund_request_number = services.next_fund_request_number()
-            fr.save()
+        try:
+            with transaction.atomic():
+                if action == 'submit' and not fr.fund_request_number:
+                    fr.fund_request_number = services.next_fund_request_number()
+                if action == 'submit' and fr.fund_request_type == models.FundRequestTypeChoices.ARTICLE and not fr.purchase_order_number:
+                    fr.purchase_order_number = services.next_purchase_order_number()
+                fr.save()
 
-            recipient_formset.instance = fr
-            article_formset.instance = fr
+                recipient_formset.instance = fr
+                article_formset.instance = fr
 
-            for deleted_form in getattr(recipient_formset, "deleted_forms", []):
-                deleted_instance = getattr(deleted_form, "instance", None)
-                if deleted_instance and deleted_instance.pk:
-                    deleted_instance.delete()
-            recipient_instances = recipient_formset.save(commit=False)
-            for recipient in recipient_instances:
-                recipient.fund_request = fr
-                recipient.recipient_name = recipient.recipient_name or recipient.name_of_beneficiary or recipient.name_of_institution or recipient.beneficiary or 'Recipient'
-                recipient.save()
+                for deleted_form in getattr(recipient_formset, "deleted_forms", []):
+                    deleted_instance = getattr(deleted_form, "instance", None)
+                    if deleted_instance and deleted_instance.pk:
+                        deleted_instance.delete()
+                recipient_instances = recipient_formset.save(commit=False)
+                for recipient in recipient_instances:
+                    recipient.fund_request = fr
+                    if recipient.beneficiary_type == models.RecipientTypeChoices.DISTRICT:
+                        recipient.recipient_name = (
+                            recipient.name_of_beneficiary
+                            or recipient.name_of_institution
+                            or recipient.district_name
+                            or recipient.recipient_name
+                            or recipient.beneficiary
+                            or 'Recipient'
+                        )
+                    elif recipient.beneficiary_type == models.RecipientTypeChoices.PUBLIC:
+                        recipient.recipient_name = recipient.name_of_beneficiary or recipient.recipient_name or recipient.beneficiary or 'Recipient'
+                    elif recipient.beneficiary_type in {
+                        models.RecipientTypeChoices.INSTITUTIONS,
+                        models.RecipientTypeChoices.OTHERS,
+                    }:
+                        recipient.recipient_name = (
+                            recipient.name_of_institution
+                            or recipient.name_of_beneficiary
+                            or recipient.recipient_name
+                            or recipient.beneficiary
+                            or 'Recipient'
+                        )
+                    else:
+                        recipient.recipient_name = recipient.recipient_name or recipient.name_of_beneficiary or recipient.name_of_institution or recipient.beneficiary or 'Recipient'
+                    recipient.save()
 
-            for deleted_form in getattr(article_formset, "deleted_forms", []):
-                deleted_instance = getattr(deleted_form, "instance", None)
-                if deleted_instance and deleted_instance.pk:
-                    deleted_instance.delete()
-            article_instances = article_formset.save(commit=False)
-            for article in article_instances:
-                article.fund_request = fr
-                if not article.article_id:
-                    article.article = self._resolve_article_record(article.article_name)
-                if article.article and not article.article_name:
-                    article.article_name = article.article.article_name
-                article.unit_price = article.unit_price or 0
-                article.price_including_gst = article.unit_price * (article.quantity or 0)
-                article.value = article.price_including_gst
-                article.cumulative = article.value
-                article.save()
+                for deleted_form in getattr(article_formset, "deleted_forms", []):
+                    deleted_instance = getattr(deleted_form, "instance", None)
+                    if deleted_instance and deleted_instance.pk:
+                        deleted_instance.delete()
+                article_instances = article_formset.save(commit=False)
+                for article in article_instances:
+                    article.fund_request = fr
+                    if not article.article_id:
+                        article.article = self._resolve_article_record(article.article_name)
+                    if article.article and not article.article_name:
+                        article.article_name = article.article.article_name
+                    article.vendor_name = fr.supplier_name
+                    article.vendor_address = fr.supplier_address
+                    article.vendor_city = fr.supplier_city
+                    article.vendor_state = fr.supplier_state
+                    article.vendor_pincode = fr.supplier_pincode
+                    article.unit_price = article.unit_price or 0
+                    article.price_including_gst = article.unit_price * (article.quantity or 0)
+                    article.value = article.price_including_gst
+                    article.cumulative = article.value
+                    article.save()
 
-            self._link_aid_sources(fr)
-            self._collect_totals(fr)
-            services.sync_order_entries_from_fund_request(fr, actor=self.request.user)
-            self.object = fr
+                self._link_aid_sources(fr)
+                self._collect_totals(fr)
+                services.sync_order_entries_from_fund_request(fr, actor=self.request.user)
+                self.object = fr
 
-            if action == 'submit':
-                services.log_audit(
-                    user=self.request.user,
-                    action_type=models.ActionTypeChoices.STATUS_CHANGE,
-                    entity_type='fund_request',
-                    entity_id=str(fr.id),
-                    details={'status': models.FundRequestStatusChoices.SUBMITTED},
-                    ip_address=self.request.META.get('REMOTE_ADDR'),
-                    user_agent=self.request.META.get('HTTP_USER_AGENT', ''),
+                if action == 'submit':
+                    services.log_audit(
+                        user=self.request.user,
+                        action_type=models.ActionTypeChoices.STATUS_CHANGE,
+                        entity_type='fund_request',
+                        entity_id=str(fr.id),
+                        details={'status': models.FundRequestStatusChoices.SUBMITTED},
+                        ip_address=self.request.META.get('REMOTE_ADDR'),
+                        user_agent=self.request.META.get('HTTP_USER_AGENT', ''),
+                    )
+                    messages.success(self.request, 'Fund request submitted.')
+                else:
+                    messages.success(self.request, 'Fund request saved as draft.')
+        except IntegrityError:
+            form.add_error(None, 'Fund request number already exists. Please try submitting again.')
+            return self.render_to_response(
+                self.get_context_data(
+                    form=form,
+                    recipient_formset=recipient_formset,
+                    article_formset=article_formset,
                 )
-                messages.success(self.request, 'Fund request submitted.')
-            else:
-                messages.success(self.request, 'Fund request saved as draft.')
+            )
         return HttpResponseRedirect(self.get_success_url())
 
 
@@ -4585,6 +4922,10 @@ class FundRequestDetailView(LoginRequiredMixin, RoleRequiredMixin, DetailView):
         context["media_url"] = settings.MEDIA_URL
         context["can_edit"] = _is_editable_by_user(self.request.user, self.object)
         context["can_reopen"] = self.request.user.role == "admin" and self.object.status == models.FundRequestStatusChoices.SUBMITTED
+        context["can_delete"] = self.request.user.role == "admin" and self.request.user.has_module_permission(
+            models.ModuleKeyChoices.ORDER_FUND_REQUEST,
+            "delete",
+        )
         return context
 
 
@@ -4598,7 +4939,7 @@ class FundRequestPDFView(LoginRequiredMixin, RoleRequiredMixin, View):
             pk=pk,
         )
         pdf_buffer = services.generate_fund_request_pdf(fund_request)
-        filename_base = fund_request.fund_request_number or f"FR-DRAFT-{fund_request.pk}"
+        filename_base = fund_request.formatted_fund_request_number or f"FR-DRAFT-{fund_request.pk}"
         response = HttpResponse(pdf_buffer.getvalue(), content_type="application/pdf")
         response["Content-Disposition"] = f'inline; filename="{filename_base}.pdf"'
         return response
@@ -4633,7 +4974,11 @@ class FundRequestSubmitView(LoginRequiredMixin, WriteRoleMixin, View):
         fr.status = models.FundRequestStatusChoices.SUBMITTED
         if not fr.fund_request_number:
             fr.fund_request_number = services.next_fund_request_number()
-        fr.save(update_fields=["status", "fund_request_number"])
+        update_fields = ["status", "fund_request_number"]
+        if fr.fund_request_type == models.FundRequestTypeChoices.ARTICLE and not fr.purchase_order_number:
+            fr.purchase_order_number = services.next_purchase_order_number()
+            update_fields.append("purchase_order_number")
+        fr.save(update_fields=update_fields)
         services.log_audit(
             user=request.user,
             action_type=models.ActionTypeChoices.STATUS_CHANGE,
@@ -4713,6 +5058,369 @@ class FundRequestDocumentUploadView(LoginRequiredMixin, WriteRoleMixin, FormView
         return HttpResponseRedirect(self.get_success_url())
 
 
+def _purchase_order_sequence(value):
+    raw = str(value or "").strip().upper()
+    prefix = "MASM/MNP"
+    if not raw.startswith(prefix):
+        return None
+    suffix = raw[len(prefix):]
+    if len(suffix) != 5 or not suffix.isdigit():
+        return None
+    return int(suffix[:3])
+
+
+def _purchase_order_article_choices():
+    return [
+        {
+            'id': article.id,
+            'article_name': article.article_name,
+            'cost_per_unit': str(article.cost_per_unit or 0),
+        }
+        for article in models.Article.objects.filter(
+            item_type=models.ItemTypeChoices.ARTICLE,
+            is_active=True,
+        ).order_by('article_name')
+    ]
+
+
+class PurchaseOrderListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
+    module_key = models.ModuleKeyChoices.PURCHASE_ORDER
+    permission_action = "view"
+    model = models.PurchaseOrder
+    template_name = "dashboard/purchase_order_list.html"
+    context_object_name = "purchase_orders"
+    paginate_by = 20
+
+    def get_queryset(self):
+        queryset = (
+            models.PurchaseOrder.objects
+            .select_related("created_by")
+            .prefetch_related("items", "items__article")
+        )
+        self._sort_key = (self.request.GET.get("sort") or "created_at").strip()
+        self._sort_dir = (self.request.GET.get("dir") or "desc").strip().lower()
+        if q := (self.request.GET.get("q") or "").strip():
+            matching_ids = (
+                models.PurchaseOrder.objects
+                .annotate(
+                    total_amount_text=Cast("total_amount", output_field=CharField()),
+                    created_at_text=Cast("created_at", output_field=CharField()),
+                    item_quantity_text=Cast("items__quantity", output_field=CharField()),
+                    item_unit_price_text=Cast("items__unit_price", output_field=CharField()),
+                    item_total_text=Cast("items__total_value", output_field=CharField()),
+                )
+                .filter(
+                    Q(purchase_order_number__icontains=q)
+                    | Q(vendor_name__icontains=q)
+                    | Q(vendor_address__icontains=q)
+                    | Q(vendor_city__icontains=q)
+                    | Q(vendor_state__icontains=q)
+                    | Q(vendor_pincode__icontains=q)
+                    | Q(comments__icontains=q)
+                    | Q(status__icontains=q)
+                    | Q(total_amount_text__icontains=q)
+                    | Q(created_at_text__icontains=q)
+                    | Q(created_by__email__icontains=q)
+                    | Q(created_by__first_name__icontains=q)
+                    | Q(created_by__last_name__icontains=q)
+                    | Q(items__article_name__icontains=q)
+                    | Q(items__supplier_article_name__icontains=q)
+                    | Q(items__description__icontains=q)
+                    | Q(item_quantity_text__icontains=q)
+                    | Q(item_unit_price_text__icontains=q)
+                    | Q(item_total_text__icontains=q)
+                )
+                .values_list("pk", flat=True)
+                .distinct()
+            )
+            queryset = queryset.filter(pk__in=matching_ids)
+
+        if status := (self.request.GET.get("status") or "").strip():
+            queryset = queryset.filter(status=status)
+
+        sort_field_map = {
+            "purchase_order_number": "purchase_order_number",
+            "vendor_name": "vendor_name",
+            "vendor_city": "vendor_city",
+            "total_amount": "total_amount",
+            "status": "status",
+            "created_at": "created_at",
+        }
+        sort_field = sort_field_map.get(self._sort_key, "created_at")
+        sort_prefix = "" if self._sort_dir == "asc" else "-"
+        if sort_field == "purchase_order_number":
+            rows = list(queryset.order_by(f"{sort_prefix}created_at", f"{sort_prefix}id"))
+            rows.sort(
+                key=lambda po: (
+                    _purchase_order_sequence(po.purchase_order_number) is None,
+                    _purchase_order_sequence(po.purchase_order_number) or 0,
+                    po.created_at,
+                    po.id,
+                ),
+                reverse=(self._sort_dir == "desc"),
+            )
+            return rows
+        return queryset.order_by(f"{sort_prefix}{sort_field}", "-id")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        current_sort = getattr(self, "_sort_key", "created_at")
+        current_dir = getattr(self, "_sort_dir", "desc")
+
+        for purchase_order in context["purchase_orders"]:
+            purchase_order.item_count = purchase_order.items.count()
+            purchase_order.items_total_quantity = sum(int(item.quantity or 0) for item in purchase_order.items.all())
+            purchase_order.display_comments = (purchase_order.comments or "").strip() or models.PURCHASE_ORDER_DEFAULT_COMMENTS
+
+        def build_sort_params(column):
+            params = self.request.GET.copy()
+            params.pop("page", None)
+            next_dir = "asc"
+            if current_sort == column and current_dir == "asc":
+                next_dir = "desc"
+            params["sort"] = column
+            params["dir"] = next_dir
+            return params.urlencode()
+
+        context["status_choices"] = [
+            ("", "All"),
+            (models.FundRequestStatusChoices.DRAFT, "Draft"),
+            (models.FundRequestStatusChoices.SUBMITTED, "Submitted"),
+        ]
+        context["filters"] = {
+            "q": self.request.GET.get("q", ""),
+            "status": self.request.GET.get("status", ""),
+        }
+        context["current_sort"] = current_sort
+        context["current_dir"] = current_dir
+        context["sort_querystrings"] = {
+            "purchase_order_number": build_sort_params("purchase_order_number"),
+            "vendor_name": build_sort_params("vendor_name"),
+            "total_amount": build_sort_params("total_amount"),
+            "status": build_sort_params("status"),
+            "created_at": build_sort_params("created_at"),
+        }
+        context["can_create_edit"] = self.request.user.has_module_permission(models.ModuleKeyChoices.PURCHASE_ORDER, "create_edit")
+        context["can_submit"] = self.request.user.has_module_permission(models.ModuleKeyChoices.PURCHASE_ORDER, "submit")
+        context["can_reopen"] = self.request.user.has_module_permission(models.ModuleKeyChoices.PURCHASE_ORDER, "reopen")
+        context["can_delete"] = self.request.user.has_module_permission(models.ModuleKeyChoices.PURCHASE_ORDER, "delete")
+        return context
+
+
+class PurchaseOrderCreateUpdateMixin(WriteRoleMixin):
+    module_key = models.ModuleKeyChoices.PURCHASE_ORDER
+    permission_action = "create_edit"
+    form_class = PurchaseOrderForm
+    template_name = "dashboard/purchase_order_form.html"
+    model = models.PurchaseOrder
+    success_url = reverse_lazy("ui:purchase-order-list")
+
+    def _build_formset(self, instance: models.PurchaseOrder | None = None):
+        return PurchaseOrderItemFormSet(self.request.POST or None, prefix="items", instance=instance)
+
+    def _can_edit(self, purchase_order: models.PurchaseOrder):
+        return _is_editable_purchase_order(self.request.user, purchase_order)
+
+    def dispatch(self, request, *args, **kwargs):
+        self.object = getattr(self, "object", None)
+        if self.object and not self._can_edit(self.object):
+            messages.error(request, "Submitted purchase orders must be reopened before editing.")
+            return HttpResponseRedirect(reverse("ui:purchase-order-list"))
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["item_formset"] = kwargs.get("item_formset", None) or self._build_formset(self.object)
+        context["article_request_choices_json"] = json.dumps(_purchase_order_article_choices())
+        return context
+
+    def _resolve_article_record(self, article_name: str):
+        article_name = (article_name or "").strip()
+        if not article_name:
+            return None
+        return models.Article.objects.filter(article_name__iexact=article_name).first()
+
+    def _validate_header_fields(self, form, purchase_order, action):
+        if action != "submit":
+            return True
+        valid = True
+        for field_name, label in [
+            ("vendor_name", "Vendor Name"),
+            ("vendor_address", "Vendor Address"),
+            ("vendor_city", "City"),
+            ("vendor_state", "State"),
+            ("vendor_pincode", "Pincode"),
+        ]:
+            value = getattr(purchase_order, field_name, None)
+            if not str(value or "").strip():
+                form.add_error(field_name, f"{label} is required for submit.")
+                valid = False
+        return valid
+
+    def _validate_item_formset(self, item_formset, action):
+        active_forms = [form for form in item_formset.forms if form.cleaned_data and not form.cleaned_data.get("DELETE", False)]
+        if action == "submit" and not active_forms:
+            item_formset._non_form_errors = item_formset.error_class(["Add at least one item."])
+            return False
+        valid = True
+        if action == "submit":
+            for form in active_forms:
+                for field_name in ["article_name", "supplier_article_name", "description", "quantity", "unit_price"]:
+                    value = form.cleaned_data.get(field_name)
+                    if value in (None, "", 0, "0"):
+                        form.add_error(field_name, "Required for submit.")
+                        valid = False
+        return valid
+
+    def form_valid(self, form):
+        action = self.request.POST.get("action", "draft")
+        if action == "submit" and self.object and self.object.status != models.FundRequestStatusChoices.DRAFT:
+            messages.error(self.request, "Only draft purchase orders can be submitted.")
+            return HttpResponseRedirect(self.get_success_url())
+
+        purchase_order = form.save(commit=False)
+        if self.object and self.object.purchase_order_number:
+            purchase_order.purchase_order_number = self.object.purchase_order_number
+        if not purchase_order.created_by:
+            purchase_order.created_by = self.request.user
+        purchase_order.status = (
+            models.FundRequestStatusChoices.SUBMITTED
+            if action == "submit"
+            else models.FundRequestStatusChoices.DRAFT
+        )
+
+        header_ok = self._validate_header_fields(form, purchase_order, action)
+        item_formset = self._build_formset(purchase_order)
+        formsets_ok = item_formset.is_valid()
+        items_ok = self._validate_item_formset(item_formset, action)
+        if not header_ok or not formsets_ok or not items_ok:
+            messages.error(self.request, "Please fix errors in purchase order fields before saving.")
+            return self.render_to_response(self.get_context_data(form=form, item_formset=item_formset))
+
+        with transaction.atomic():
+            if action == "submit" and not purchase_order.purchase_order_number:
+                purchase_order.purchase_order_number = services.next_purchase_order_number()
+            purchase_order.save()
+
+            item_formset.instance = purchase_order
+            for deleted_form in getattr(item_formset, "deleted_forms", []):
+                deleted_instance = getattr(deleted_form, "instance", None)
+                if deleted_instance and deleted_instance.pk:
+                    deleted_instance.delete()
+            item_instances = item_formset.save(commit=False)
+            for item in item_instances:
+                item.purchase_order = purchase_order
+                if not item.article_id:
+                    item.article = self._resolve_article_record(item.article_name)
+                if item.article and not item.article_name:
+                    item.article_name = item.article.article_name
+                item.quantity = item.quantity or 0
+                item.unit_price = item.unit_price or 0
+                item.total_value = (item.unit_price or 0) * (item.quantity or 0)
+                item.save()
+
+            services.sync_purchase_order_totals(purchase_order)
+            self.object = purchase_order
+
+        messages.success(
+            self.request,
+            "Purchase order submitted." if action == "submit" else "Purchase order saved as draft.",
+        )
+        return HttpResponseRedirect(self.get_success_url())
+
+
+class PurchaseOrderCreateView(LoginRequiredMixin, PurchaseOrderCreateUpdateMixin, CreateView):
+    pass
+
+
+class PurchaseOrderUpdateView(LoginRequiredMixin, PurchaseOrderCreateUpdateMixin, UpdateView):
+    def get_queryset(self):
+        return models.PurchaseOrder.objects.all()
+
+
+class PurchaseOrderPDFView(LoginRequiredMixin, RoleRequiredMixin, View):
+    module_key = models.ModuleKeyChoices.PURCHASE_ORDER
+    permission_action = "view"
+
+    def get(self, request, pk):
+        purchase_order = get_object_or_404(
+            models.PurchaseOrder.objects.select_related("created_by").prefetch_related("items"),
+            pk=pk,
+        )
+        services.ensure_purchase_order_number(purchase_order)
+        pdf_buffer = services.generate_purchase_order_pdf(purchase_order)
+        filename_base = purchase_order.purchase_order_number or f"PO-DRAFT-{purchase_order.pk}"
+        response = HttpResponse(pdf_buffer.getvalue(), content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="{filename_base}.pdf"'
+        return response
+
+
+class PurchaseOrderSubmitView(LoginRequiredMixin, WriteRoleMixin, View):
+    module_key = models.ModuleKeyChoices.PURCHASE_ORDER
+    permission_action = "submit"
+    allowed_roles = {"admin", "editor"}
+
+    def post(self, request, pk):
+        purchase_order = get_object_or_404(models.PurchaseOrder, pk=pk)
+        if not _is_editable_purchase_order(request.user, purchase_order) or request.user.role == "viewer":
+            return HttpResponse("Forbidden", status=403)
+        if purchase_order.status != models.FundRequestStatusChoices.DRAFT:
+            messages.error(request, "Only draft purchase orders can be submitted.")
+            return HttpResponseRedirect(reverse("ui:purchase-order-list"))
+        purchase_order.status = models.FundRequestStatusChoices.SUBMITTED
+        if not purchase_order.purchase_order_number:
+            purchase_order.purchase_order_number = services.next_purchase_order_number()
+        purchase_order.save(update_fields=["status", "purchase_order_number"])
+        services.log_audit(
+            user=request.user,
+            action_type=models.ActionTypeChoices.STATUS_CHANGE,
+            entity_type="purchase_order",
+            entity_id=str(purchase_order.id),
+            details={"status": models.FundRequestStatusChoices.SUBMITTED},
+            **_request_audit_meta(request),
+        )
+        services.sync_purchase_order_totals(purchase_order)
+        messages.success(request, "Purchase order submitted.")
+        return HttpResponseRedirect(reverse("ui:purchase-order-list"))
+
+
+class PurchaseOrderReopenView(LoginRequiredMixin, AdminRequiredMixin, View):
+    module_key = models.ModuleKeyChoices.PURCHASE_ORDER
+    permission_action = "reopen"
+
+    def post(self, request, pk):
+        purchase_order = get_object_or_404(models.PurchaseOrder, pk=pk)
+        if purchase_order.status != models.FundRequestStatusChoices.SUBMITTED:
+            messages.error(request, "Only submitted purchase orders can be reopened.")
+            return HttpResponseRedirect(reverse("ui:purchase-order-list"))
+        previous_status = purchase_order.status
+        purchase_order.status = models.FundRequestStatusChoices.DRAFT
+        purchase_order.save(update_fields=["status"])
+        services.log_audit(
+            user=request.user,
+            action_type=models.ActionTypeChoices.STATUS_CHANGE,
+            entity_type="purchase_order",
+            entity_id=str(purchase_order.id),
+            details={"from": previous_status, "to": models.FundRequestStatusChoices.DRAFT},
+            **_request_audit_meta(request),
+        )
+        messages.success(request, "Purchase order reopened as draft.")
+        return HttpResponseRedirect(reverse("ui:purchase-order-edit", args=[purchase_order.pk]))
+
+
+class PurchaseOrderDeleteView(LoginRequiredMixin, AdminRequiredMixin, DeleteView):
+    module_key = models.ModuleKeyChoices.PURCHASE_ORDER
+    permission_action = "delete"
+    model = models.PurchaseOrder
+    template_name = "dashboard/purchase_order_confirm_delete.html"
+    success_url = reverse_lazy("ui:purchase-order-list")
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        messages.warning(self.request, "Purchase order deleted.")
+        return super().post(request, *args, **kwargs)
+
+
 class AidRecipientTemplateDownloadView(LoginRequiredMixin, RoleRequiredMixin, View):
     module_key = models.ModuleKeyChoices.BASE_FILES
     permission_action = "view"
@@ -4720,12 +5428,8 @@ class AidRecipientTemplateDownloadView(LoginRequiredMixin, RoleRequiredMixin, Vi
     def get(self, request, *args, **kwargs):
         headers = [
             "beneficiary_type",
-            "source_entry_id",
             "application_number",
             "beneficiary",
-            "name_of_beneficiary",
-            "name_of_institution",
-            "aadhar_number",
             "fund_requested",
             "details",
             "cheque_rtgs_in_favour",

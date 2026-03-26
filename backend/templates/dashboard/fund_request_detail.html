@@ -4,11 +4,21 @@
 {% block content %}
   <section class="card">
     <style>
+      .fund-request-actions {
+        gap: 6px !important;
+      }
       .fund-request-actions .icon-btn {
+        width: 28px;
+        min-width: 28px;
+        height: 28px;
         border: none;
         background: transparent;
         box-shadow: none;
         padding: 0;
+      }
+      .fund-request-actions .icon-btn svg {
+        width: 14px;
+        height: 14px;
       }
       .fund-request-actions .icon-btn svg { stroke: currentColor; }
       .fund-request-actions .fund-request-neutral-action.icon-btn {
@@ -28,10 +38,30 @@
       .fund-request-actions .btn-reopen.icon-btn:hover {
         color: #1d4ed8;
       }
+      .fund-request-actions .btn-danger.icon-btn {
+        color: #dc2626;
+      }
+      .fund-request-actions .btn-danger.icon-btn:hover {
+        color: #b91c1c;
+      }
+      .fund-request-actions .fund-request-delete-btn.icon-btn {
+        width: 36px;
+        min-width: 36px;
+        height: 36px;
+        padding: 0;
+        border-radius: 999px;
+        background: transparent;
+        border: none;
+        color: #dc2626;
+      }
+      .fund-request-actions .fund-request-delete-btn.icon-btn:hover {
+        background: transparent;
+        color: #b91c1c;
+      }
     </style>
     <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
       <div>
-        <h2 style="margin: 0 0 6px 0;">Fund request {{ fund_request.fund_request_number|default:"Draft" }}</h2>
+        <h2 style="margin: 0 0 6px 0;">Fund request {{ fund_request.formatted_fund_request_number|default:"Draft" }}</h2>
         <div class="small" style="color: var(--text-secondary);">{% if fund_request.status == "submitted" %}This request has already moved its mapped quantities to ordered in Inventory Planning.{% else %}This request is still a draft and has not changed Inventory Planning yet.{% endif %}</div>
       </div>
       <div class="actions-inline fund-request-actions" style="gap:12px;">
@@ -50,6 +80,11 @@
               <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.708"/><path d="M3 3v6h6"/></svg>
             </button>
           </form>
+        {% endif %}
+        {% if can_delete %}
+          <a class="btn icon-btn fund-request-delete-btn" title="Delete" aria-label="Delete" href="{% url 'ui:fund-request-delete' fund_request.id %}">
+            <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+          </a>
         {% endif %}
       </div>
     </div>
@@ -120,6 +155,7 @@
           <th>Article</th>
           <th>Beneficiary</th>
           <th>Supplier Article</th>
+          <th>Description</th>
           <th>Qty</th>
           <th>Unit</th>
           <th>Line value</th>
@@ -133,6 +169,7 @@
             <td>{{ item.article_name }}</td>
             <td>{{ item.beneficiary }}</td>
             <td>{{ item.supplier_article_name|default:"-" }}</td>
+            <td>{{ item.description|default:"-" }}</td>
             <td>{{ item.quantity }}</td>
             <td>{{ item.unit_price }}</td>
             <td>{{ item.value }}</td>
@@ -141,7 +178,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="8">No items added.</td>
+            <td colspan="9">No items added.</td>
           </tr>
         {% endfor %}
       </tbody>

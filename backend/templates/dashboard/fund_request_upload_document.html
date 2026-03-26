@@ -3,7 +3,7 @@
 {% block content %}
   <section class="card" style="max-width: 640px;">
     <h2 style="margin-top: 0;">Upload document</h2>
-    <p><strong>Fund request:</strong> {{ fund_request.fund_request_number|default:"Draft" }}</p>
+    <p><strong>Fund request:</strong> {{ fund_request.formatted_fund_request_number|default:"Draft" }}</p>
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
       <div class="grid2">

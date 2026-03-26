@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="card" style="max-width: 620px;">
+    <h2 style="margin-top: 0;">Delete purchase order</h2>
+    <p>Delete {{ object.purchase_order_number|default:"this draft purchase order" }}?</p>
+    <form method="post" data-confirm-message="Delete this purchase order?">
+      {% csrf_token %}
+      <button class="btn btn-danger" type="submit">Delete</button>
+      <a class="btn" href="{% url 'ui:purchase-order-list' %}">Cancel</a>
+    </form>
+  </section>
+{% endblock %}

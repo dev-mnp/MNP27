@@ -179,10 +179,17 @@
             <tr id="district-{{ row.district_id }}" class="summary-row" hidden>
               <td colspan="9">
                 <div class="summary-card">
-                  {% if row.internal_notes %}
-                    <div style="margin-bottom: 12px;"><strong>Internal Notes:</strong> {{ row.internal_notes }}</div>
-                  {% endif %}
-                  <table class="summary-detail-table">
+                  <div style="margin-bottom: 12px;"><strong>Internal Notes:</strong> {{ row.internal_notes|default:"-" }}</div>
+                  <table class="summary-detail-table summary-detail-table-entries">
+                    <colgroup>
+                      <col style="width: 24%;">
+                      <col style="width: 6%;">
+                      <col style="width: 14%;">
+                      <col style="width: 14%;">
+                      <col style="width: 14%;">
+                      <col style="width: 16%;">
+                      <col style="width: 12%;">
+                    </colgroup>
                     <thead>
                       <tr>
                         <th>Article</th>
@@ -420,10 +427,17 @@
                     <div><strong>Mobile:</strong> {{ row.mobile|default:"-" }}</div>
                     <div><strong>Address:</strong> {{ row.address|default:"-" }}</div>
                   </div>
-                  {% if row.internal_notes %}
-                    <div style="margin-bottom: 12px;"><strong>Internal Notes:</strong> {{ row.internal_notes }}</div>
-                  {% endif %}
-                  <table class="summary-detail-table">
+                  <div style="margin-bottom: 12px;"><strong>Internal Notes:</strong> {{ row.internal_notes|default:"-" }}</div>
+                  <table class="summary-detail-table summary-detail-table-entries">
+                    <colgroup>
+                      <col style="width: 24%;">
+                      <col style="width: 6%;">
+                      <col style="width: 14%;">
+                      <col style="width: 14%;">
+                      <col style="width: 14%;">
+                      <col style="width: 16%;">
+                      <col style="width: 12%;">
+                    </colgroup>
                     <thead>
                       <tr>
                         <th>Article</th>
@@ -772,6 +786,9 @@
     .summary-detail-table {
       width: 100%;
     }
+    .summary-detail-table-entries {
+      table-layout: fixed;
+    }
     .summary-detail-table th,
     .summary-detail-table td {
       vertical-align: top;
@@ -779,7 +796,8 @@
       padding-bottom: 8px;
     }
     .summary-detail-table th {
-      white-space: nowrap;
+      white-space: normal;
+      word-break: break-word;
     }
     .summary-detail-table th:not(:first-child),
     .summary-detail-table td:not(:first-child) {
@@ -789,8 +807,12 @@
     .summary-detail-table td:first-child {
       text-align: left;
     }
-    .summary-detail-table td:nth-child(6) {
-      white-space: nowrap;
+    .summary-detail-table-entries td:nth-child(6),
+    .summary-detail-table-entries th:nth-child(6),
+    .summary-detail-table-entries td:nth-child(7),
+    .summary-detail-table-entries th:nth-child(7) {
+      white-space: normal;
+      word-break: break-word;
     }
     .status-pill {
       display: inline;
