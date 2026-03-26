@@ -5,20 +5,21 @@
   <section class="card">
     <style>
       .fund-request-actions {
-        gap: 6px !important;
+        gap: 4px !important;
+        align-items: center;
       }
       .fund-request-actions .icon-btn {
-        width: 28px;
-        min-width: 28px;
-        height: 28px;
+        width: 26px;
+        min-width: 26px;
+        height: 26px;
         border: none;
         background: transparent;
         box-shadow: none;
         padding: 0;
       }
       .fund-request-actions .icon-btn svg {
-        width: 14px;
-        height: 14px;
+        width: 13px;
+        height: 13px;
       }
       .fund-request-actions .icon-btn svg { stroke: currentColor; }
       .fund-request-actions .fund-request-neutral-action.icon-btn {
@@ -45,11 +46,10 @@
         color: #b91c1c;
       }
       .fund-request-actions .fund-request-delete-btn.icon-btn {
-        width: 36px;
-        min-width: 36px;
-        height: 36px;
+        width: 26px;
+        min-width: 26px;
+        height: 26px;
         padding: 0;
-        border-radius: 999px;
         background: transparent;
         border: none;
         color: #dc2626;
@@ -64,7 +64,7 @@
         <h2 style="margin: 0 0 6px 0;">Fund request {{ fund_request.formatted_fund_request_number|default:"Draft" }}</h2>
         <div class="small" style="color: var(--text-secondary);">{% if fund_request.status == "submitted" %}This request has already moved its mapped quantities to ordered in Inventory Planning.{% else %}This request is still a draft and has not changed Inventory Planning yet.{% endif %}</div>
       </div>
-      <div class="actions-inline fund-request-actions" style="gap:12px;">
+      <div class="actions-inline fund-request-actions">
         <a class="btn icon-btn fund-request-neutral-action" title="Download PDF" aria-label="Download PDF" href="{% url 'ui:fund-request-pdf' fund_request.id %}" target="_blank" rel="noopener">
           <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
         </a>

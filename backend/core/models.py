@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+"""
+Core data model definitions for the MNP27 backend.
+
+Use this file when you need to change persisted business entities, numbering
+formats, role/module permissions, or relationships between the major modules
+such as master entry, fund requests, inventory planning, and purchase orders.
+"""
+
 from decimal import Decimal
 from uuid import uuid4
 
@@ -722,7 +730,10 @@ class DistrictBeneficiaryEntry(BaseTimestampedModel):
     article_cost_per_unit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     quantity = models.PositiveIntegerField(default=1)
     total_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    item_comes_here = models.BooleanField(blank=True, null=True)
+    name_of_beneficiary = models.CharField(max_length=255, blank=True, null=True)
     name_of_institution = models.CharField(max_length=255, blank=True, null=True)
+    aadhar_number = models.CharField(max_length=20, blank=True, null=True)
     cheque_rtgs_in_favour = models.CharField(max_length=255, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     internal_notes = models.TextField(blank=True, null=True)
@@ -770,6 +781,7 @@ class PublicBeneficiaryEntry(BaseTimestampedModel):
     article_cost_per_unit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     quantity = models.PositiveIntegerField(default=1)
     total_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    item_comes_here = models.BooleanField(blank=True, null=True)
     name_of_institution = models.CharField(max_length=255, blank=True, null=True)
     cheque_rtgs_in_favour = models.CharField(max_length=255, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
@@ -817,7 +829,10 @@ class InstitutionsBeneficiaryEntry(BaseTimestampedModel):
     article_cost_per_unit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     quantity = models.PositiveIntegerField(default=1)
     total_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    item_comes_here = models.BooleanField(blank=True, null=True)
+    name_of_beneficiary = models.CharField(max_length=255, blank=True, null=True)
     name_of_institution = models.CharField(max_length=255, blank=True, null=True)
+    aadhar_number = models.CharField(max_length=20, blank=True, null=True)
     cheque_rtgs_in_favour = models.CharField(max_length=255, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     internal_notes = models.TextField(blank=True, null=True)

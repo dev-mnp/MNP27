@@ -62,7 +62,7 @@
       <div class="toolbar" style="align-items: end; margin-bottom: 0;">
         <div style="flex: 1;">
           <label>Aadhar Number<span class="required-star">*</span></label>
-          <input class="input" type="text" name="aadhar_number" value="{{ public_form_data.aadhar_number }}" placeholder="Enter 12-digit Aadhaar number" maxlength="12" inputmode="numeric" pattern="[0-9]{12}" data-submit-required="true">
+          <input class="input" type="text" name="aadhar_number" id="public-primary-aadhar" value="{{ public_form_data.aadhar_number }}" placeholder="Enter 12-digit Aadhaar number" maxlength="12" inputmode="numeric" pattern="[0-9]{12}" data-submit-required="true">
         </div>
         <button class="btn" type="submit" name="action" value="verify"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7H3V5h11"/></svg><span>Verify</span></button>
       </div>
@@ -242,16 +242,27 @@
           </div>
         </div>
 
-        <div style="grid-column: span 2;" id="public-cheque-wrap" {% if public_entry.article.item_type != "Aid" and public_form_data.article_id %}hidden{% endif %}>
-          <label>Name of Institution</label>
-          <input class="input" type="text" name="name_of_institution" id="public-name-of-institution" value="{{ public_form_data.name_of_institution }}" placeholder="Optional" style="margin-bottom:10px;">
-          <label>Cheque / RTGS in Favour</label>
-          <textarea class="textarea" name="cheque_rtgs_in_favour" id="public-cheque-rtgs" rows="2">{{ public_form_data.cheque_rtgs_in_favour }}</textarea>
-        </div>
-
         <div style="grid-column: span 2;">
-          <label>Comments</label>
-          <input class="input" type="text" name="notes" value="{{ public_form_data.notes }}">
+          <div class="public-aid-card" id="public-aid-fields" {% if public_entry.article.item_type != "Aid" and public_form_data.article_id %}hidden{% endif %}>
+            <div class="public-aid-grid">
+              <div class="public-aid-field public-aid-field-wide">
+                <label>Details</label>
+                <textarea class="textarea" name="notes" id="public-notes" rows="2">{{ public_form_data.notes }}</textarea>
+              </div>
+              <div class="public-aid-field" id="public-aid-aadhar-wrap">
+                <label>Aadhar Number</label>
+                <input class="input" type="text" id="public-aid-aadhar" value="{{ public_form_data.aadhar_number }}" placeholder="Optional" maxlength="12" inputmode="numeric" pattern="[0-9]{12}">
+              </div>
+              <div class="public-aid-field" id="public-cheque-wrap">
+                <label>Name of Institution</label>
+                <input class="input" type="text" name="name_of_institution" id="public-name-of-institution" value="{{ public_form_data.name_of_institution }}" placeholder="Optional">
+              </div>
+              <div class="public-aid-field public-aid-field-wide" id="public-cheque-rtgs-wrap">
+                <label>Cheque / RTGS in Favour</label>
+                <textarea class="textarea" name="cheque_rtgs_in_favour" id="public-cheque-rtgs" rows="2">{{ public_form_data.cheque_rtgs_in_favour }}</textarea>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       </div>
@@ -360,8 +371,29 @@
     .public-metric-block {
       min-width: 0;
     }
+    .public-aid-card {
+      padding: 14px;
+      border: 1px solid #dbe3f0;
+      border-radius: 18px;
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+    }
+    .public-aid-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px 14px;
+    }
+    .public-aid-field {
+      min-width: 0;
+    }
+    .public-aid-field-wide {
+      grid-column: 1 / -1;
+    }
     @media (max-width: 980px) {
       .public-metrics-row {
+        grid-template-columns: 1fr;
+      }
+      .public-aid-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -393,8 +425,13 @@
       const saveButtons = Array.from(form.querySelectorAll(".js-save-button"));
       const submitButton = form.querySelector(".js-submit-button");
       const articleSelect = document.getElementById("public-article-select");
+      const aidFieldsCard = document.getElementById("public-aid-fields");
+      const primaryAadharInput = document.getElementById("public-primary-aadhar");
+      const aidAadharInput = document.getElementById("public-aid-aadhar");
+      const aidAadharWrap = document.getElementById("public-aid-aadhar-wrap");
       const unitCostInput = document.getElementById("public-unit-cost");
       const chequeWrap = document.getElementById("public-cheque-wrap");
+      const chequeRtgsWrap = document.getElementById("public-cheque-rtgs-wrap");
       const chequeInput = document.getElementById("public-cheque-rtgs");
       const quantityInput = document.getElementById("public-quantity");
       const qtyMinusBtn = document.getElementById("public-qty-minus");
@@ -515,12 +552,21 @@
         if (chequeWrap) {
           const showCheque = itemType === "Aid";
           const institutionNameInput = document.getElementById("public-name-of-institution");
-          chequeWrap.hidden = !showCheque;
+          const notesInput = document.getElementById("public-notes");
+          if (aidFieldsCard) {
+            aidFieldsCard.hidden = !showCheque;
+          }
           if (!showCheque && chequeInput) {
             chequeInput.value = "";
           }
           if (!showCheque && institutionNameInput) {
             institutionNameInput.value = "";
+          }
+          if (!showCheque && notesInput) {
+            notesInput.value = "";
+          }
+          if (!showCheque && aidAadharInput) {
+            aidAadharInput.value = "";
           }
         }
         const cost = Number(unitCostInput.value || 0);
@@ -529,6 +575,11 @@
           minimumFractionDigits: 0
         });
         lastArticleId = selectedArticleId;
+      }
+
+      function syncAidAadhar(source, target) {
+        if (!source || !target || target.value === source.value) return;
+        target.value = source.value;
       }
 
       function updateSubmitRequirements(mode) {
@@ -588,6 +639,16 @@
         }
         recalc();
       });
+      if (primaryAadharInput && aidAadharInput) {
+        primaryAadharInput.addEventListener("input", function() {
+          syncAidAadhar(primaryAadharInput, aidAadharInput);
+          updateSaveState();
+        });
+        aidAadharInput.addEventListener("input", function() {
+          syncAidAadhar(aidAadharInput, primaryAadharInput);
+          updateSaveState();
+        });
+      }
       quantityInput.addEventListener("input", recalc);
       unitCostInput.addEventListener("input", recalc);
       handicappedInputs.forEach(function(input) {

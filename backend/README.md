@@ -15,6 +15,13 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
+## Developer guide
+
+If you are new to this codebase, start with:
+
+- `CODEBASE_GUIDE.md` for the architecture overview
+- `CHANGE_MAP.md` for "if I want to change X, where do I go?"
+
 ## What is included
 
 - Custom user model with roles (`admin`, `editor`, `viewer`) in `core.AppUser`

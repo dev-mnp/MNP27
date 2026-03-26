@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Route map for the server-rendered UI under `/ui/`."""
+
 from django.urls import path
 
 from . import web_views

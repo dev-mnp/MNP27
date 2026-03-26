@@ -109,28 +109,36 @@
 
       <table id="district-items-table">
         <colgroup>
-          <col style="width: 31%;">
-          <col style="width: 10%;">
-          <col style="width: 15%;">
-          <col style="width: 12%;">
-          <col style="width: 12%;">
-          <col style="width: 14%;">
           <col style="width: 6%;">
+          <col style="width: 38%;">
+          <col style="width: 10%;">
+          <col style="width: 16%;">
+          <col style="width: 13%;">
+          <col style="width: 13%;">
+          <col style="width: 8%;">
         </colgroup>
         <thead>
           <tr>
+            <th>S.No</th>
             <th><button class="table-sort-btn" type="button" data-sort-key="item">Item <span class="required-star">*</span> <span class="sort-indicator">⇅</span></button></th>
             <th><button class="table-sort-btn" type="button" data-sort-key="type">Type <span class="sort-indicator">⇅</span></button></th>
             <th><button class="table-sort-btn" type="button" data-sort-key="quantity">Quantity <span class="required-star">*</span> <span class="sort-indicator">⇅</span></button></th>
             <th><button class="table-sort-btn" type="button" data-sort-key="unit_cost">Unit Price <span class="required-star">*</span> <span class="sort-indicator">⇅</span></button></th>
             <th><button class="table-sort-btn" type="button" data-sort-key="total">Total <span class="sort-indicator">⇅</span></button></th>
-            <th><button class="table-sort-btn" type="button" data-sort-key="comment">Comment <span class="sort-indicator">⇅</span></button></th>
             <th>Action</th>
           </tr>
         </thead>
         <tbody id="district-items-body">
           {% for row in entry_rows %}
             <tr class="district-item-row">
+              <td class="row-serial-cell">
+                <div class="row-serial-wrap">
+                  <span class="row-serial-label">{{ forloop.counter }}</span>
+                  <button class="btn icon-btn aid-toggle-btn{% if row.item_type != 'Aid' %} is-hidden{% endif %}" type="button" title="Collapse aid details" aria-label="Collapse aid details" aria-expanded="{% if row.item_type == 'Aid' %}true{% else %}false{% endif %}">
+                    <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+                  </button>
+                </div>
+              </td>
               <td>
                 <select class="input article-select" name="article_id">
                   <option value="">Select Item</option>
@@ -164,26 +172,35 @@
                 <input class="line-total" type="hidden" value="0">
               </td>
               <td>
-                <div class="item-row-notes-stack">
-                  <div class="item-row-inline-field">
-                    <input class="input notes-input item-notes" name="notes" value="{{ row.notes }}" placeholder="Comments">
-                  </div>
-                  <div class="cheque-wrap" {% if row.item_type != "Aid" %}hidden{% endif %}>
-                    <div class="item-row-subfield">
-                      <div class="item-row-subfield-label">Name of Institution</div>
-                      <input class="input institution-name-input" name="name_of_institution" value="{{ row.name_of_institution }}" placeholder="Optional">
-                    </div>
-                    <div class="item-row-subfield">
-                      <div class="item-row-subfield-label">Cheque / RTGS in Favour</div>
-                      <textarea class="textarea cheque-input" name="cheque_rtgs_in_favour" rows="2">{{ row.cheque_rtgs_in_favour }}</textarea>
-                    </div>
-                  </div>
-                </div>
-              </td>
-              <td>
                 <button class="btn btn-danger icon-btn remove-row-btn" type="button" title="Remove item" aria-label="Remove item">
                   <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
                 </button>
+              </td>
+            </tr>
+            <tr class="district-item-aid-row" {% if row.item_type != "Aid" %}hidden{% endif %}>
+              <td colspan="8" class="aid-row-shell">
+                <div class="cheque-wrap aid-details-card">
+                  <div class="item-row-subfield">
+                    <div class="item-row-subfield-label">Name of Beneficiary</div>
+                    <input class="input beneficiary-name-input" name="name_of_beneficiary" value="{{ row.name_of_beneficiary }}" placeholder="Optional">
+                  </div>
+                  <div class="item-row-subfield item-row-details-block">
+                    <div class="item-row-subfield-label">Details</div>
+                    <textarea class="textarea notes-input item-notes" name="notes" rows="2" placeholder="Optional">{{ row.notes }}</textarea>
+                  </div>
+                  <div class="item-row-subfield">
+                    <div class="item-row-subfield-label">Cheque / RTGS in Favour</div>
+                    <textarea class="textarea cheque-input" name="cheque_rtgs_in_favour" rows="2">{{ row.cheque_rtgs_in_favour }}</textarea>
+                  </div>
+                  <div class="item-row-subfield">
+                    <div class="item-row-subfield-label">Aadhaar Number</div>
+                    <input class="input aadhar-input" name="aadhar_number" value="{{ row.aadhar_number }}" placeholder="Optional">
+                  </div>
+                  <div class="item-row-subfield">
+                    <div class="item-row-subfield-label">Name of Institution</div>
+                    <input class="input institution-name-input" name="name_of_institution" value="{{ row.name_of_institution }}" placeholder="Optional">
+                  </div>
+                </div>
               </td>
             </tr>
           {% endfor %}
@@ -197,6 +214,14 @@
 
       <template id="district-item-row-template">
         <tr class="district-item-row">
+          <td class="row-serial-cell">
+            <div class="row-serial-wrap">
+              <span class="row-serial-label">1</span>
+              <button class="btn icon-btn aid-toggle-btn is-hidden" type="button" title="Collapse aid details" aria-label="Collapse aid details" aria-expanded="false">
+                <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+            </div>
+          </td>
           <td>
             <select class="input article-select" name="article_id">
               <option value="">Select Item</option>
@@ -223,26 +248,35 @@
             <input class="line-total" type="hidden" value="0">
           </td>
           <td>
-            <div class="item-row-notes-stack">
-              <div class="item-row-inline-field">
-                <input class="input notes-input item-notes" name="notes" value="" placeholder="Comments">
-              </div>
-              <div class="cheque-wrap" hidden>
-                <div class="item-row-subfield">
-                  <div class="item-row-subfield-label">Name of Institution</div>
-                  <input class="input institution-name-input" name="name_of_institution" value="" placeholder="Optional">
-                </div>
-                <div class="item-row-subfield">
-                  <div class="item-row-subfield-label">Cheque / RTGS in Favour</div>
-                  <textarea class="textarea cheque-input" name="cheque_rtgs_in_favour" rows="2"></textarea>
-                </div>
-              </div>
-            </div>
-          </td>
-          <td>
             <button class="btn btn-danger icon-btn remove-row-btn" type="button" title="Remove item" aria-label="Remove item">
               <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
             </button>
+          </td>
+        </tr>
+        <tr class="district-item-aid-row" hidden>
+          <td colspan="8" class="aid-row-shell">
+            <div class="cheque-wrap aid-details-card">
+              <div class="item-row-subfield">
+                <div class="item-row-subfield-label">Name of Beneficiary</div>
+                <input class="input beneficiary-name-input" name="name_of_beneficiary" value="" placeholder="Optional">
+              </div>
+              <div class="item-row-subfield item-row-details-block">
+                <div class="item-row-subfield-label">Details</div>
+                <textarea class="textarea notes-input item-notes" name="notes" rows="2" placeholder="Optional"></textarea>
+              </div>
+              <div class="item-row-subfield">
+                <div class="item-row-subfield-label">Cheque / RTGS in Favour</div>
+                <textarea class="textarea cheque-input" name="cheque_rtgs_in_favour" rows="2"></textarea>
+              </div>
+              <div class="item-row-subfield">
+                <div class="item-row-subfield-label">Aadhaar Number</div>
+                <input class="input aadhar-input" name="aadhar_number" value="" placeholder="Optional">
+              </div>
+              <div class="item-row-subfield">
+                <div class="item-row-subfield-label">Name of Institution</div>
+                <input class="input institution-name-input" name="name_of_institution" value="" placeholder="Optional">
+              </div>
+            </div>
           </td>
         </tr>
       </template>
@@ -484,20 +518,35 @@
       }
 
       function bindRow(row) {
+        const aidRow = row.nextElementSibling && row.nextElementSibling.classList.contains("district-item-aid-row")
+          ? row.nextElementSibling
+          : null;
         const articleSelect = row.querySelector(".article-select");
+        const aidToggleBtn = row.querySelector(".aid-toggle-btn");
         const itemTypeDisplay = row.querySelector(".item-type-display");
         const quantityInput = row.querySelector(".quantity-input");
         const unitCostInput = row.querySelector(".unit-cost-input");
         const lineTotalInput = row.querySelector(".line-total");
         const lineTotalDisplay = row.querySelector(".line-total-display");
-        const notesInput = row.querySelector(".notes-input");
-        const chequeWrap = row.querySelector(".cheque-wrap");
-        const chequeInput = row.querySelector(".cheque-input");
+        const notesInput = aidRow?.querySelector(".notes-input");
+        const chequeWrap = aidRow?.querySelector(".cheque-wrap");
+        const chequeInput = aidRow?.querySelector(".cheque-input");
+        const aadharInput = aidRow?.querySelector(".aadhar-input");
         const duplicateIndicator = row.querySelector(".duplicate-indicator");
         const qtyMinusBtn = row.querySelector(".qty-minus");
         const qtyPlusBtn = row.querySelector(".qty-plus");
         const removeBtn = row.querySelector(".remove-row-btn");
         let lastArticleId = articleSelect.value;
+
+        function syncAidToggle(showAid) {
+          if (!aidToggleBtn) return;
+          aidToggleBtn.classList.toggle("is-hidden", !showAid);
+          const collapsed = row.dataset.aidCollapsed === "true";
+          aidToggleBtn.classList.toggle("is-collapsed", collapsed);
+          aidToggleBtn.setAttribute("aria-expanded", showAid && !collapsed ? "true" : "false");
+          aidToggleBtn.title = showAid && !collapsed ? "Collapse aid details" : "Expand aid details";
+          aidToggleBtn.setAttribute("aria-label", aidToggleBtn.title);
+        }
 
         function updateRow() {
           const selected = articleSelect.options[articleSelect.selectedIndex];
@@ -518,17 +567,31 @@
             unitCostInput.readOnly = false;
           }
 
-          notesInput.required = itemType === "Aid";
           if (chequeWrap) {
             const showCheque = itemType === "Aid";
-            const institutionNameInput = row.querySelector(".institution-name-input");
-            chequeWrap.hidden = !showCheque;
+            const beneficiaryNameInput = aidRow?.querySelector(".beneficiary-name-input");
+            const institutionNameInput = aidRow?.querySelector(".institution-name-input");
+            const collapsed = row.dataset.aidCollapsed === "true";
+            if (aidRow) {
+              aidRow.hidden = !showCheque || collapsed;
+            }
+            row.classList.toggle("row-has-aid-open", showCheque && !collapsed);
+            if (!showCheque && beneficiaryNameInput) {
+              beneficiaryNameInput.value = "";
+            }
+            if (!showCheque && notesInput) {
+              notesInput.value = "";
+            }
             if (!showCheque && chequeInput) {
               chequeInput.value = "";
+            }
+            if (!showCheque && aadharInput) {
+              aadharInput.value = "";
             }
             if (!showCheque && institutionNameInput) {
               institutionNameInput.value = "";
             }
+            syncAidToggle(showCheque);
           }
           const unitCost = Number(unitCostInput.value || 0);
           const lineTotal = quantity * unitCost;
@@ -537,6 +600,7 @@
           lastArticleId = selectedArticleId;
           recalcTotals();
           markDuplicateItems();
+          refreshRowMeta();
           updateSaveState();
         }
 
@@ -562,13 +626,32 @@
           quantityInput.value = current + 1;
           updateRow();
         });
+        if (aidToggleBtn) {
+          aidToggleBtn.addEventListener("click", function() {
+            row.dataset.aidCollapsed = row.dataset.aidCollapsed === "true" ? "false" : "true";
+            updateRow();
+          });
+        }
         removeBtn.addEventListener("click", function() {
+          if (aidRow) {
+            aidRow.remove();
+          }
           row.remove();
           recalcTotals();
           markDuplicateItems();
+          refreshRowMeta();
           updateSaveState();
         });
         updateRow();
+      }
+
+      function refreshRowMeta() {
+        Array.from(itemsBody.querySelectorAll(".district-item-row")).forEach(function(row, index) {
+          const label = row.querySelector(".row-serial-label");
+          if (label) {
+            label.textContent = String(index + 1);
+          }
+        });
       }
 
       function markDuplicateItems() {
@@ -639,7 +722,6 @@
         if (key === "quantity") return Number(row.querySelector(".quantity-input")?.value || 0);
         if (key === "unit_cost") return Number(row.querySelector(".unit-cost-input")?.value || 0);
         if (key === "total") return Number(row.querySelector(".line-total")?.value || 0);
-        if (key === "comment") return row.querySelector(".notes-input")?.value.trim().toLowerCase() || "";
         return "";
       }
 
@@ -662,15 +744,28 @@
           currentSortKey = key;
           currentSortDir = "asc";
         }
-        const rows = Array.from(itemsBody.querySelectorAll(".district-item-row"));
-        rows.sort(function(a, b) {
-          const aValue = sortValue(a, key);
-          const bValue = sortValue(b, key);
+        const rowPairs = Array.from(itemsBody.querySelectorAll(".district-item-row")).map(function(row) {
+          return {
+            row: row,
+            aidRow: row.nextElementSibling && row.nextElementSibling.classList.contains("district-item-aid-row")
+              ? row.nextElementSibling
+              : null
+          };
+        });
+        rowPairs.sort(function(a, b) {
+          const aValue = sortValue(a.row, key);
+          const bValue = sortValue(b.row, key);
           if (aValue < bValue) return currentSortDir === "asc" ? -1 : 1;
           if (aValue > bValue) return currentSortDir === "asc" ? 1 : -1;
           return 0;
         });
-        rows.forEach(function(row) { itemsBody.appendChild(row); });
+        rowPairs.forEach(function(pair) {
+          itemsBody.appendChild(pair.row);
+          if (pair.aidRow) {
+            itemsBody.appendChild(pair.aidRow);
+          }
+        });
+        refreshRowMeta();
         updateSortIndicators();
         markDuplicateItems();
         updateSaveState();
@@ -680,9 +775,10 @@
         const fragment = rowTemplate.content.cloneNode(true);
         const row = fragment.querySelector(".district-item-row");
         itemsBody.appendChild(fragment);
-        bindRow(itemsBody.lastElementChild);
+        bindRow(row);
         if (currentSortKey) sortRows(currentSortKey);
         markDuplicateItems();
+        refreshRowMeta();
         updateSaveState();
       });
 
@@ -730,6 +826,7 @@
         updateDistrictMeta();
       }
       markDuplicateItems();
+      refreshRowMeta();
       initialSnapshot = formSnapshot();
       updateSaveState();
     })();
@@ -742,11 +839,124 @@
     }
     .item-row-notes-stack {
       display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+    .row-serial-cell {
+      text-align: center;
+      vertical-align: middle;
+      width: 72px;
+      min-width: 72px;
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+    .row-serial-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       gap: 8px;
+      width: 100%;
+      min-height: 72px;
+    }
+    .row-serial-label {
+      display: block;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1;
+      min-width: 2ch;
+      text-align: center;
+    }
+    .aid-toggle-btn {
+      width: 28px;
+      min-width: 28px;
+      height: 28px;
+      padding: 0;
+      border-color: #cbd5e1;
+      background: #ffffff;
+      color: #7c8aa0;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    }
+    .aid-toggle-btn svg {
+      width: 14px;
+      height: 14px;
+      display: block;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .aid-toggle-btn svg path {
+      stroke: currentColor;
+      fill: none;
+    }
+    .aid-toggle-btn:hover {
+      color: #2563eb;
+      border-color: #bfdbfe;
+      background: #eff6ff;
+    }
+    .aid-toggle-btn.is-collapsed svg {
+      transform: rotate(-90deg);
+    }
+    .aid-toggle-btn.is-hidden {
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .aid-row-shell {
+      padding: 0;
+      background: #fff;
+      border-top: 0;
+    }
+    .item-row-details-block .item-notes {
+      min-height: 44px;
+      resize: vertical;
+    }
+    .aid-details-card {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 12px;
+      padding: 10px 12px 12px;
+      border: 0;
+      border-radius: 0;
+      background: #ffffff;
+      box-shadow: inset 0 1px 0 #dbe3f0;
+    }
+    .district-item-row td {
+      background: #ffffff;
+      border-bottom: 0;
+    }
+    .district-item-row.row-has-aid-open td {
+      border-top: 1px solid #dbe3f0;
+      border-bottom: 0;
+    }
+    .district-item-row.row-has-aid-open td:first-child {
+      border-left: 1px solid #dbe3f0;
+      border-top-left-radius: 14px;
+    }
+    .district-item-row.row-has-aid-open td:last-child {
+      border-right: 1px solid #dbe3f0;
+      border-top-right-radius: 14px;
+    }
+    .district-item-aid-row td {
+      background: #ffffff;
+      padding: 0;
+      border-left: 1px solid #dbe3f0;
+      border-right: 1px solid #dbe3f0;
+      border-bottom: 1px solid #dbe3f0;
+      border-bottom-left-radius: 14px;
+      border-bottom-right-radius: 14px;
+      overflow: hidden;
+    }
+    .district-item-aid-row .cheque-input {
+      min-height: 44px;
     }
     .item-row-subfield {
       display: grid;
       gap: 4px;
+    }
+    .aid-span-full {
+      grid-column: 1 / -1;
     }
     .item-row-subfield-label {
       font-size: 0.73rem;
@@ -990,11 +1200,9 @@
     #district-items-table td:nth-child(3),
     #district-items-table td:nth-child(4),
     #district-items-table td:nth-child(5),
+    #district-items-table td:nth-child(6),
     #district-items-table td:nth-child(7) {
       text-align: center;
-    }
-    #district-items-table td:nth-child(6) {
-      text-align: left;
     }
     .district-total-wrap {
       margin-top: 22px;
@@ -1014,6 +1222,9 @@
     }
     @media (max-width: 900px) {
       .district-summary-grid {
+        grid-template-columns: 1fr;
+      }
+      .aid-details-card {
         grid-template-columns: 1fr;
       }
     }

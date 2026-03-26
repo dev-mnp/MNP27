@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""
+Server-rendered UI views, helper functions, list filtering, and form workflows.
+
+This is the main file to inspect when changing the behavior of the Django
+templates under ``templates/dashboard/``.
+"""
+
 import csv
 import base64
 import json
@@ -1147,7 +1154,9 @@ def _district_audit_snapshot(district):
                 "quantity": entry.quantity,
                 "unit_cost": str(entry.article_cost_per_unit or 0),
                 "total_amount": str(entry.total_amount or 0),
+                "name_of_beneficiary": entry.name_of_beneficiary or "",
                 "name_of_institution": entry.name_of_institution or "",
+                "aadhar_number": entry.aadhar_number or "",
                 "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour or "",
                 "notes": entry.notes or "",
             }
@@ -1207,7 +1216,9 @@ def _institution_audit_snapshot(application_number):
                 "quantity": entry.quantity,
                 "unit_cost": str(entry.article_cost_per_unit or 0),
                 "total_amount": str(entry.total_amount or 0),
+                "name_of_beneficiary": entry.name_of_beneficiary or "",
                 "name_of_institution": entry.name_of_institution or "",
+                "aadhar_number": entry.aadhar_number or "",
                 "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour or "",
                 "notes": entry.notes or "",
             }
@@ -1549,7 +1560,9 @@ def _build_district_entry_summaries():
                         "quantity": entry.quantity,
                         "unit_cost": entry.article_cost_per_unit,
                         "total_amount": entry.total_amount,
+                        "name_of_beneficiary": entry.name_of_beneficiary,
                         "name_of_institution": entry.name_of_institution,
+                        "aadhar_number": entry.aadhar_number,
                         "notes": entry.notes,
                         "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour,
                         "changed_at": entry.updated_at,
@@ -1574,7 +1587,9 @@ def _filter_sort_district_summaries(summaries, *, search_query="", date_from="",
             or query in (row.get("status") or "").lower()
             or any(
                 query in str(item.get("article_name") or "").lower()
+                or query in str(item.get("name_of_beneficiary") or "").lower()
                 or query in str(item.get("name_of_institution") or "").lower()
+                or query in str(item.get("aadhar_number") or "").lower()
                 or query in str(item.get("notes") or "").lower()
                 or query in str(item.get("cheque_rtgs_in_favour") or "").lower()
                 for item in row.get("detail_items", [])
@@ -1626,10 +1641,22 @@ def _parse_district_rows(post_data):
     quantities = post_data.getlist("quantity")
     unit_costs = post_data.getlist("unit_cost")
     notes_list = post_data.getlist("notes")
+    name_of_beneficiary_list = post_data.getlist("name_of_beneficiary")
     name_of_institution_list = post_data.getlist("name_of_institution")
+    aadhar_number_list = post_data.getlist("aadhar_number")
     cheque_rtgs_list = post_data.getlist("cheque_rtgs_in_favour")
     rows = []
-    max_len = max(len(article_ids), len(quantities), len(unit_costs), len(notes_list), len(name_of_institution_list), len(cheque_rtgs_list), 0)
+    max_len = max(
+        len(article_ids),
+        len(quantities),
+        len(unit_costs),
+        len(notes_list),
+        len(name_of_beneficiary_list),
+        len(name_of_institution_list),
+        len(aadhar_number_list),
+        len(cheque_rtgs_list),
+        0,
+    )
     for idx in range(max_len):
         rows.append(
             {
@@ -1637,7 +1664,9 @@ def _parse_district_rows(post_data):
                 "quantity": (quantities[idx] if idx < len(quantities) else "").strip(),
                 "unit_cost": (unit_costs[idx] if idx < len(unit_costs) else "").strip(),
                 "notes": (notes_list[idx] if idx < len(notes_list) else "").strip(),
+                "name_of_beneficiary": (name_of_beneficiary_list[idx] if idx < len(name_of_beneficiary_list) else "").strip(),
                 "name_of_institution": (name_of_institution_list[idx] if idx < len(name_of_institution_list) else "").strip(),
+                "aadhar_number": (aadhar_number_list[idx] if idx < len(aadhar_number_list) else "").strip(),
                 "cheque_rtgs_in_favour": (cheque_rtgs_list[idx] if idx < len(cheque_rtgs_list) else "").strip(),
             }
         )
@@ -1676,10 +1705,6 @@ def _validate_and_build_district_entries(district, raw_rows, *, internal_notes="
             errors.append(f"Row {index}: {article.article_name} can be added only once.")
             continue
 
-        if article.item_type == models.ItemTypeChoices.AID and not row["notes"]:
-            errors.append(f"Row {index}: comment is mandatory for aid items.")
-            continue
-
         if article.cost_per_unit and article.cost_per_unit > 0:
             unit_cost = article.cost_per_unit
         else:
@@ -1700,7 +1725,9 @@ def _validate_and_build_district_entries(district, raw_rows, *, internal_notes="
                 "article_cost_per_unit": unit_cost,
                 "quantity": quantity,
                 "total_amount": total_amount,
+                "name_of_beneficiary": row.get("name_of_beneficiary") or None,
                 "name_of_institution": row["name_of_institution"] or None,
+                "aadhar_number": row["aadhar_number"] or None,
                 "cheque_rtgs_in_favour": row["cheque_rtgs_in_favour"] or None,
                 "notes": row["notes"] or None,
                 "internal_notes": internal_notes or None,
@@ -1792,7 +1819,9 @@ class DistrictMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, TemplateVi
                         "quantity": row["quantity"],
                         "unit_cost": row["unit_cost"],
                         "notes": row["notes"],
+                        "name_of_beneficiary": row.get("name_of_beneficiary", ""),
                         "name_of_institution": row.get("name_of_institution", ""),
+                        "aadhar_number": row.get("aadhar_number", ""),
                         "cheque_rtgs_in_favour": row.get("cheque_rtgs_in_favour", ""),
                         "article_name": article.article_name if article else "",
                         "item_type": article.item_type if article else "",
@@ -1891,7 +1920,9 @@ class DistrictMasterEntryUpdateView(DistrictMasterEntryBaseView):
                 "quantity": entry.quantity,
                 "unit_cost": entry.article_cost_per_unit,
                 "notes": entry.notes or "",
+                "name_of_beneficiary": entry.name_of_beneficiary or "",
                 "name_of_institution": entry.name_of_institution or "",
+                "aadhar_number": entry.aadhar_number or "",
                 "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour or "",
                 "article_name": entry.article.article_name,
                 "item_type": entry.article.item_type,
@@ -1937,6 +1968,7 @@ class DistrictMasterEntryDetailView(LoginRequiredMixin, RoleRequiredMixin, Templ
         entries = list(models.DistrictBeneficiaryEntry.objects.filter(district=district).select_related("article").order_by("id"))
         total_accrued = sum((entry.total_amount or 0) for entry in entries)
         total_quantity = sum((entry.quantity or 0) for entry in entries)
+        status = entries[0].status if entries else ""
         context.update(
             {
                 "district": district,
@@ -1944,8 +1976,10 @@ class DistrictMasterEntryDetailView(LoginRequiredMixin, RoleRequiredMixin, Templ
                 "total_accrued": total_accrued,
                 "total_quantity": total_quantity,
                 "remaining_fund": (district.allotted_budget or 0) - total_accrued,
+                "application_status": status,
             }
         )
+        context.update(_district_attachment_context(district))
         return context
 
 
@@ -2177,7 +2211,9 @@ def _build_institution_entry_summaries():
                         "quantity": entry.quantity,
                         "unit_cost": entry.article_cost_per_unit,
                         "total_amount": entry.total_amount,
+                        "name_of_beneficiary": entry.name_of_beneficiary,
                         "name_of_institution": entry.name_of_institution,
+                        "aadhar_number": entry.aadhar_number,
                         "notes": entry.notes,
                         "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour,
                         "changed_at": entry.updated_at,
@@ -2192,7 +2228,7 @@ def _build_institution_entry_summaries():
 
 def _filter_sort_public_entries(queryset, *, search_query="", date_from="", date_to="", status_filter="", sort_by="", sort_dir="desc"):
     if search_query:
-        queryset = queryset.filter(
+        query_filter = (
             Q(application_number__icontains=search_query)
             | Q(name__icontains=search_query)
             | Q(aadhar_number__icontains=search_query)
@@ -2203,6 +2239,7 @@ def _filter_sort_public_entries(queryset, *, search_query="", date_from="", date
             | Q(notes__icontains=search_query)
             | Q(cheque_rtgs_in_favour__icontains=search_query)
         )
+        queryset = queryset.filter(query_filter)
     if date_from:
         queryset = queryset.filter(created_at__date__gte=date_from)
     if date_to:
@@ -2239,7 +2276,9 @@ def _filter_sort_institution_summaries(summaries, *, search_query="", date_from=
             or query in (row.get("status") or "").lower()
             or any(
                 query in str(item.get("article_name") or "").lower()
+                or query in str(item.get("name_of_beneficiary") or "").lower()
                 or query in str(item.get("name_of_institution") or "").lower()
+                or query in str(item.get("aadhar_number") or "").lower()
                 or query in str(item.get("notes") or "").lower()
                 or query in str(item.get("cheque_rtgs_in_favour") or "").lower()
                 for item in row.get("detail_items", [])
@@ -2331,17 +2370,15 @@ def _validate_institution_rows(raw_rows, *, require_complete=True, internal_note
                 errors.append(f"Row {index}: enter a valid price for {article.article_name}.")
                 continue
 
-        if require_complete and article.item_type == models.ItemTypeChoices.AID and not (row["notes"] or "").strip():
-            errors.append(f"Row {index}: comment is required for aid items.")
-            continue
-
         built_rows.append(
             {
                 "article": article,
                 "article_cost_per_unit": unit_cost,
                 "quantity": quantity,
                 "total_amount": unit_cost * quantity,
+                "name_of_beneficiary": row.get("name_of_beneficiary") or None,
                 "name_of_institution": row.get("name_of_institution") or None,
+                "aadhar_number": row.get("aadhar_number") or None,
                 "cheque_rtgs_in_favour": row.get("cheque_rtgs_in_favour") or None,
                 "notes": row["notes"] or None,
                 "internal_notes": internal_notes or None,
@@ -2381,8 +2418,14 @@ def _sync_district_entries(existing_entries, built_rows, user):
         if match.total_amount != built["total_amount"]:
             match.total_amount = built["total_amount"]
             changed = True
+        if match.name_of_beneficiary != built.get("name_of_beneficiary"):
+            match.name_of_beneficiary = built.get("name_of_beneficiary")
+            changed = True
         if match.name_of_institution != built.get("name_of_institution"):
             match.name_of_institution = built.get("name_of_institution")
+            changed = True
+        if match.aadhar_number != built.get("aadhar_number"):
+            match.aadhar_number = built.get("aadhar_number")
             changed = True
         if match.cheque_rtgs_in_favour != built.get("cheque_rtgs_in_favour"):
             match.cheque_rtgs_in_favour = built.get("cheque_rtgs_in_favour")
@@ -2459,8 +2502,14 @@ def _sync_institution_entries(existing_entries, built_rows, user, *, application
         if match.total_amount != built["total_amount"]:
             match.total_amount = built["total_amount"]
             changed = True
+        if match.name_of_beneficiary != built.get("name_of_beneficiary"):
+            match.name_of_beneficiary = built.get("name_of_beneficiary")
+            changed = True
         if match.name_of_institution != built.get("name_of_institution"):
             match.name_of_institution = built.get("name_of_institution")
+            changed = True
+        if match.aadhar_number != built.get("aadhar_number"):
+            match.aadhar_number = built.get("aadhar_number")
             changed = True
         if match.cheque_rtgs_in_favour != built.get("cheque_rtgs_in_favour"):
             match.cheque_rtgs_in_favour = built.get("cheque_rtgs_in_favour")
@@ -2719,6 +2768,7 @@ class PublicMasterEntryDetailView(LoginRequiredMixin, RoleRequiredMixin, Templat
         entry = models.PublicBeneficiaryEntry.objects.select_related("article").get(pk=self.kwargs["pk"])
         context["entry"] = entry
         context["history_matches"] = _public_history_matches(entry.aadhar_number)
+        context.update(_public_attachment_context(entry))
         return context
 
 
@@ -2814,7 +2864,9 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                         "quantity": row["quantity"],
                         "unit_cost": row["unit_cost"],
                         "notes": row["notes"],
+                        "name_of_beneficiary": row.get("name_of_beneficiary", ""),
                         "name_of_institution": row.get("name_of_institution", ""),
+                        "aadhar_number": row.get("aadhar_number", ""),
                         "cheque_rtgs_in_favour": row.get("cheque_rtgs_in_favour", ""),
                         "article_name": article.article_name if article else "",
                         "item_type": article.item_type if article else "",
@@ -2949,7 +3001,9 @@ class InstitutionsMasterEntryUpdateView(InstitutionsMasterEntryBaseView):
                 "quantity": entry.quantity,
                 "unit_cost": entry.article_cost_per_unit,
                 "notes": entry.notes or "",
+                "name_of_beneficiary": entry.name_of_beneficiary or "",
                 "name_of_institution": entry.name_of_institution or "",
+                "aadhar_number": entry.aadhar_number or "",
                 "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour or "",
                 "article_name": entry.article.article_name,
                 "item_type": entry.article.item_type,
@@ -3018,8 +3072,10 @@ class InstitutionsMasterEntryDetailView(LoginRequiredMixin, RoleRequiredMixin, T
                 "entries": entries,
                 "total_quantity": sum((row.quantity or 0) for row in entries),
                 "total_value": sum((row.total_amount or 0) for row in entries),
+                "application_status": first.status,
             }
         )
+        context.update(_institution_attachment_context(application_number))
         return context
 
 
@@ -4493,11 +4549,11 @@ def _build_aid_option_payload(entry, beneficiary_type):
             'application_number': entry.application_number or '',
             'display_text': f"{entry.application_number or ''} - {beneficiary_name} - Rs.{amount_display} - {details_display}",
             'recipient_name': beneficiary_name,
-            'name_of_beneficiary': '',
+            'name_of_beneficiary': entry.name_of_beneficiary or '',
             'name_of_institution': entry.name_of_institution or '',
             'details': entry.notes or '',
             'fund_requested': amount,
-            'aadhar_number': '',
+            'aadhar_number': entry.aadhar_number or '',
             'cheque_in_favour': entry.cheque_rtgs_in_favour or '',
             'district_name': beneficiary_name,
             'source_item': entry.article.article_name,
@@ -4524,11 +4580,11 @@ def _build_aid_option_payload(entry, beneficiary_type):
         'application_number': entry.application_number or '',
         'display_text': f"{entry.application_number or ''} - {beneficiary_name} - Rs.{amount_display} - {details_display}",
         'recipient_name': beneficiary_name,
-        'name_of_beneficiary': '',
+        'name_of_beneficiary': entry.name_of_beneficiary or '',
         'name_of_institution': entry.name_of_institution or beneficiary_name,
         'details': entry.notes or '',
         'fund_requested': amount,
-        'aadhar_number': '',
+        'aadhar_number': entry.aadhar_number or '',
         'cheque_in_favour': entry.cheque_rtgs_in_favour or '',
         'district_name': '',
         'source_item': entry.article.article_name,

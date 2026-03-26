@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""
+Server-rendered Django form definitions used by the UI views in ``web_views.py``.
+
+This file is the right place to change field widgets, validation rules, default
+values, and which model fields are exposed in the HTML forms.
+"""
+
 from django import forms
 from django.core.exceptions import ValidationError
 

@@ -5,31 +5,65 @@
   <section class="card">
     <div class="toolbar" style="justify-content: space-between;">
       <div>
-        <h2 style="margin: 0 0 6px;">Public Entry Summary</h2>
+        <h2 style="margin: 0 0 6px;">Public Application Details</h2>
         <p style="margin: 0; color: var(--text-secondary);">
           {{ entry.application_number }} · {{ entry.name }}
         </p>
       </div>
       <div class="toolbar" style="margin-bottom: 0;">
-        <a class="btn" href="{% url 'ui:master-entry-public-edit' entry.id %}">Modify</a>
+        {% if entry.status != "submitted" %}
+          <a class="btn" href="{% url 'ui:master-entry-public-edit' entry.id %}">Modify</a>
+        {% endif %}
         <a class="btn" href="{% url 'ui:master-entry' %}?type=public">Back</a>
       </div>
     </div>
 
-    <div class="grid2">
+    <div class="grid2" style="margin-bottom: 16px;">
+      <div><label>Status</label><input class="input" value="{{ entry.status|title|default:'-' }}" readonly></div>
+      <div><label>Created On</label><input class="input" value="{{ entry.created_at|date:'d/m/Y H:i' }}" readonly></div>
       <div><label>Aadhaar Number</label><input class="input" value="{{ entry.aadhar_number }}" readonly></div>
       <div><label>Application Number</label><input class="input" value="{{ entry.application_number }}" readonly></div>
       <div><label>Name</label><input class="input" value="{{ entry.name }}" readonly></div>
       <div><label>Mobile Number</label><input class="input" value="{{ entry.mobile|default:'-' }}" readonly></div>
       <div><label>Gender</label><input class="input" value="{{ entry.gender|default:'-' }}" readonly></div>
       <div><label>Handicapped Status</label><input class="input" value="{% if entry.is_handicapped and entry.is_handicapped != "No" %}{{ entry.get_is_handicapped_display }}{% else %}No{% endif %}" readonly></div>
+      <div><label>Female Status</label><input class="input" value="{{ entry.get_female_status_display|default:'-' }}" readonly></div>
       <div style="grid-column: span 2;"><label>Address</label><textarea class="textarea" rows="3" readonly>{{ entry.address|default:"" }}</textarea></div>
       <div><label>Article</label><input class="input" value="{{ entry.article.article_name }}" readonly></div>
+      <div><label>Item Type</label><input class="input" value="{{ entry.article.item_type|default:'-' }}" readonly></div>
       <div><label>Quantity</label><input class="input" value="{{ entry.quantity }}" readonly></div>
       <div><label>Cost Per Unit</label><input class="input" value="Rs.{{ entry.article_cost_per_unit|rupees }}" readonly></div>
       <div><label>Total Value</label><input class="input" value="Rs.{{ entry.total_amount|rupees }}" readonly></div>
-      <div style="grid-column: span 2;"><label>Comments</label><textarea class="textarea" rows="3" readonly>{{ entry.notes|default:"" }}</textarea></div>
+      <div><label>Name of Institution</label><input class="input" value="{{ entry.name_of_institution|default:'-' }}" readonly></div>
+      <div style="grid-column: span 2;"><label>Details</label><textarea class="textarea" rows="3" readonly>{{ entry.notes|default:"" }}</textarea></div>
+      <div style="grid-column: span 2;"><label>Cheque / RTGS in Favour</label><textarea class="textarea" rows="3" readonly>{{ entry.cheque_rtgs_in_favour|default:"" }}</textarea></div>
     </div>
+
+    {% if application_attachments %}
+      <section class="card" style="margin-bottom: 16px;">
+        <h3 style="margin-top: 0;">Attachments</h3>
+        <table class="summary-detail-table">
+          <thead>
+            <tr>
+              <th>File Name</th>
+              <th>Uploaded By</th>
+              <th>Uploaded On</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for attachment in application_attachments %}
+              <tr>
+                <td>{{ attachment.file_name|default:"-" }}</td>
+                <td>{{ attachment.uploaded_by.get_full_name|default:attachment.uploaded_by.email|default:"-" }}</td>
+                <td>{{ attachment.created_at|date:"d/m/Y H:i" }}</td>
+                <td><a class="btn compact-btn" href="{% url 'ui:application-attachment-download' attachment.id %}">Download</a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    {% endif %}
 
     {% if history_matches %}
       <section class="card" style="margin-top: 16px; margin-bottom: 0;">

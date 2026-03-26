@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""
+REST API layer for the Django backend.
+
+These viewsets power the `/api/` routes and should be updated when mobile/web
+clients need CRUD or workflow changes outside the server-rendered UI.
+"""
+
 from django.db import transaction
 from rest_framework import status, viewsets
 from rest_framework.views import APIView

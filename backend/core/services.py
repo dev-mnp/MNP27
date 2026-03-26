@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""
+Shared business logic for numbering, totals, PDF generation, and audit helpers.
+
+When a rule should be reused by multiple views or serializers, it usually
+belongs here instead of being duplicated inside ``views.py`` or ``web_views.py``.
+"""
+
 import io
 from decimal import Decimal
 from pathlib import Path
