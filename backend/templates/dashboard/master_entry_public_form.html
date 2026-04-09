@@ -239,25 +239,29 @@
               <label>Total Value</label>
               <div class="info-field" id="public-total-value">Rs.0</div>
             </div>
+            <div class="public-metric-block public-metric-comments" id="public-inline-comments-wrap" {% if public_entry.article.item_type == "Aid" %}hidden{% endif %}>
+              <label>Comments</label>
+              <textarea class="textarea" name="notes" id="public-inline-notes" rows="2" placeholder="Comments" {% if public_entry.article.item_type == "Aid" %}disabled{% endif %}>{{ public_form_data.notes }}</textarea>
+            </div>
           </div>
         </div>
 
         <div style="grid-column: span 2;">
-          <div class="public-aid-card" id="public-aid-fields" {% if public_entry.article.item_type != "Aid" and public_form_data.article_id %}hidden{% endif %}>
+          <div class="public-aid-card" id="public-aid-fields" {% if public_entry.article.item_type != "Aid" %}hidden{% endif %}>
             <div class="public-aid-grid">
               <div class="public-aid-field public-aid-field-wide">
-                <label>Details</label>
-                <textarea class="textarea" name="notes" id="public-notes" rows="2">{{ public_form_data.notes }}</textarea>
+                <label id="public-notes-label">Details / Comments</label>
+                <textarea class="textarea" name="notes" id="public-notes" rows="2" {% if public_entry.article.item_type != "Aid" %}disabled{% endif %}>{{ public_form_data.notes }}</textarea>
               </div>
-              <div class="public-aid-field" id="public-aid-aadhar-wrap">
+              <div class="public-aid-field aid-only-field" id="public-aid-aadhar-wrap">
                 <label>Aadhar Number</label>
                 <input class="input" type="text" id="public-aid-aadhar" value="{{ public_form_data.aadhar_number }}" placeholder="Optional" maxlength="12" inputmode="numeric" pattern="[0-9]{12}">
               </div>
-              <div class="public-aid-field" id="public-cheque-wrap">
+              <div class="public-aid-field aid-only-field" id="public-cheque-wrap">
                 <label>Name of Institution</label>
                 <input class="input" type="text" name="name_of_institution" id="public-name-of-institution" value="{{ public_form_data.name_of_institution }}" placeholder="Optional">
               </div>
-              <div class="public-aid-field public-aid-field-wide" id="public-cheque-rtgs-wrap">
+              <div class="public-aid-field public-aid-field-wide aid-only-field" id="public-cheque-rtgs-wrap">
                 <label>Cheque / RTGS in Favour</label>
                 <textarea class="textarea" name="cheque_rtgs_in_favour" id="public-cheque-rtgs" rows="2">{{ public_form_data.cheque_rtgs_in_favour }}</textarea>
               </div>
@@ -426,6 +430,9 @@
       const submitButton = form.querySelector(".js-submit-button");
       const articleSelect = document.getElementById("public-article-select");
       const aidFieldsCard = document.getElementById("public-aid-fields");
+      const inlineNotesWrap = document.getElementById("public-inline-comments-wrap");
+      const inlineNotesInput = document.getElementById("public-inline-notes");
+      const notesInput = document.getElementById("public-notes");
       const primaryAadharInput = document.getElementById("public-primary-aadhar");
       const aidAadharInput = document.getElementById("public-aid-aadhar");
       const aidAadharWrap = document.getElementById("public-aid-aadhar-wrap");
@@ -449,6 +456,7 @@
       const submitRequiredFields = Array.from(form.querySelectorAll("[data-submit-required]"));
       const isEditMode = form.dataset.editMode === "true";
       let lastArticleId = articleSelect.value;
+      const initialUnitCostValue = (unitCostInput.value || "").trim();
       let articleCreateTarget = null;
       let initialSnapshot = "";
       let allowNavigation = false;
@@ -540,11 +548,13 @@
         const selectedArticleId = selected?.value || "";
         const articleChanged = selectedArticleId !== lastArticleId;
         if (articleCost > 0) {
-          unitCostInput.value = formatInputNumber(articleCost);
+          if (articleChanged || !unitCostInput.value.trim()) {
+            unitCostInput.value = formatInputNumber(articleCost);
+          }
           unitCostInput.readOnly = true;
         } else {
           if (articleChanged) {
-            unitCostInput.value = "0";
+            unitCostInput.value = initialUnitCostValue || "0";
           }
           unitCostInput.readOnly = false;
         }
@@ -552,18 +562,31 @@
         if (chequeWrap) {
           const showCheque = itemType === "Aid";
           const institutionNameInput = document.getElementById("public-name-of-institution");
-          const notesInput = document.getElementById("public-notes");
+          const hasSelection = !!selectedArticleId && selectedArticleId !== "__create_new__";
+          const notesLabel = document.getElementById("public-notes-label");
           if (aidFieldsCard) {
-            aidFieldsCard.hidden = !showCheque;
+            aidFieldsCard.hidden = !showCheque || !hasSelection;
+          }
+          if (inlineNotesWrap) {
+            inlineNotesWrap.hidden = !hasSelection || showCheque;
+          }
+          if (inlineNotesInput) {
+            inlineNotesInput.disabled = showCheque;
+          }
+          if (notesInput) {
+            notesInput.disabled = !showCheque;
+          }
+          document.querySelectorAll("#public-aid-fields .aid-only-field").forEach(function(field) {
+            field.hidden = !showCheque;
+          });
+          if (notesLabel) {
+            notesLabel.textContent = "Details / Comments";
           }
           if (!showCheque && chequeInput) {
             chequeInput.value = "";
           }
           if (!showCheque && institutionNameInput) {
             institutionNameInput.value = "";
-          }
-          if (!showCheque && notesInput) {
-            notesInput.value = "";
           }
           if (!showCheque && aidAadharInput) {
             aidAadharInput.value = "";
@@ -580,6 +603,22 @@
       function syncAidAadhar(source, target) {
         if (!source || !target || target.value === source.value) return;
         target.value = source.value;
+      }
+
+      if (inlineNotesInput) {
+        inlineNotesInput.addEventListener("input", function() {
+          if (notesInput && notesInput.value !== inlineNotesInput.value) {
+            notesInput.value = inlineNotesInput.value;
+          }
+          markDirty();
+        });
+      }
+      if (notesInput) {
+        notesInput.addEventListener("input", function() {
+          if (inlineNotesInput && inlineNotesInput.value !== notesInput.value) {
+            inlineNotesInput.value = notesInput.value;
+          }
+        });
       }
 
       function updateSubmitRequirements(mode) {

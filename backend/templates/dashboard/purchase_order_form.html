@@ -29,6 +29,10 @@
           {{ form.vendor_name }}
         </div>
         <div>
+          <label>GST Number</label>
+          {{ form.gst_number }}
+        </div>
+        <div>
           <label>Vendor Address <span style="color:#dc2626;">*</span></label>
           {{ form.vendor_address }}
         </div>
@@ -187,18 +191,28 @@
   }
 
   function refreshArticleOptions(select) {
-    const currentValue = select.value;
+    const hiddenArticle = select.closest('.js-item-row')?.querySelector('input[name$="-article"]');
+    let currentValue = select.value;
+    if (!currentValue && hiddenArticle && hiddenArticle.value) {
+      const matchedChoice = articleChoices.find(function(choice) {
+        return String(choice.article_id || choice.id || '') === String(hiddenArticle.value || '');
+      });
+      if (matchedChoice) {
+        currentValue = String(matchedChoice.name || matchedChoice.article_name || '');
+      }
+    }
     select.innerHTML = '';
     const emptyOption = document.createElement('option');
     emptyOption.value = '';
     emptyOption.textContent = 'Select article';
     select.appendChild(emptyOption);
     articleChoices.forEach(function(choice) {
+      const choiceName = String(choice.name || choice.article_name || '');
       const option = document.createElement('option');
-      option.value = choice.article_name;
-      option.textContent = choice.article_name;
-      option.dataset.articleId = choice.id || '';
-      option.dataset.defaultPrice = choice.cost_per_unit || '0';
+      option.value = choiceName;
+      option.textContent = String(choice.label || choiceName || '');
+      option.dataset.articleId = choice.article_id || choice.id || '';
+      option.dataset.defaultPrice = choice.default_price || choice.cost_per_unit || '0';
       select.appendChild(option);
     });
     if (currentValue) select.value = currentValue;

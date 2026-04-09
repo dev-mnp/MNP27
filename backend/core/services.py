@@ -15,11 +15,12 @@ from typing import Optional
 from django.db import transaction
 from django.db.models import Sum
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.pagesizes import A4, landscape, portrait
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import Image, LongTable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.pdfgen import canvas
 from django.utils import timezone
 from django.utils.html import escape
 
@@ -645,6 +646,7 @@ def generate_purchase_order_pdf(purchase_order: models.PurchaseOrder) -> io.Byte
             ) or "-",
             small,
         ),
+        Paragraph(f"GST No: {purchase_order.gst_number or '-'}", small),
     ]
     ship_to_lines = [
         Paragraph("Melmaruvathur Adhiparasakthi Spiritual Movement", small),
@@ -659,11 +661,12 @@ def generate_purchase_order_pdf(purchase_order: models.PurchaseOrder) -> io.Byte
             ],
             [vendor_lines, ship_to_lines],
         ],
-        colWidths=[88 * mm, 88 * mm],
+        colWidths=[91 * mm, 91 * mm],
     )
     vendor_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), green_header),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (0, 1), (-1, 1), "CENTER"),
         ("LEFTPADDING", (0, 0), (-1, -1), 6),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
@@ -672,45 +675,63 @@ def generate_purchase_order_pdf(purchase_order: models.PurchaseOrder) -> io.Byte
         ("INNERGRID", (0, 1), (-1, 1), 0.5, light_border),
     ]))
 
+    header_left = ParagraphStyle(
+        "po-header-left",
+        parent=small,
+        alignment=0,
+        textColor=colors.white,
+        fontName="Helvetica-Bold",
+    )
+    header_center = ParagraphStyle(
+        "po-header-center",
+        parent=small,
+        alignment=1,
+        textColor=colors.white,
+        fontName="Helvetica-Bold",
+    )
     item_rows = [[
-        Paragraph('<font color="white"><b>ITEM NAME</b></font>', small),
-        Paragraph('<font color="white"><b>DESCRIPTION</b></font>', small),
-        Paragraph('<font color="white"><b>QTY</b></font>', small),
-        Paragraph('<font color="white"><b>UNIT PRICE</b></font>', small),
-        Paragraph('<font color="white"><b>TOTAL<br/><font size="8">(Inclusive of Tax)</font></b></font>', small),
+        Paragraph('ITEM NAME', header_left),
+        Paragraph('DESCRIPTION', header_left),
+        Paragraph('QTY', header_center),
+        Paragraph('UNIT PRICE', header_center),
+        Paragraph('TOTAL<br/><font size="8">(Inclusive of Tax)</font>', header_center),
     ]]
     total_amount = Decimal("0")
     for item in purchase_order.items.all():
         line_total = Decimal(str(item.total_value or 0))
         total_amount += line_total
         item_rows.append([
-            Paragraph(item.supplier_article_name or item.article_name or "-", small),
-            Paragraph((item.description or "").replace("\n", "<br/>") or "-", small),
-            Paragraph(str(item.quantity or 0), ParagraphStyle("po-center", parent=small, alignment=1)),
-            Paragraph(
-                _pdf_currency(item.unit_price or 0),
-                ParagraphStyle("po-right", parent=small, alignment=2),
-            ),
-            Paragraph(
-                _pdf_currency(line_total),
-                ParagraphStyle("po-right-total", parent=small, alignment=2),
-            ),
+            Paragraph(item.supplier_article_name or item.article_name or "-", ParagraphStyle("po-item-left", parent=small, alignment=0)),
+            Paragraph((item.description or "").replace("\n", "<br/>") or "-", ParagraphStyle("po-desc-left", parent=small, alignment=0)),
+            str(item.quantity or 0),
+            _pdf_currency(item.unit_price or 0),
+            _pdf_currency(line_total),
         ])
     item_rows.append([
         Paragraph("", small),
         Paragraph("", small),
         Paragraph("", small),
         Paragraph("<b>TOTAL<br/><font size='8'>(Inclusive of Tax)</font></b>", ParagraphStyle("po-total-label", parent=small, alignment=1)),
-        Paragraph(f"<b>{_pdf_currency(total_amount)}</b>", ParagraphStyle("po-total-value", parent=small, alignment=2)),
+        f"{_pdf_currency(total_amount)}",
     ])
 
     item_table = Table(item_rows, colWidths=[46 * mm, 46 * mm, 18 * mm, 36 * mm, 36 * mm], repeatRows=1)
     item_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), green_header),
         ("LINEBELOW", (0, 0), (-1, -1), 0.4, light_border),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (0, 1), (1, -1), "LEFT"),
+        ("ALIGN", (2, 0), (4, 0), "CENTER"),
+        ("ALIGN", (2, 1), (4, -1), "CENTER"),
+        ("FONTNAME", (2, 1), (4, -2), "Helvetica"),
+        ("FONTSIZE", (2, 1), (4, -2), 8.5),
+        ("TEXTCOLOR", (2, 1), (4, -2), colors.black),
+        ("FONTNAME", (4, -1), (4, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (4, -1), (4, -1), 8.5),
         ("LEFTPADDING", (0, 0), (-1, -1), 6),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (2, 0), (4, -1), 0),
+        ("RIGHTPADDING", (2, 0), (4, -1), 0),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#f5f5f5")),
@@ -837,3 +858,187 @@ def mark_fund_request_status(
         details={"from": prev, "to": status},
     )
     return fund_request
+
+
+LABEL_LAYOUTS = {
+    "12L": {
+        "page_size": portrait(A4),
+        "top_margin": 9 * mm,
+        "side_margin": 4 * mm,
+        "vertical_pitch": 47 * mm,
+        "horizontal_pitch": 102 * mm,
+        "label_height": 44 * mm,
+        "label_width": 100 * mm,
+        "number_across": 2,
+        "number_down": 6,
+        "token_font": 60,
+        "token_font_medium": 50,
+        "token_font_small": 47,
+        "line_font": 15,
+        "line_leading": 16,
+        "name_leading": 14,
+        "name_space_after": 20,
+        "article_y": 6 * mm,
+        "name_vertical_factor": 0.85,
+    },
+    "2L": {
+        "page_size": portrait(A4),
+        "top_margin": 2.5 * mm,
+        "side_margin": 5 * mm,
+        "vertical_pitch": 146 * mm,
+        "horizontal_pitch": 200 * mm,
+        "label_height": 146 * mm,
+        "label_width": 200 * mm,
+        "number_across": 1,
+        "number_down": 2,
+        "token_font": 80,
+        "token_font_medium": 80,
+        "token_font_small": 70,
+        "line_font": 35,
+        "line_leading": 35,
+        "name_leading": 35,
+        "name_space_after": 0,
+        "article_y": 35 * mm,
+        "name_vertical_factor": 0.66,
+    },
+}
+
+
+def _label_token_font_size(token_text: str, config: dict) -> int:
+    if len(token_text) >= 4:
+        return config["token_font_small"]
+    if len(token_text) == 3:
+        return config["token_font_medium"]
+    return config["token_font"]
+
+
+def _draw_standard_label(pdf_canvas, entry: dict, *, x: float, y: float, config: dict) -> None:
+    token_text = str(entry.get("token") or "")
+    name_text = str(entry.get("name") or "")
+    article_text = str(entry.get("article") or "")
+
+    token_style = ParagraphStyle(
+        name=f"token-{config['label_width']}",
+        fontSize=_label_token_font_size(token_text, config),
+        alignment=0,
+    )
+    article_style = ParagraphStyle(
+        name=f"article-{config['label_width']}",
+        fontSize=config["line_font"],
+        leading=config["line_leading"],
+        alignment=1,
+    )
+    name_style = ParagraphStyle(
+        name=f"name-{config['label_width']}",
+        fontSize=config["line_font"],
+        leading=config["name_leading"],
+        spaceAfter=config.get("name_space_after", 0),
+        alignment=1,
+    )
+
+    token_para = Paragraph(f"<b>{escape(token_text)}</b>", token_style)
+    article_para = Paragraph(f"<b>{escape(article_text)}</b>", article_style)
+    name_para = Paragraph(f"<b>{escape(name_text)}</b>", name_style)
+
+    label_width = config["label_width"]
+    label_height = config["label_height"]
+
+    token_width, token_height = token_para.wrap(label_width / 2, label_height)
+    token_para.drawOn(pdf_canvas, x + 8 * mm, y + 0.66 * (label_height - token_height))
+
+    name_width, name_height = name_para.wrap(label_width / 2, label_height)
+    name_para.drawOn(
+        pdf_canvas,
+        x + 0.8 * (label_width - name_width),
+        y + config["name_vertical_factor"] * (label_height - name_height),
+    )
+
+    article_width, article_height = article_para.wrap(label_width / 2, label_height)
+    article_para.drawOn(pdf_canvas, x + 0.8 * (label_width - article_width), y + config["article_y"])
+
+
+def generate_mnp_labels_pdf(entries: list[dict], *, layout: str = "12L", mode: str = "continuous") -> io.BytesIO:
+    config = LABEL_LAYOUTS[layout]
+    buffer = io.BytesIO()
+    pdf_canvas = canvas.Canvas(buffer, pagesize=config["page_size"])
+    _width, height = config["page_size"]
+    per_page = config["number_across"] * config["number_down"]
+    slot_index = 0
+    current_group = None
+
+    for entry in entries:
+        group_key = str(entry.get("group") or "")
+        if mode == "separate" and current_group is not None and group_key != current_group:
+            pdf_canvas.showPage()
+            slot_index = 0
+        elif slot_index and slot_index % per_page == 0:
+            pdf_canvas.showPage()
+            slot_index = 0
+
+        current_group = group_key if mode == "separate" else current_group
+        col = slot_index % config["number_across"]
+        row = slot_index // config["number_across"] % config["number_down"]
+        x = config["side_margin"] + col * config["horizontal_pitch"]
+        y = height - config["top_margin"] - row * config["vertical_pitch"] - config["label_height"]
+        _draw_standard_label(pdf_canvas, entry, x=x, y=y, config=config)
+        slot_index += 1
+
+    pdf_canvas.save()
+    buffer.seek(0)
+    return buffer
+
+
+def generate_mnp_custom_labels_pdf(entries, *, layout: str = "12L") -> io.BytesIO:
+    config = LABEL_LAYOUTS[layout]
+    buffer = io.BytesIO()
+    pdf_canvas = canvas.Canvas(buffer, pagesize=config["page_size"])
+    _width, height = config["page_size"]
+    per_page = config["number_across"] * config["number_down"]
+    font_size = 30 if layout == "12L" else 54
+    line_leading = 32 if layout == "12L" else 58
+
+    normalized_entries = []
+    if isinstance(entries, list):
+        for entry in entries:
+            if isinstance(entry, dict):
+                text = str(entry.get("text") or "").strip()
+                count = int(entry.get("count") or 0)
+            elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                text = str(entry[0] or "").strip()
+                count = int(entry[1] or 0)
+            else:
+                text = str(entry or "").strip()
+                count = 1
+            if text and count > 0:
+                normalized_entries.extend([text] * count)
+    else:
+        text = str(entries or "").strip()
+        if text:
+            normalized_entries.append(text)
+
+    for index, text in enumerate(normalized_entries):
+        if index and index % per_page == 0:
+            pdf_canvas.showPage()
+        slot_index = index % per_page
+        col = slot_index % config["number_across"]
+        row = slot_index // config["number_across"] % config["number_down"]
+        x = config["side_margin"] + col * config["horizontal_pitch"]
+        y = height - config["top_margin"] - row * config["vertical_pitch"] - config["label_height"]
+
+        style = ParagraphStyle(
+            name=f"custom-{layout}",
+            fontSize=font_size,
+            leading=line_leading,
+            alignment=1,
+        )
+        para = Paragraph(f"<b>{escape(text)}</b>", style)
+        wrapped_width, wrapped_height = para.wrap(config["label_width"] - 10 * mm, config["label_height"] - 10 * mm)
+        para.drawOn(
+            pdf_canvas,
+            x + (config["label_width"] - wrapped_width) / 2,
+            y + (config["label_height"] - wrapped_height) / 2,
+        )
+
+    pdf_canvas.save()
+    buffer.seek(0)
+    return buffer

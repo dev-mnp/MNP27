@@ -13,9 +13,13 @@ import json
 import uuid
 import io
 import os
+import re
 import mimetypes
+import subprocess
+import sys
+from collections import Counter
 from decimal import Decimal, InvalidOperation
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
@@ -23,7 +27,7 @@ from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib import messages
 from django.db import IntegrityError, transaction
-from django.db.models import CharField, Q
+from django.db.models import CharField, F, Q
 from django.db.models.functions import Cast
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.urls import reverse, reverse_lazy
@@ -43,6 +47,7 @@ from django.forms import inlineformset_factory
 
 from . import models
 from . import services
+from .sequence_defaults import SEQUENCE_DEFAULT_ITEMS
 from .forms import (
     AppUserCreateForm,
     AppUserPasswordResetForm,
@@ -141,6 +146,7 @@ class DashboardView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             }
         )
         return context
+
 
     def _zero(self):
         return Decimal("0")
@@ -345,6 +351,19 @@ class DashboardView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             "total_districts": len(districts),
             "pending_districts": pending_districts,
         }
+
+
+class UserGuideView(LoginRequiredMixin, TemplateView):
+    template_name = "dashboard/user_guide.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            {
+                "page_title": "User Guide",
+            }
+        )
+        return context
 
 
 class ArticleListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
@@ -792,6 +811,16 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         context["district_count"] = models.DistrictBeneficiaryEntry.objects.values("district_id").distinct().count()
         context["public_count"] = models.PublicBeneficiaryEntry.objects.count()
         context["institution_count"] = models.InstitutionsBeneficiaryEntry.objects.values("application_number").distinct().count()
+        context["total_material_rows"] = (
+            models.DistrictBeneficiaryEntry.objects.count()
+            + models.PublicBeneficiaryEntry.objects.count()
+            + models.InstitutionsBeneficiaryEntry.objects.count()
+        )
+        phase2_preview = _phase2_build_rows_from_master_export_rows(
+            _phase2_master_export_rows(),
+            source_file_name="master-entry-db",
+        )
+        context["grouped_material_rows"] = len(phase2_preview["rows"])
         context["public_entries"] = public_entries
         context["institution_groups"] = institution_groups
         context["district_total_accrued"] = sum((row["total_accrued"] or 0) for row in district_groups)
@@ -877,6 +906,685 @@ class ApplicationAuditLogListView(LoginRequiredMixin, AdminRequiredMixin, ListVi
         return context
 
 
+def _reconciliation_parse_decimal(value):
+    raw = str(value or "").replace(",", "").strip()
+    try:
+        return Decimal(raw or "0")
+    except (InvalidOperation, ValueError):
+        return Decimal("0")
+
+
+def _reconciliation_format_decimal(value):
+    amount = Decimal(str(value or 0))
+    return f"{amount:,.2f}"
+
+
+def _reconciliation_master_metrics(rows=None):
+    rows = list(rows if rows is not None else _phase2_master_export_rows())
+    unique_items = set()
+    beneficiaries = {
+        models.RecipientTypeChoices.DISTRICT: set(),
+        models.RecipientTypeChoices.PUBLIC: set(),
+        models.RecipientTypeChoices.INSTITUTIONS: set(),
+        models.RecipientTypeChoices.OTHERS: set(),
+    }
+    quantity_total = 0
+    total_value = Decimal("0")
+
+    for row in rows:
+        beneficiary_type = str(row.get("Beneficiary Type") or "").strip()
+        application_number = str(row.get("Application Number") or "").strip()
+        beneficiary_name = str(row.get("Beneficiary Name") or "").strip()
+        requested_item = str(row.get("Requested Item") or "").strip()
+        quantity_total += _phase2_parse_number(row.get("Quantity"))
+        total_value += _reconciliation_parse_decimal(row.get("Total Value"))
+        if requested_item:
+            unique_items.add(requested_item)
+        if beneficiary_type or application_number or beneficiary_name:
+            beneficiaries.setdefault(beneficiary_type or models.RecipientTypeChoices.OTHERS, set()).add(
+                _phase2_distinct_beneficiary_key(application_number, beneficiary_name, beneficiary_type)
+            )
+
+    return {
+        "rows": len(rows),
+        "quantity_total": quantity_total,
+        "total_value": total_value,
+        "unique_items": len(unique_items),
+        "district_count": len(beneficiaries.get(models.RecipientTypeChoices.DISTRICT, set())),
+        "public_count": len(beneficiaries.get(models.RecipientTypeChoices.PUBLIC, set())),
+        "institution_count": len(beneficiaries.get(models.RecipientTypeChoices.INSTITUTIONS, set())),
+    }
+
+
+def _reconciliation_module_card(*, name, description, checks, metrics):
+    return {
+        "name": name,
+        "description": description,
+        "checks": checks,
+        "metrics": metrics,
+        "healthy": bool(checks) and all(check["matched"] for check in checks),
+        "matched_count": sum(1 for check in checks if check["matched"]),
+        "check_count": len(checks),
+    }
+
+
+class ReconciliationOverviewView(LoginRequiredMixin, AdminRequiredMixin, TemplateView):
+    module_key = models.ModuleKeyChoices.AUDIT_LOGS
+    permission_action = "view"
+    template_name = "dashboard/reconciliation_overview.html"
+    health_suites = [
+        {
+            "key": "django-check",
+            "name": "Django System Check",
+            "description": "Validates project wiring, models, routes, and configuration.",
+            "command": ["manage.py", "check"],
+            "kind": "check",
+        },
+        {
+            "key": "application-entry",
+            "name": "Application Entry",
+            "description": "District, Public, and Institution create/edit/detail/export regression coverage.",
+            "command": ["manage.py", "test", "core.tests.test_application_entry_flows"],
+            "kind": "test",
+        },
+        {
+            "key": "fund-request",
+            "name": "Order & Fund Request",
+            "description": "Aid and article request creation, reopen, autofill, and export-related regressions.",
+            "command": ["manage.py", "test", "core.tests.test_fund_request_list"],
+            "kind": "test",
+        },
+        {
+            "key": "phase2",
+            "name": "Seat Allocation & Sequence List",
+            "description": "Sync, split, save, reconcile, export, and final integrity regressions.",
+            "command": ["manage.py", "test", "core.tests.test_phase2_module"],
+            "kind": "test",
+        },
+        {
+            "key": "purchase-order",
+            "name": "Purchase Order",
+            "description": "Purchase order draft, reopen, export, and PDF regressions.",
+            "command": ["manage.py", "test", "core.tests.test_purchase_order_module"],
+            "kind": "test",
+        },
+        {
+            "key": "search-export",
+            "name": "Search / Export / Autofill",
+            "description": "Export integrity, application detail propagation, and related regression coverage.",
+            "command": ["manage.py", "test", "core.tests.test_search_bars"],
+            "kind": "test",
+        },
+    ]
+    data_module_order = [
+        "dashboard-metrics",
+        "application-entry",
+        "seat-allocation",
+        "sequence-list",
+        "export-consistency",
+    ]
+
+    def _run_health_suite(self, suite):
+        command = [sys.executable, *suite["command"]]
+        result = subprocess.run(
+            command,
+            cwd=settings.BASE_DIR,
+            capture_output=True,
+            text=True,
+        )
+        output = "\n".join(part for part in [result.stdout, result.stderr] if part).strip()
+        output_lines = [line.strip() for line in output.splitlines() if line.strip()]
+        tests_match = re.search(r"Ran (\d+) tests?", output)
+        tests_ran = int(tests_match.group(1)) if tests_match else 0
+
+        if result.returncode == 0:
+            if suite["kind"] == "check":
+                details = "System check identified no issues."
+            else:
+                details = (
+                    f"Passed {tests_ran} test(s)."
+                    if tests_ran
+                    else "Regression suite passed."
+                )
+        else:
+            failure_line = next(
+                (
+                    line
+                    for line in reversed(output_lines)
+                    if "FAILED" in line or "ERROR" in line or "Traceback" in line
+                ),
+                output_lines[-1] if output_lines else "Health check failed.",
+            )
+            details = failure_line
+
+        return {
+            "key": suite["key"],
+            "name": suite["name"],
+            "description": suite["description"],
+            "matched": result.returncode == 0,
+            "details": details,
+            "tests_ran": tests_ran,
+        }
+
+    def _run_app_health_check(self, suite_keys=None):
+        selected = self.health_suites
+        if suite_keys is not None:
+            selected = [suite for suite in self.health_suites if suite["key"] in set(suite_keys)]
+        suites = [self._run_health_suite(suite) for suite in selected]
+        return {
+            "checked_at_display": timezone.localtime().strftime("%d/%m/%Y %I:%M %p"),
+            "all_passed": all(suite["matched"] for suite in suites),
+            "suites": suites,
+            "total_tests": sum(suite["tests_ran"] for suite in suites),
+        }
+
+    def _build_data_modules(self, session):
+        master_rows = _phase2_master_export_rows()
+        master_metrics = _reconciliation_master_metrics(master_rows)
+        return [
+            self._dashboard_module(master_metrics),
+            self._application_entry_module(master_rows, master_metrics),
+            self._seat_allocation_module(session),
+            self._sequence_module(session),
+            self._export_consistency_module(session),
+        ], [
+            {"label": "Master rows", "value": str(master_metrics["rows"])},
+            {"label": "Total quantity", "value": str(master_metrics["quantity_total"])},
+            {"label": "Total value", "value": f"Rs.{_reconciliation_format_decimal(master_metrics['total_value'])}"},
+            {"label": "Unique items", "value": str(master_metrics["unique_items"])},
+        ]
+
+    def _run_data_health(self, session, module_keys=None):
+        data_modules, overall_metrics = self._build_data_modules(session)
+        if module_keys is not None:
+            wanted = set(module_keys)
+            data_modules = [module for module in data_modules if module["key"] in wanted]
+        return {
+            "checked_at_display": timezone.localtime().strftime("%d/%m/%Y %I:%M %p"),
+            "all_passed": bool(data_modules) and all(module["healthy"] for module in data_modules),
+            "all_ran": len(data_modules) == len(self.data_module_order),
+            "modules": data_modules,
+            "overall_metrics": overall_metrics,
+        }
+
+    def _merge_app_health_result(self, existing_result, new_result):
+        suite_name_map = {suite["name"]: suite["key"] for suite in self.health_suites}
+        existing_map = {}
+        for suite in (existing_result or {}).get("suites", []):
+            suite_key = suite.get("key") or suite_name_map.get(suite.get("name") or "")
+            if suite_key:
+                existing_map[suite_key] = {**suite, "key": suite_key}
+        for suite in new_result.get("suites", []):
+            existing_map[suite["key"]] = suite
+        suites = []
+        for suite_def in self.health_suites:
+            suite = existing_map.get(suite_def["key"])
+            if suite:
+                suites.append(suite)
+        return {
+            "checked_at_display": new_result["checked_at_display"],
+            "all_passed": bool(suites) and all(suite["matched"] for suite in suites),
+            "all_ran": len(suites) == len(self.health_suites),
+            "suites": suites,
+            "total_tests": sum(suite["tests_ran"] for suite in suites),
+        }
+
+    def _merge_data_health_result(self, existing_result, new_result):
+        module_name_map = {
+            "Dashboard Metrics": "dashboard-metrics",
+            "Application Entry": "application-entry",
+            "Seat Allocation": "seat-allocation",
+            "Sequence List": "sequence-list",
+            "Export Consistency": "export-consistency",
+        }
+        existing_map = {}
+        for module in (existing_result or {}).get("modules", []):
+            module_key = module.get("key") or module_name_map.get(module.get("name") or "")
+            if module_key:
+                existing_map[module_key] = {**module, "key": module_key}
+        for module in new_result.get("modules", []):
+            existing_map[module["key"]] = module
+        modules = []
+        for module_key in self.data_module_order:
+            module = existing_map.get(module_key)
+            if module:
+                modules.append(module)
+        return {
+            "checked_at_display": new_result["checked_at_display"],
+            "all_passed": bool(modules) and all(module["healthy"] for module in modules),
+            "all_ran": len(modules) == len(self.data_module_order),
+            "modules": modules,
+            "overall_metrics": new_result.get("overall_metrics") or (existing_result or {}).get("overall_metrics") or [],
+        }
+
+    def _dashboard_module(self, master_metrics):
+        dashboard_metrics = DashboardView()._build_metrics()
+        checks = [
+            {
+                "label": "Dashboard total quantity",
+                "matched": dashboard_metrics["overall"]["total_articles_qty"] == master_metrics["quantity_total"],
+                "details": (
+                    f"Dashboard {dashboard_metrics['overall']['total_articles_qty']}, Master {master_metrics['quantity_total']}"
+                ),
+            },
+            {
+                "label": "Dashboard actual total value",
+                "matched": Decimal(str(dashboard_metrics["overall"]["actual_total_value_accrued"] or 0)) == master_metrics["total_value"],
+                "details": (
+                    f"Dashboard {_reconciliation_format_decimal(dashboard_metrics['overall']['actual_total_value_accrued'])}, "
+                    f"Master {_reconciliation_format_decimal(master_metrics['total_value'])}"
+                ),
+            },
+            {
+                "label": "Dashboard unique items",
+                "matched": dashboard_metrics["overall"]["unique_articles"] == master_metrics["unique_items"],
+                "details": (
+                    f"Dashboard {dashboard_metrics['overall']['unique_articles']}, Master {master_metrics['unique_items']}"
+                ),
+            },
+            {
+                "label": "Dashboard beneficiary counts",
+                "matched": (
+                    dashboard_metrics["district"]["districts_received"] == master_metrics["district_count"]
+                    and dashboard_metrics["public"]["total_beneficiaries"] == master_metrics["public_count"]
+                    and dashboard_metrics["institutions"]["application_count"] == master_metrics["institution_count"]
+                ),
+                "details": (
+                    f"District {dashboard_metrics['district']['districts_received']}/{master_metrics['district_count']}, "
+                    f"Public {dashboard_metrics['public']['total_beneficiaries']}/{master_metrics['public_count']}, "
+                    f"Institutions {dashboard_metrics['institutions']['application_count']}/{master_metrics['institution_count']}"
+                ),
+            },
+        ]
+        metrics = [
+            {"label": "Qty", "value": str(dashboard_metrics["overall"]["total_articles_qty"])},
+            {"label": "Value", "value": f"Rs.{_reconciliation_format_decimal(dashboard_metrics['overall']['actual_total_value_accrued'])}"},
+            {"label": "Unique items", "value": str(dashboard_metrics["overall"]["unique_articles"])},
+            {
+                "label": "Applications",
+                "value": (
+                    f"D {dashboard_metrics['district']['districts_received']} | "
+                    f"P {dashboard_metrics['public']['total_beneficiaries']} | "
+                    f"I {dashboard_metrics['institutions']['application_count']}"
+                ),
+            },
+        ]
+        card = _reconciliation_module_card(
+            name="Dashboard Metrics",
+            description="Confirms the live dashboard totals still match the current master data source.",
+            checks=checks,
+            metrics=metrics,
+        )
+        card["key"] = "dashboard-metrics"
+        return card
+
+    def _application_entry_module(self, master_rows, master_metrics):
+        district_entries = list(models.DistrictBeneficiaryEntry.objects.select_related("article").all())
+        public_entries = list(models.PublicBeneficiaryEntry.objects.select_related("article").all())
+        institution_entries = list(models.InstitutionsBeneficiaryEntry.objects.select_related("article").all())
+        live_total_rows = len(district_entries) + len(public_entries) + len(institution_entries)
+        live_quantity_total = (
+            sum(int(entry.quantity or 0) for entry in district_entries)
+            + sum(int(entry.quantity or 0) for entry in public_entries)
+            + sum(int(entry.quantity or 0) for entry in institution_entries)
+        )
+        live_total_value = (
+            sum(Decimal(str(entry.total_amount or 0)) for entry in district_entries)
+            + sum(Decimal(str(entry.total_amount or 0)) for entry in public_entries)
+            + sum(Decimal(str(entry.total_amount or 0)) for entry in institution_entries)
+        )
+        live_unique_items = len(
+            {
+                str(entry.article.article_name or "").strip()
+                for entry in [*district_entries, *public_entries, *institution_entries]
+                if entry.article_id and str(entry.article.article_name or "").strip()
+            }
+        )
+        live_district_count = models.DistrictBeneficiaryEntry.objects.values("district_id").distinct().count()
+        live_public_count = models.PublicBeneficiaryEntry.objects.count()
+        live_institution_count = models.InstitutionsBeneficiaryEntry.objects.values("application_number").distinct().count()
+
+        checks = [
+            {
+                "label": "Master export row count",
+                "matched": master_metrics["rows"] == live_total_rows,
+                "details": f"Export {master_metrics['rows']}, Application Entry {live_total_rows}",
+            },
+            {
+                "label": "Master export quantity",
+                "matched": master_metrics["quantity_total"] == live_quantity_total,
+                "details": f"Export {master_metrics['quantity_total']}, Application Entry {live_quantity_total}",
+            },
+            {
+                "label": "Master export total value",
+                "matched": master_metrics["total_value"] == live_total_value,
+                "details": (
+                    f"Export {_reconciliation_format_decimal(master_metrics['total_value'])}, "
+                    f"Application Entry {_reconciliation_format_decimal(live_total_value)}"
+                ),
+            },
+            {
+                "label": "Master export unique items",
+                "matched": master_metrics["unique_items"] == live_unique_items,
+                "details": f"Export {master_metrics['unique_items']}, Application Entry {live_unique_items}",
+            },
+            {
+                "label": "Application counts",
+                "matched": (
+                    master_metrics["district_count"] == live_district_count
+                    and master_metrics["public_count"] == live_public_count
+                    and master_metrics["institution_count"] == live_institution_count
+                ),
+                "details": (
+                    f"District {master_metrics['district_count']}/{live_district_count}, "
+                    f"Public {master_metrics['public_count']}/{live_public_count}, "
+                    f"Institutions {master_metrics['institution_count']}/{live_institution_count}"
+                ),
+            },
+        ]
+        metrics = [
+            {"label": "Rows", "value": str(master_metrics["rows"])},
+            {"label": "Qty", "value": str(master_metrics["quantity_total"])},
+            {"label": "Value", "value": f"Rs.{_reconciliation_format_decimal(master_metrics['total_value'])}"},
+            {"label": "Unique items", "value": str(master_metrics["unique_items"])},
+        ]
+        card = _reconciliation_module_card(
+            name="Application Entry",
+            description="Checks that the master export is still a faithful row-level copy of District, Public, and Institution data entry.",
+            checks=checks,
+            metrics=metrics,
+        )
+        card["key"] = "application-entry"
+        return card
+
+    def _seat_allocation_module(self, session):
+        if not session:
+            card = _reconciliation_module_card(
+                name="Seat Allocation",
+                description="Checks the working copy against Master Data and validates Waiting Hall / Token splits.",
+                checks=[{"label": "Active session", "matched": False, "details": "No Seat Allocation session is available yet."}],
+                metrics=[],
+            )
+            card["key"] = "seat-allocation"
+            return card
+
+        integrity = _sequence_seat_allocation_integrity(session)
+        snapshot = integrity["snapshot"]
+        split_check = integrity["split_check"]
+        checks = [
+            {
+                "label": "Master Data vs Seat Allocation row count",
+                "matched": snapshot["source_row_count"] == snapshot["grouped_row_count"],
+                "details": f"Master {snapshot['source_row_count']}, Seat Allocation {snapshot['grouped_row_count']}",
+            },
+            *[
+                {
+                    "label": f"Master Data vs Seat Allocation {check['label']}",
+                    "matched": check["matched"],
+                    "details": (
+                        f"Master {check['source']}, Seat Allocation {check['grouped']}"
+                    ),
+                }
+                for check in integrity["checks"]
+            ],
+            {
+                "label": "Seat Allocation row-wise split",
+                "matched": split_check["rowwise_matched"],
+                "details": (
+                    f"All {split_check['row_count']} row(s) matched"
+                    if split_check["rowwise_matched"]
+                    else f"{split_check['row_mismatch_count']} row(s) have Quantity != Waiting Hall + Token"
+                ),
+            },
+            {
+                "label": "Seat Allocation overall split",
+                "matched": split_check["overall_matched"],
+                "details": (
+                    f"Waiting Hall {split_check['total_waiting']}, Token {split_check['total_token']}, Total Quantity {split_check['total_quantity']}"
+                ),
+            },
+        ]
+        metrics = [
+            {"label": "Rows", "value": str(snapshot["grouped_row_count"])},
+            {"label": "Waiting Hall", "value": str(split_check["total_waiting"])},
+            {"label": "Token", "value": str(split_check["total_token"])},
+        ]
+        card = _reconciliation_module_card(
+            name="Seat Allocation",
+            description="Confirms the Seat Allocation working copy still matches Master Data and that the split math is valid.",
+            checks=checks,
+            metrics=metrics,
+        )
+        card["key"] = "seat-allocation"
+        return card
+
+    def _sequence_module(self, session):
+        if not session:
+            card = _reconciliation_module_card(
+                name="Sequence List",
+                description="Checks final sequence integrity against Master Data and Seat Allocation before the next stage.",
+                checks=[{"label": "Active session", "matched": False, "details": "No Sequence / Seat Allocation session is available yet."}],
+                metrics=[],
+            )
+            card["key"] = "sequence-list"
+            return card
+
+        sequence_view = SequenceListView()
+        reconciliation_state = sequence_view._sequence_reconciliation_state(session)
+        saved_items = sequence_view._saved_sequence_items(session)
+        sequence_item_names = {str(row["item_name"] or "").strip() for row in saved_items if str(row["item_name"] or "").strip()}
+        sequence_number_count = len(
+            {
+                int(row["sequence_no"])
+                for row in saved_items
+                if row.get("sequence_no")
+            }
+        )
+        sequence_map = {
+            str(row["item_name"] or "").strip(): int(row["sequence_no"])
+            for row in saved_items
+            if str(row["item_name"] or "").strip() and row.get("sequence_no")
+        }
+        final_export = _sequence_final_export_rows(session, sequence_map)
+        master_rows = _phase2_master_export_rows()
+        seat_integrity = _sequence_seat_allocation_integrity(session)
+        exact_checks = {
+            "master_match": _sequence_exact_compare(
+                left_rows=_sequence_project_rows(final_export["final_rows"], EXPORT_COLUMNS),
+                left_headers=EXPORT_COLUMNS,
+                right_rows=_sequence_project_rows(master_rows, EXPORT_COLUMNS),
+                right_headers=EXPORT_COLUMNS,
+                matched_label=f"Matched {len(master_rows)} row(s) across {len(EXPORT_COLUMNS)} column(s)",
+                mismatch_label="Master Data comparison failed",
+            ),
+            "seat_match": _sequence_exact_compare(
+                left_rows=_sequence_project_rows(final_export["final_rows"], final_export["seat_headers"]),
+                left_headers=final_export["seat_headers"],
+                right_rows=final_export["seat_rows"],
+                right_headers=final_export["seat_headers"],
+                matched_label=f"Matched {len(final_export['seat_rows'])} row(s) across {len(final_export['seat_headers'])} column(s)",
+                mismatch_label="Seat Allocation comparison failed",
+            ),
+        }
+        submit_result = sequence_view._sequence_submit_result(
+            reconciliation_state=reconciliation_state,
+            sequence_item_names=sequence_item_names,
+            sequence_number_count=sequence_number_count,
+            exact_checks=exact_checks,
+            seat_integrity=seat_integrity,
+        )
+        metrics = [
+            {"label": "Saved items", "value": str(len(sequence_item_names))},
+            {"label": "Unique sequences", "value": str(sequence_number_count)},
+            {"label": "Final rows", "value": str(len(final_export["final_rows"]))},
+        ]
+        card = _reconciliation_module_card(
+            name="Sequence List",
+            description="Validates final 25-column sequence output, sequence uniqueness, and carry-forward integrity from earlier stages.",
+            checks=submit_result["checks"],
+            metrics=metrics,
+        )
+        card["key"] = "sequence-list"
+        return card
+
+    def _export_consistency_module(self, session):
+        if not session:
+            card = _reconciliation_module_card(
+                name="Export Consistency",
+                description="Confirms the exported master, seat, and sequence layers are still consistent with one another.",
+                checks=[{"label": "Active session", "matched": False, "details": "No active session is available for Seat / Sequence export checks."}],
+                metrics=[],
+            )
+            card["key"] = "export-consistency"
+            return card
+
+        master_rows = _phase2_master_export_rows()
+        seat_queryset = models.SeatAllocationRow.objects.filter(session=session).order_by(
+            F("sequence_no").asc(nulls_last=True),
+            "sort_order",
+            "requested_item",
+            "application_number",
+            "id",
+        )
+        seat_rows, seat_headers = _phase2_export_rows(seat_queryset, include_sequence=False)
+        sequence_rows, sequence_headers = _phase2_export_rows(seat_queryset, include_sequence=True)
+        checks = [
+            {
+                "label": "Master export vs Seat export",
+                **_sequence_exact_compare(
+                    left_rows=_sequence_project_rows(seat_rows, EXPORT_COLUMNS),
+                    left_headers=EXPORT_COLUMNS,
+                    right_rows=_sequence_project_rows(master_rows, EXPORT_COLUMNS),
+                    right_headers=EXPORT_COLUMNS,
+                    matched_label=f"Matched {len(master_rows)} row(s) across {len(EXPORT_COLUMNS)} shared column(s)",
+                    mismatch_label="Master vs Seat export comparison failed",
+                ),
+            },
+            {
+                "label": "Master export vs Sequence export",
+                **_sequence_exact_compare(
+                    left_rows=_sequence_project_rows(sequence_rows, EXPORT_COLUMNS),
+                    left_headers=EXPORT_COLUMNS,
+                    right_rows=_sequence_project_rows(master_rows, EXPORT_COLUMNS),
+                    right_headers=EXPORT_COLUMNS,
+                    matched_label=f"Matched {len(master_rows)} row(s) across {len(EXPORT_COLUMNS)} shared column(s)",
+                    mismatch_label="Master vs Sequence export comparison failed",
+                ),
+            },
+            {
+                "label": "Seat export vs Sequence export",
+                **_sequence_exact_compare(
+                    left_rows=_sequence_project_rows(sequence_rows, seat_headers),
+                    left_headers=seat_headers,
+                    right_rows=seat_rows,
+                    right_headers=seat_headers,
+                    matched_label=f"Matched {len(seat_rows)} row(s) across {len(seat_headers)} shared column(s)",
+                    mismatch_label="Seat vs Sequence export comparison failed",
+                ),
+            },
+        ]
+        metrics = [
+            {"label": "Master rows", "value": str(len(master_rows))},
+            {"label": "Seat rows", "value": str(len(seat_rows))},
+            {"label": "Sequence rows", "value": str(len(sequence_rows))},
+        ]
+        card = _reconciliation_module_card(
+            name="Export Consistency",
+            description="Confirms the generated exports still carry forward the same data between stages without silent loss.",
+            checks=checks,
+            metrics=metrics,
+        )
+        card["key"] = "export-consistency"
+        return card
+
+    def post(self, request, *args, **kwargs):
+        action = (request.POST.get("action") or "").strip()
+        session = _phase2_selected_session(request)
+        if action == "run_data_health":
+            request.session["reconciliation_data_health"] = self._run_data_health(session)
+        elif action == "run_data_module":
+            module_key = (request.POST.get("module_key") or "").strip()
+            if module_key:
+                request.session["reconciliation_data_health"] = self._merge_data_health_result(
+                    request.session.get("reconciliation_data_health"),
+                    self._run_data_health(session, [module_key]),
+                )
+        elif action == "run_health_check":
+            request.session["reconciliation_app_health"] = self._merge_app_health_result(
+                request.session.get("reconciliation_app_health"),
+                self._run_app_health_check(),
+            )
+        elif action == "run_health_suite":
+            suite_key = (request.POST.get("suite_key") or "").strip()
+            if suite_key:
+                request.session["reconciliation_app_health"] = self._merge_app_health_result(
+                    request.session.get("reconciliation_app_health"),
+                    self._run_app_health_check([suite_key]),
+                )
+        return HttpResponseRedirect(
+            _phase2_redirect_url(request, "ui:reconciliation-overview", session)
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        session = _phase2_selected_session(self.request)
+        data_health_result = self.request.session.get("reconciliation_data_health")
+        app_health_result = self.request.session.get("reconciliation_app_health")
+        module_name_map = {
+            "Dashboard Metrics": "dashboard-metrics",
+            "Application Entry": "application-entry",
+            "Seat Allocation": "seat-allocation",
+            "Sequence List": "sequence-list",
+            "Export Consistency": "export-consistency",
+        }
+        data_modules = []
+        for module in (data_health_result or {}).get("modules", []):
+            module_key = module.get("key") or module_name_map.get(module.get("name") or "")
+            data_modules.append({**module, "key": module_key or ""})
+        overall_metrics = (data_health_result or {}).get("overall_metrics", [])
+        data_overall_healthy = data_health_result["all_passed"] if data_health_result else None
+        app_overall_healthy = app_health_result["all_passed"] if app_health_result else None
+        app_suite_cards = []
+        suite_name_map = {suite["name"]: suite["key"] for suite in self.health_suites}
+        result_map = {}
+        for suite in (app_health_result or {}).get("suites", []):
+            suite_key = suite.get("key") or suite_name_map.get(suite.get("name") or "")
+            if suite_key:
+                result_map[suite_key] = {**suite, "key": suite_key}
+        for suite_def in self.health_suites:
+            suite_result = result_map.get(suite_def["key"])
+            app_suite_cards.append(
+                {
+                    "key": suite_def["key"],
+                    "name": suite_def["name"],
+                    "description": suite_def["description"],
+                    "matched": suite_result.get("matched") if suite_result else None,
+                    "details": suite_result.get("details") if suite_result else "Not run yet.",
+                    "tests_ran": suite_result.get("tests_ran", 0) if suite_result else 0,
+                }
+            )
+        overall_healthy = True
+        if data_overall_healthy is False or app_overall_healthy is False:
+            overall_healthy = False
+        context.update(
+            {
+                "page_title": "Reconciliation",
+                "checked_at_display": timezone.localtime().strftime("%d/%m/%Y %I:%M %p"),
+                "selected_session": session,
+                "modules": data_modules,
+                "data_modules": data_modules,
+                "data_health_result": data_health_result,
+                "data_overall_healthy": data_overall_healthy,
+                "app_health_result": app_health_result,
+                "app_overall_healthy": app_overall_healthy,
+                "overall_healthy": overall_healthy,
+                "overall_metrics": overall_metrics,
+                "app_suite_cards": app_suite_cards,
+            }
+        )
+        return context
+
+
 
 EXPORT_COLUMNS = [
     "Application Number",
@@ -888,6 +1596,9 @@ EXPORT_COLUMNS = [
     "Address",
     "Mobile",
     "Aadhar Number",
+    "Name of Beneficiary",
+    "Name of Institution",
+    "Cheque / RTGS in Favour",
     "Handicapped Status",
     "Gender",
     "Gender Category",
@@ -899,6 +1610,51 @@ EXPORT_COLUMNS = [
     "Internal Notes",
     "Comments",
 ]
+
+TOKEN_GENERATION_NUMERIC_HEADERS = {
+    "Quantity",
+    "Cost Per Unit",
+    "Total Value",
+    "Mobile",
+    "Aadhar Number",
+    "Waiting Hall Quantity",
+    "Token Quantity",
+    "Sequence No",
+}
+
+TOKEN_GENERATION_BENEFICIARY_ORDER = {
+    "Institutions": 0,
+    "Public": 1,
+    "District": 2,
+}
+
+TOKEN_GENERATION_RENAME_MAP = {
+    "I001 - Government Leprosy Centre,Chengalpattu.": "I001-Govt Leprosy Centre,CGL",
+    "I002 - Athivakkam,Panchayat Union Primary School.": "I002-Athivakkam,Panchayat School",
+    "I003 - Thirukazhukundram,Govt Girls Higher Secondary School.": "I003-Thirukazhukundram,Govt Girls School",
+    "I004 - Acharapakkam,Govt Girls Higher Secondary School.": "I004-Acharapakkam,Govt Girls School",
+    "I005 - Maduranthagam,District Educational Office.": "I005-Maduranthagam,District Edu Off",
+    "I006 - Thozhupedu,Govt Higher Secondary School.": "I006-Thozhupedu,Govt School",
+    "I007 - Kayappakkam,Government Higher Secondary School.": "I007-Kayappakkam,Government School",
+    "I008 - Nolambur Government Higher SecondarySchool": "I008-Nolambur Government School",
+    "I009 - Acharapakkam, Govt Boys Higher Secondary School.": "I009-Acharapakkam,Govt Boys School",
+    "I010 - Cheyyur Govt Girls Higher Secondary School.": "I010-Cheyyur Govt Girls School",
+    "I011 - Chunambedu Govt Higher Secondary School.": "I011-Chunambedu Govt School",
+    "I012 - Avanippur Government Higher Secondary School": "I012-Avanippur Government School",
+    "I013 - Polambakkam Govt Higher Secondary School.": "I013-Polambakkam Govt School",
+}
+
+TOKEN_GENERATION_ARTICLE_PRINT_EXCLUDES = {
+    "Plant Sapling",
+    "Provision items",
+    "Aluminium holed rice strainer with Handle",
+    "Goat(1 Pair)",
+    "Ortho Caliper",
+    "Fishing Net",
+    "Grocery Items",
+    "Artificial leg",
+    "Cow & Calf",
+}
 
 
 def _request_audit_meta(request):
@@ -1387,7 +2143,10 @@ def _district_export_rows(filtered_summaries):
             "Total Value": _decimal_to_csv(entry.total_amount),
             "Address": entry.district.district_name or "",
             "Mobile": entry.district.mobile_number or "",
-            "Aadhar Number": "",
+            "Aadhar Number": entry.aadhar_number or "",
+            "Name of Beneficiary": entry.name_of_beneficiary or "",
+            "Name of Institution": entry.name_of_institution or "",
+            "Cheque / RTGS in Favour": entry.cheque_rtgs_in_favour or "",
             "Handicapped Status": "",
             "Gender": "",
             "Gender Category": "",
@@ -1415,6 +2174,9 @@ def _public_export_rows(filtered_entries):
             "Address": entry.address or "",
             "Mobile": entry.mobile or "",
             "Aadhar Number": entry.aadhar_number or "",
+            "Name of Beneficiary": entry.name or "",
+            "Name of Institution": entry.name_of_institution or "",
+            "Cheque / RTGS in Favour": entry.cheque_rtgs_in_favour or "",
             "Handicapped Status": entry.get_is_handicapped_display() if entry.is_handicapped else models.HandicappedStatusChoices.NO,
             "Gender": entry.gender or "",
             "Gender Category": entry.female_status or entry.gender or "",
@@ -1445,7 +2207,10 @@ def _institution_export_rows(filtered_summaries):
             "Total Value": _decimal_to_csv(entry.total_amount),
             "Address": entry.address or "",
             "Mobile": entry.mobile or "",
-            "Aadhar Number": "",
+            "Aadhar Number": entry.aadhar_number or "",
+            "Name of Beneficiary": entry.name_of_beneficiary or "",
+            "Name of Institution": entry.name_of_institution or "",
+            "Cheque / RTGS in Favour": entry.cheque_rtgs_in_favour or "",
             "Handicapped Status": "",
             "Gender": "",
             "Gender Category": "",
@@ -1504,8 +2269,30 @@ def _export_master_entry_csv(request, *, export_scope):
 
     rows = district_rows + public_rows + institution_rows
     response = HttpResponse(content_type="text/csv")
-    timestamp = timezone.localtime().strftime("%Y_%m_%d_%I_%M_%p")
-    response["Content-Disposition"] = f'attachment; filename="master-entry-{export_scope}_{timestamp}.csv"'
+    timestamp = timezone.localtime().strftime("%d_%b_%y_%H_%M")
+    if export_scope == "all":
+        has_non_submitted = (
+            models.DistrictBeneficiaryEntry.objects.exclude(status=models.BeneficiaryStatusChoices.SUBMITTED).exists()
+            or models.PublicBeneficiaryEntry.objects.exclude(status=models.BeneficiaryStatusChoices.SUBMITTED).exists()
+            or models.InstitutionsBeneficiaryEntry.objects.exclude(status=models.BeneficiaryStatusChoices.SUBMITTED).exists()
+        )
+        status_label = "Draft" if has_non_submitted else "Submitted"
+        filename = f"1_Master_Data_{status_label}_{timestamp}.csv"
+    else:
+        has_non_submitted = False
+        scope_rows = []
+        if export_scope == "district":
+            scope_rows = models.DistrictBeneficiaryEntry.objects.all()
+        elif export_scope == "public":
+            scope_rows = models.PublicBeneficiaryEntry.objects.all()
+        elif export_scope == "institutions":
+            scope_rows = models.InstitutionsBeneficiaryEntry.objects.all()
+        if scope_rows:
+            has_non_submitted = scope_rows.exclude(status=models.BeneficiaryStatusChoices.SUBMITTED).exists()
+        status_label = "Draft" if has_non_submitted else "Submitted"
+        scope_label = export_scope.title()
+        filename = f"1_Master_Data_{scope_label}_{status_label}_{timestamp}.csv"
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
     writer = csv.DictWriter(response, fieldnames=EXPORT_COLUMNS)
     writer.writeheader()
     for row in rows:
@@ -1637,6 +2424,7 @@ def _district_form_context(district=None, entries=None, errors=None):
 
 
 def _parse_district_rows(post_data):
+    entry_ids = post_data.getlist("entry_id")
     article_ids = post_data.getlist("article_id")
     quantities = post_data.getlist("quantity")
     unit_costs = post_data.getlist("unit_cost")
@@ -1660,6 +2448,7 @@ def _parse_district_rows(post_data):
     for idx in range(max_len):
         rows.append(
             {
+                "entry_id": (entry_ids[idx] if idx < len(entry_ids) else "").strip(),
                 "article_id": (article_ids[idx] if idx < len(article_ids) else "").strip(),
                 "quantity": (quantities[idx] if idx < len(quantities) else "").strip(),
                 "unit_cost": (unit_costs[idx] if idx < len(unit_costs) else "").strip(),
@@ -1705,20 +2494,25 @@ def _validate_and_build_district_entries(district, raw_rows, *, internal_notes="
             errors.append(f"Row {index}: {article.article_name} can be added only once.")
             continue
 
-        if article.cost_per_unit and article.cost_per_unit > 0:
-            unit_cost = article.cost_per_unit
-        else:
+        raw_unit_cost = str(row.get("unit_cost") or "").strip()
+        if raw_unit_cost:
             try:
-                unit_cost = Decimal(row["unit_cost"])
+                unit_cost = Decimal(raw_unit_cost)
                 if unit_cost < 0:
                     raise ValueError
             except (InvalidOperation, TypeError, ValueError):
                 errors.append(f"Row {index}: enter a valid price for {article.article_name}.")
                 continue
+        elif article.cost_per_unit and article.cost_per_unit > 0:
+            unit_cost = article.cost_per_unit
+        else:
+            errors.append(f"Row {index}: enter a valid price for {article.article_name}.")
+            continue
 
         total_amount = unit_cost * quantity
         built_rows.append(
             {
+                "entry_id": int(row["entry_id"]) if str(row.get("entry_id") or "").strip().isdigit() else None,
                 "district": district,
                 "application_number": district.application_number,
                 "article": article,
@@ -1816,6 +2610,7 @@ class DistrictMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, TemplateVi
                 hydrated_rows.append(
                     {
                         "article_id": row["article_id"],
+                        "entry_id": row.get("entry_id", ""),
                         "quantity": row["quantity"],
                         "unit_cost": row["unit_cost"],
                         "notes": row["notes"],
@@ -1858,7 +2653,8 @@ class DistrictMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, TemplateVi
                     )
             else:
                 for built in built_rows:
-                    models.DistrictBeneficiaryEntry.objects.create(created_by=self.request.user, **built)
+                    create_kwargs = {key: value for key, value in built.items() if key != "entry_id"}
+                    models.DistrictBeneficiaryEntry.objects.create(created_by=self.request.user, **create_kwargs)
                 services.log_audit(
                     user=self.request.user,
                     action_type=models.ActionTypeChoices.CREATE,
@@ -1917,6 +2713,7 @@ class DistrictMasterEntryUpdateView(DistrictMasterEntryBaseView):
         hydrated = [
             {
                 "article_id": str(entry.article_id),
+                "entry_id": str(entry.id),
                 "quantity": entry.quantity,
                 "unit_cost": entry.article_cost_per_unit,
                 "notes": entry.notes or "",
@@ -1966,6 +2763,9 @@ class DistrictMasterEntryDetailView(LoginRequiredMixin, RoleRequiredMixin, Templ
         context = super().get_context_data(**kwargs)
         district = models.DistrictMaster.objects.get(pk=self.kwargs["district_id"], is_active=True)
         entries = list(models.DistrictBeneficiaryEntry.objects.filter(district=district).select_related("article").order_by("id"))
+        current_sort = (self.request.GET.get("sort") or "article_name").strip()
+        current_dir = "asc" if (self.request.GET.get("dir") or "asc").lower() == "asc" else "desc"
+        entries = _sort_application_detail_entries(entries, current_sort, current_dir)
         total_accrued = sum((entry.total_amount or 0) for entry in entries)
         total_quantity = sum((entry.quantity or 0) for entry in entries)
         status = entries[0].status if entries else ""
@@ -1977,6 +2777,9 @@ class DistrictMasterEntryDetailView(LoginRequiredMixin, RoleRequiredMixin, Templ
                 "total_quantity": total_quantity,
                 "remaining_fund": (district.allotted_budget or 0) - total_accrued,
                 "application_status": status,
+                "current_sort": current_sort,
+                "current_dir": current_dir,
+                "sort_querystrings": _application_detail_sort_querystrings(current_sort, current_dir),
             }
         )
         context.update(_district_attachment_context(district))
@@ -2154,15 +2957,18 @@ def _validate_public_form(form_data, *, require_complete=True):
 
     unit_cost = None
     if article:
-        if article.cost_per_unit and article.cost_per_unit > 0:
-            unit_cost = article.cost_per_unit
-        else:
+        raw_unit_cost = str(form_data.get("article_cost_per_unit") or "").strip()
+        if raw_unit_cost:
             try:
-                unit_cost = Decimal(form_data["article_cost_per_unit"])
+                unit_cost = Decimal(raw_unit_cost)
                 if unit_cost < 0:
                     raise ValueError
             except (InvalidOperation, TypeError, ValueError):
                 errors.append("Enter a valid cost per unit.")
+        elif article.cost_per_unit and article.cost_per_unit > 0:
+            unit_cost = article.cost_per_unit
+        else:
+            errors.append("Enter a valid cost per unit.")
 
     return article, quantity, unit_cost, errors
 
@@ -2305,6 +3111,48 @@ def _filter_sort_institution_summaries(summaries, *, search_query="", date_from=
     return summaries
 
 
+def _application_detail_sort_querystrings(current_sort: str, current_dir: str):
+    allowed_columns = (
+        "article_name",
+        "item_type",
+        "quantity",
+        "unit_price",
+        "total_amount",
+        "name_of_beneficiary",
+        "name_of_institution",
+        "aadhar_number",
+        "notes",
+        "cheque_rtgs_in_favour",
+        "updated_at",
+    )
+    return {
+        column: f"?sort={column}&dir={'desc' if current_sort == column and current_dir == 'asc' else 'asc'}"
+        for column in allowed_columns
+    }
+
+
+def _sort_application_detail_entries(entries, sort_key: str, sort_dir: str):
+    sort_map = {
+        "article_name": lambda entry: (entry.article.article_name or "").casefold(),
+        "item_type": lambda entry: (entry.article.item_type or "").casefold(),
+        "quantity": lambda entry: entry.quantity or 0,
+        "unit_price": lambda entry: entry.article_cost_per_unit or Decimal("0"),
+        "total_amount": lambda entry: entry.total_amount or Decimal("0"),
+        "name_of_beneficiary": lambda entry: (getattr(entry, "name_of_beneficiary", "") or "").casefold(),
+        "name_of_institution": lambda entry: (getattr(entry, "name_of_institution", "") or "").casefold(),
+        "aadhar_number": lambda entry: (getattr(entry, "aadhar_number", "") or "").casefold(),
+        "notes": lambda entry: (getattr(entry, "notes", "") or "").casefold(),
+        "cheque_rtgs_in_favour": lambda entry: (getattr(entry, "cheque_rtgs_in_favour", "") or "").casefold(),
+        "updated_at": lambda entry: entry.updated_at or timezone.now(),
+    }
+    selected_key = sort_map.get(sort_key, sort_map["article_name"])
+    return sorted(
+        entries,
+        key=lambda entry: (selected_key(entry), (entry.article.article_name or "").casefold(), getattr(entry, "id", 0)),
+        reverse=(sort_dir == "desc"),
+    )
+
+
 def _institution_form_context(form_data=None, rows=None, errors=None, application_number=None):
     return {
         "institution_form_data": form_data or {},
@@ -2359,19 +3207,24 @@ def _validate_institution_rows(raw_rows, *, require_complete=True, internal_note
             errors.append(f"Row {index}: {article.article_name} can be added only once.")
             continue
 
-        if article.cost_per_unit and article.cost_per_unit > 0:
-            unit_cost = article.cost_per_unit
-        else:
+        raw_unit_cost = str(row.get("unit_cost") or "").strip()
+        if raw_unit_cost:
             try:
-                unit_cost = Decimal(row["unit_cost"])
+                unit_cost = Decimal(raw_unit_cost)
                 if unit_cost < 0:
                     raise ValueError
             except (InvalidOperation, TypeError, ValueError):
                 errors.append(f"Row {index}: enter a valid price for {article.article_name}.")
                 continue
+        elif article.cost_per_unit and article.cost_per_unit > 0:
+            unit_cost = article.cost_per_unit
+        else:
+            errors.append(f"Row {index}: enter a valid price for {article.article_name}.")
+            continue
 
         built_rows.append(
             {
+                "entry_id": int(row["entry_id"]) if str(row.get("entry_id") or "").strip().isdigit() else None,
                 "article": article,
                 "article_cost_per_unit": unit_cost,
                 "quantity": quantity,
@@ -2390,16 +3243,25 @@ def _validate_institution_rows(raw_rows, *, require_complete=True, internal_note
 
 
 def _sync_district_entries(existing_entries, built_rows, user):
+    by_id = {entry.id: entry for entry in existing_entries}
     by_article = {}
     for entry in existing_entries:
         by_article.setdefault(entry.article_id, []).append(entry)
 
     used_ids = set()
     for built in built_rows:
-        candidates = by_article.get(built["article"].id, [])
-        match = next((entry for entry in candidates if entry.id not in used_ids), None)
+        match = None
+        entry_id = built.get("entry_id")
+        if entry_id:
+            candidate = by_id.get(entry_id)
+            if candidate and candidate.id not in used_ids:
+                match = candidate
         if match is None:
-            models.DistrictBeneficiaryEntry.objects.create(created_by=user, **built)
+            candidates = by_article.get(built["article"].id, [])
+            match = next((entry for entry in candidates if entry.id not in used_ids), None)
+        if match is None:
+            create_kwargs = {key: value for key, value in built.items() if key != "entry_id"}
+            models.DistrictBeneficiaryEntry.objects.create(created_by=user, **create_kwargs)
             continue
 
         changed = False
@@ -2452,15 +3314,24 @@ def _sync_district_entries(existing_entries, built_rows, user):
 
 
 def _sync_institution_entries(existing_entries, built_rows, user, *, application_number, form_data):
+    by_id = {entry.id: entry for entry in existing_entries}
     by_article = {}
     for entry in existing_entries:
         by_article.setdefault(entry.article_id, []).append(entry)
 
     used_ids = set()
     for built in built_rows:
-        candidates = by_article.get(built["article"].id, [])
-        match = next((entry for entry in candidates if entry.id not in used_ids), None)
+        match = None
+        entry_id = built.get("entry_id")
+        if entry_id:
+            candidate = by_id.get(entry_id)
+            if candidate and candidate.id not in used_ids:
+                match = candidate
         if match is None:
+            candidates = by_article.get(built["article"].id, [])
+            match = next((entry for entry in candidates if entry.id not in used_ids), None)
+        if match is None:
+            create_kwargs = {key: value for key, value in built.items() if key != "entry_id"}
             models.InstitutionsBeneficiaryEntry.objects.create(
                 created_by=user,
                 application_number=application_number,
@@ -2468,7 +3339,7 @@ def _sync_institution_entries(existing_entries, built_rows, user, *, application
                 institution_type=form_data["institution_type"],
                 address=form_data["address"] or None,
                 mobile=form_data["mobile"] or None,
-                **built,
+                **create_kwargs,
             )
             continue
 
@@ -2768,6 +3639,13 @@ class PublicMasterEntryDetailView(LoginRequiredMixin, RoleRequiredMixin, Templat
         entry = models.PublicBeneficiaryEntry.objects.select_related("article").get(pk=self.kwargs["pk"])
         context["entry"] = entry
         context["history_matches"] = _public_history_matches(entry.aadhar_number)
+        current_sort = (self.request.GET.get("sort") or "article_name").strip()
+        current_dir = "asc" if (self.request.GET.get("dir") or "asc").lower() == "asc" else "desc"
+        detail_entries = _sort_application_detail_entries([entry], current_sort, current_dir)
+        context["detail_entries"] = detail_entries
+        context["current_sort"] = current_sort
+        context["current_dir"] = current_dir
+        context["sort_querystrings"] = _application_detail_sort_querystrings(current_sort, current_dir)
         context.update(_public_attachment_context(entry))
         return context
 
@@ -2861,6 +3739,7 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                 hydrated_rows.append(
                     {
                         "article_id": row["article_id"],
+                        "entry_id": row.get("entry_id", ""),
                         "quantity": row["quantity"],
                         "unit_cost": row["unit_cost"],
                         "notes": row["notes"],
@@ -2930,6 +3809,7 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                     )
             else:
                 for built in built_rows:
+                    create_kwargs = {key: value for key, value in built.items() if key != "entry_id"}
                     models.InstitutionsBeneficiaryEntry.objects.create(
                         created_by=self.request.user,
                         application_number=application_number,
@@ -2937,7 +3817,7 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                         institution_type=form_data["institution_type"],
                         address=form_data["address"] or None,
                         mobile=form_data["mobile"] or None,
-                        **built,
+                        **create_kwargs,
                     )
                 services.log_audit(
                     user=self.request.user,
@@ -2998,6 +3878,7 @@ class InstitutionsMasterEntryUpdateView(InstitutionsMasterEntryBaseView):
         rows = [
             {
                 "article_id": str(entry.article_id),
+                "entry_id": str(entry.id),
                 "quantity": entry.quantity,
                 "unit_cost": entry.article_cost_per_unit,
                 "notes": entry.notes or "",
@@ -3064,6 +3945,9 @@ class InstitutionsMasterEntryDetailView(LoginRequiredMixin, RoleRequiredMixin, T
         entries = list(
             models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).select_related("article").order_by("id")
         )
+        current_sort = (self.request.GET.get("sort") or "article_name").strip()
+        current_dir = "asc" if (self.request.GET.get("dir") or "asc").lower() == "asc" else "desc"
+        entries = _sort_application_detail_entries(entries, current_sort, current_dir)
         first = entries[0]
         context.update(
             {
@@ -3073,6 +3957,9 @@ class InstitutionsMasterEntryDetailView(LoginRequiredMixin, RoleRequiredMixin, T
                 "total_quantity": sum((row.quantity or 0) for row in entries),
                 "total_value": sum((row.total_amount or 0) for row in entries),
                 "application_status": first.status,
+                "current_sort": current_sort,
+                "current_dir": current_dir,
+                "sort_querystrings": _application_detail_sort_querystrings(current_sort, current_dir),
             }
         )
         context.update(_institution_attachment_context(application_number))
@@ -3938,6 +4825,123 @@ def _is_editable_purchase_order(user, purchase_order):
     return purchase_order.status == models.FundRequestStatusChoices.DRAFT
 
 
+def _fund_request_recipient_display_name(recipient) -> str:
+    source_entry_id = getattr(recipient, "source_entry_id", None)
+    beneficiary_type = getattr(recipient, "beneficiary_type", None)
+    source_entry = None
+    if source_entry_id and beneficiary_type:
+        if beneficiary_type == models.RecipientTypeChoices.DISTRICT:
+            source_entry = models.DistrictBeneficiaryEntry.objects.select_related("district").filter(pk=source_entry_id).first()
+            if source_entry:
+                application_number = str(source_entry.application_number or "").strip()
+                district_name = str(getattr(source_entry.district, "district_name", "") or "").strip()
+                if application_number and district_name:
+                    return f"{application_number} - {district_name}"
+                return district_name or application_number or "-"
+        elif beneficiary_type == models.RecipientTypeChoices.PUBLIC:
+            source_entry = models.PublicBeneficiaryEntry.objects.filter(pk=source_entry_id).first()
+            if source_entry:
+                application_number = str(source_entry.application_number or "").strip()
+                public_name = str(source_entry.name or "").strip()
+                if application_number and public_name:
+                    return f"{application_number} - {public_name}"
+                return public_name or application_number or "-"
+        elif beneficiary_type in {
+            models.RecipientTypeChoices.INSTITUTIONS,
+            models.RecipientTypeChoices.OTHERS,
+        }:
+            source_entry = models.InstitutionsBeneficiaryEntry.objects.filter(pk=source_entry_id).first()
+            if source_entry:
+                application_number = str(source_entry.application_number or "").strip()
+                institution_name = str(source_entry.institution_name or "").strip()
+                if application_number and institution_name:
+                    return f"{application_number} - {institution_name}"
+                return institution_name or application_number or "-"
+    return (
+        str(getattr(recipient, "recipient_name", "") or "").strip()
+        or str(getattr(recipient, "name_of_beneficiary", "") or "").strip()
+        or str(getattr(recipient, "name_of_institution", "") or "").strip()
+        or str(getattr(recipient, "beneficiary", "") or "").strip()
+        or "-"
+    )
+
+
+def _fund_request_article_beneficiary_display(article_item) -> str:
+    article = getattr(article_item, "article", None)
+    if not article:
+        return str(getattr(article_item, "beneficiary", "") or "").strip() or "-"
+
+    labels = []
+    if article.district_entries.exists():
+        labels.append("District")
+    if article.public_entries.exists():
+        labels.append("Public")
+    if article.institution_entries.exists():
+        labels.append("Institutions")
+
+    if len(labels) == 3:
+        return "All beneficiaries"
+    if labels:
+        return " & ".join(labels)
+    return str(getattr(article_item, "beneficiary", "") or "").strip() or "-"
+
+
+def _normalize_vendor_group_payload(raw_group):
+    if not isinstance(raw_group, dict):
+        return None
+    key = str(raw_group.get("key") or "").strip()
+    if not key:
+        return None
+    payload = {
+        "key": key,
+        "vendor_name": str(raw_group.get("vendor_name") or "").strip(),
+        "gst_no": str(raw_group.get("gst_no") or "").strip(),
+        "vendor_address": str(raw_group.get("vendor_address") or "").strip(),
+        "vendor_city": str(raw_group.get("vendor_city") or "").strip(),
+        "vendor_state": str(raw_group.get("vendor_state") or "").strip(),
+        "vendor_pincode": str(raw_group.get("vendor_pincode") or "").strip(),
+        "cheque_in_favour": str(raw_group.get("cheque_in_favour") or "").strip(),
+    }
+    return payload
+
+
+def _build_vendor_groups_from_articles(article_rows):
+    groups = []
+    row_key_map = {}
+    seen = {}
+    for article in article_rows:
+        signature = (
+            str(article.vendor_name or "").strip(),
+            str(article.gst_no or "").strip(),
+            str(article.vendor_address or "").strip(),
+            str(article.vendor_city or "").strip(),
+            str(article.vendor_state or "").strip(),
+            str(article.vendor_pincode or "").strip(),
+            str(article.cheque_in_favour or "").strip(),
+        )
+        if not any(signature):
+            continue
+        key = seen.get(signature)
+        if not key:
+            key = f"vendor-{len(groups) + 1}"
+            seen[signature] = key
+            groups.append(
+                {
+                    "key": key,
+                    "vendor_name": signature[0],
+                    "gst_no": signature[1],
+                    "vendor_address": signature[2],
+                    "vendor_city": signature[3],
+                    "vendor_state": signature[4],
+                    "vendor_pincode": signature[5],
+                    "cheque_in_favour": signature[6],
+                }
+            )
+        if getattr(article, "pk", None):
+            row_key_map[str(article.pk)] = key
+    return groups, row_key_map
+
+
 FundRequestRecipientFormSet = inlineformset_factory(
     models.FundRequest,
     models.FundRequestRecipient,
@@ -4106,57 +5110,12 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        def clean_option_name(raw_value: str) -> str:
-            text = str(raw_value or "").strip()
-            if not text:
-                return "-"
-            parts = [part.strip() for part in text.split(" - ") if part.strip()]
-            if len(parts) >= 2:
-                return parts[1]
-            return parts[0] if parts else text
-
-        def beneficiary_option_display(recipient) -> str:
-            raw_value = str(recipient.beneficiary or "").strip()
-            if raw_value and " - " in raw_value:
-                return raw_value
-            source_entry_id = getattr(recipient, "source_entry_id", None)
-            beneficiary_type = getattr(recipient, "beneficiary_type", None)
-            if source_entry_id and beneficiary_type:
-                source_entry = None
-                if beneficiary_type == models.RecipientTypeChoices.DISTRICT:
-                    source_entry = models.DistrictBeneficiaryEntry.objects.select_related("district").filter(pk=source_entry_id).first()
-                elif beneficiary_type == models.RecipientTypeChoices.PUBLIC:
-                    source_entry = models.PublicBeneficiaryEntry.objects.filter(pk=source_entry_id).first()
-                elif beneficiary_type in {
-                    models.RecipientTypeChoices.INSTITUTIONS,
-                    models.RecipientTypeChoices.OTHERS,
-                }:
-                    source_entry = models.InstitutionsBeneficiaryEntry.objects.filter(pk=source_entry_id).first()
-                if source_entry:
-                    payload = _build_aid_option_payload(source_entry, beneficiary_type)
-                    display_text = str(payload.get("display_text") or "").strip()
-                    if display_text:
-                        return display_text
-            if raw_value and not raw_value.isdigit():
-                return raw_value
-            return (
-                getattr(recipient, "display_name", "")
-                or getattr(recipient, "recipient_name", "")
-                or "-"
-            )
-
         for fr in context["fund_requests"]:
             recipients = list(fr.recipients.all())
             articles = list(fr.articles.all())
             for recipient in recipients:
-                recipient.display_name = (
-                    recipient.name_of_beneficiary
-                    or recipient.name_of_institution
-                    or recipient.district_name
-                    or clean_option_name(recipient.beneficiary)
-                    or clean_option_name(recipient.recipient_name)
-                )
-                recipient.beneficiary_display = beneficiary_option_display(recipient)
+                recipient.display_name = _fund_request_recipient_display_name(recipient)
+                recipient.beneficiary_display = _fund_request_recipient_display_name(recipient)
             fr.district_recipient_count = sum(
                 1 for recipient in recipients if recipient.beneficiary_type == models.RecipientTypeChoices.DISTRICT
             )
@@ -4182,7 +5141,10 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
             params["dir"] = next_dir
             return params.urlencode()
         context["request_type_choices"] = models.FundRequestTypeChoices.choices
-        context["status_choices"] = models.FundRequestStatusChoices.choices
+        context["status_choices"] = [
+            (models.FundRequestStatusChoices.DRAFT, "Draft"),
+            (models.FundRequestStatusChoices.SUBMITTED, "Submitted"),
+        ]
         context["filters"] = {
             "q": self.request.GET.get("q", ""),
             "request_type": self.request.GET.get("request_type", ""),
@@ -4206,24 +5168,10 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
 
     def _beneficiary_display_for_export(self, recipient, fund_request_type):
         if fund_request_type == models.FundRequestTypeChoices.ARTICLE:
-            return "All Districts & Public"
+            return ""
         if not recipient:
             return ""
-        if recipient.beneficiary_type == models.RecipientTypeChoices.DISTRICT:
-            if recipient.district_name:
-                return recipient.district_name
-            text = str(recipient.beneficiary or "").strip()
-            parts = [part.strip() for part in text.split(" - ") if part.strip()]
-            return parts[1] if len(parts) >= 2 else text
-        if recipient.beneficiary_type in {
-            models.RecipientTypeChoices.PUBLIC,
-            models.RecipientTypeChoices.INSTITUTIONS,
-            models.RecipientTypeChoices.OTHERS,
-        }:
-            text = str(recipient.beneficiary or "").strip()
-            parts = [part.strip() for part in text.split(" - ") if part.strip()]
-            return parts[0] if parts else text
-        return str(recipient.beneficiary or "").strip()
+        return _fund_request_recipient_display_name(recipient)
 
     def _export_xlsx(self):
         export_status = (self.request.GET.get("export_status") or "").strip().lower()
@@ -4273,14 +5221,14 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
         birthday_number = self._event_birthday_number(event_year)
 
         current_row = 1
-        worksheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=13)
+        worksheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=14)
         cell = worksheet.cell(current_row, 1)
         cell.value = "OMSAKTHI"
         cell.font = Font(size=10, bold=True)
         cell.alignment = center
         current_row += 1
 
-        worksheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=13)
+        worksheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=14)
         cell = worksheet.cell(current_row, 1)
         cell.value = (
             f"MASM Makkal Nala Pani Payment Request Details for Distribution on the eve of "
@@ -4290,14 +5238,14 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
         cell.alignment = center
         current_row += 1
 
-        worksheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=13)
+        worksheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=14)
         cell = worksheet.cell(current_row, 1)
         cell.value = f"His Holiness AMMA at Melmaruvathur on 03.03.{event_year}"
         cell.font = Font(size=12, bold=True)
         cell.alignment = center
         current_row += 2
 
-        worksheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=13)
+        worksheet.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=14)
         cell = worksheet.cell(current_row, 1)
         label = "Payment Request - MASTER LIST"
         if export_status == models.FundRequestStatusChoices.DRAFT:
@@ -4315,7 +5263,8 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
             "Beneficiary",
             "Name of Beneficiary/Article",
             "Name of Institution/Article",
-            "GST/Aadhar Number",
+            "Vendor Name",
+            "GST / Aadhaar Number",
             "Details",
             "Units",
             "Price incl GST",
@@ -4349,6 +5298,7 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
                             "beneficiary": self._beneficiary_display_for_export(recipient, fr.fund_request_type),
                             "name_beneficiary_article": recipient.recipient_name or recipient.name_of_beneficiary or "",
                             "name_institution_article": recipient.name_of_institution or "",
+                            "vendor_name": "",
                             "gst_aadhar": recipient.aadhar_number or "",
                             "details": recipient.notes or recipient.details or "",
                             "units": 1,
@@ -4362,8 +5312,6 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
                 fr_value_map[fr.id] = float(fr_total)
             else:
                 fr_total = Decimal("0")
-                first_recipient = fr.recipients.all().first()
-                beneficiary = self._beneficiary_display_for_export(first_recipient, fr.fund_request_type)
                 for article in fr.articles.all():
                     line_value = Decimal(str(article.value or 0))
                     fr_total += line_value
@@ -4372,9 +5320,10 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
                             "fr_id": fr.id,
                             "fund_request_number": fr.formatted_fund_request_number or "",
                             "request_type": "Article",
-                            "beneficiary": beneficiary,
-                            "name_beneficiary_article": article.supplier_article_name or article.article_name or "",
-                            "name_institution_article": article.article_name or "",
+                            "beneficiary": _fund_request_article_beneficiary_display(article),
+                            "name_beneficiary_article": article.article_name or "",
+                            "name_institution_article": article.supplier_article_name or "",
+                            "vendor_name": article.vendor_name or "",
                             "gst_aadhar": article.gst_no or fr.gst_number or "",
                             "details": "",
                             "units": article.quantity or 0,
@@ -4406,6 +5355,7 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
                 row["beneficiary"],
                 row["name_beneficiary_article"],
                 row["name_institution_article"],
+                row["vendor_name"],
                 row["gst_aadhar"],
                 row["details"],
                 row["units"],
@@ -4419,32 +5369,32 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
                 cell = worksheet.cell(current_row, idx)
                 cell.value = value
                 cell.border = border
-                cell.alignment = right if idx in {8, 9, 10, 11} else left
+                cell.alignment = right if idx in {9, 10, 11, 12} else left
             current_row += 1
         if current_fr_id is not None:
             fr_groups[current_fr_id] = (group_start, current_row - 1)
 
         for _fr_id, (start_row, end_row) in fr_groups.items():
             if end_row > start_row:
-                worksheet.merge_cells(start_row=start_row, start_column=11, end_row=end_row, end_column=11)
-                worksheet.cell(start_row, 11).alignment = right
+                worksheet.merge_cells(start_row=start_row, start_column=12, end_row=end_row, end_column=12)
+                worksheet.cell(start_row, 12).alignment = right
 
         grand_total = sum(fr_value_map.values())
         total_row = current_row
-        for col in range(1, 14):
+        for col in range(1, 15):
             cell = worksheet.cell(total_row, col)
             cell.fill = total_fill
             cell.border = border
         worksheet.cell(total_row, 1).value = "TOTAL"
         worksheet.cell(total_row, 1).font = Font(size=11, bold=True)
         worksheet.cell(total_row, 1).alignment = left
-        worksheet.cell(total_row, 11).value = grand_total
-        worksheet.cell(total_row, 11).font = Font(size=11, bold=True)
-        worksheet.cell(total_row, 11).alignment = right
+        worksheet.cell(total_row, 12).value = grand_total
+        worksheet.cell(total_row, 12).font = Font(size=11, bold=True)
+        worksheet.cell(total_row, 12).alignment = right
 
         widths = {
-            1: 18, 2: 18, 3: 20, 4: 25, 5: 25, 6: 18, 7: 30,
-            8: 12, 9: 15, 10: 15, 11: 18, 12: 25, 13: 15,
+            1: 18, 2: 18, 3: 20, 4: 24, 5: 24, 6: 22, 7: 18, 8: 28,
+            9: 12, 10: 15, 11: 15, 12: 18, 13: 25, 14: 15,
         }
         for column_index, width in widths.items():
             worksheet.column_dimensions[get_column_letter(column_index)].width = width
@@ -4493,20 +5443,16 @@ def _fund_request_aid_type_choices():
 
 
 def _fund_request_article_choices(current_fund_request=None):
-    rows = [
+    all_rows = [
         row
         for row in _build_order_management_rows()
-        if row['item_type'] == models.ItemTypeChoices.ARTICLE and row['quantity_pending'] > 0
+        if row['item_type'] == models.ItemTypeChoices.ARTICLE
     ]
-    if current_fund_request and current_fund_request.status == models.FundRequestStatusChoices.SUBMITTED:
-        current_quantities = {}
-        for line in current_fund_request.articles.all():
-            article_name = (line.article_name or getattr(line.article, "article_name", "") or "").strip()
-            if not article_name:
-                continue
-            current_quantities[article_name.casefold()] = current_quantities.get(article_name.casefold(), 0) + int(line.quantity or 0)
-        for row in rows:
-            row['quantity_pending'] += current_quantities.get(row['article_name'].casefold(), 0)
+    rows_by_name = {
+        str(row['article_name']).casefold(): dict(row)
+        for row in all_rows
+    }
+    rows = [row for row in rows_by_name.values() if row['quantity_pending'] > 0]
     article_map = {
         article.article_name.casefold(): article
         for article in models.Article.objects.filter(item_type=models.ItemTypeChoices.ARTICLE)
@@ -4694,7 +5640,64 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
         context['current_fund_request_id'] = getattr(self.object, 'pk', '') or ''
         context['purchase_order_mode'] = self.is_purchase_order_mode()
         context['back_url'] = reverse('ui:purchase-order-list') if self.is_purchase_order_mode() else reverse('ui:fund-request-list')
+        vendor_groups = []
+        article_vendor_group_keys = {}
+        if self.request.method == 'POST':
+            raw_groups = self.request.POST.get('vendor_groups_json', '[]')
+            try:
+                parsed_groups = json.loads(raw_groups or '[]')
+            except (TypeError, ValueError):
+                parsed_groups = []
+            vendor_groups = [group for group in (_normalize_vendor_group_payload(item) for item in parsed_groups) if group]
+            for form in context['article_formset'].forms:
+                article_vendor_group_keys[form.prefix] = str(self.request.POST.get(f'{form.prefix}-vendor_group_key') or '').strip()
+        elif self.object:
+            vendor_groups, row_key_map = _build_vendor_groups_from_articles(self.object.articles.all())
+            for form in context['article_formset'].forms:
+                instance_pk = getattr(getattr(form, 'instance', None), 'pk', None)
+                article_vendor_group_keys[form.prefix] = row_key_map.get(str(instance_pk), '')
+        context['vendor_groups_json'] = json.dumps(vendor_groups)
+        context['article_vendor_group_keys_json'] = json.dumps(article_vendor_group_keys)
         return context
+
+    def _parse_vendor_groups_from_request(self):
+        raw_groups = self.request.POST.get('vendor_groups_json', '[]')
+        try:
+            parsed_groups = json.loads(raw_groups or '[]')
+        except (TypeError, ValueError):
+            parsed_groups = []
+        return {
+            group['key']: group
+            for group in (_normalize_vendor_group_payload(item) for item in parsed_groups)
+            if group
+        }
+
+    def _apply_article_vendor_summary(self, fr, article_formset, vendor_groups):
+        if fr.fund_request_type != models.FundRequestTypeChoices.ARTICLE or self.is_purchase_order_mode():
+            return
+        active_keys = []
+        for form in article_formset.forms:
+            if not getattr(form, 'cleaned_data', None) or form.cleaned_data.get('DELETE', False):
+                continue
+            group_key = str(self.request.POST.get(f'{form.prefix}-vendor_group_key') or '').strip()
+            if group_key and group_key in vendor_groups:
+                active_keys.append(group_key)
+        active_keys = list(dict.fromkeys(active_keys))
+        if len(active_keys) == 1:
+            group = vendor_groups[active_keys[0]]
+            fr.supplier_name = group['vendor_name']
+            fr.gst_number = group['gst_no']
+            fr.supplier_address = group['vendor_address']
+            fr.supplier_city = group['vendor_city']
+            fr.supplier_state = group['vendor_state']
+            fr.supplier_pincode = group['vendor_pincode']
+        elif len(active_keys) > 1:
+            fr.supplier_name = 'Multiple Vendors'
+            fr.gst_number = ''
+            fr.supplier_address = ''
+            fr.supplier_city = ''
+            fr.supplier_state = ''
+            fr.supplier_pincode = ''
 
     def _collect_totals(self, instance: models.FundRequest):
         for article in instance.articles.all():
@@ -4753,7 +5756,6 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
         is_valid = True
         if fr.fund_request_type == models.FundRequestTypeChoices.AID:
             if action == 'submit' and not (fr.aid_type or '').strip():
-                self.request._messages.add(messages.ERROR, 'Select the aid type before submit.')
                 return False
             active_forms = [form for form in recipient_formset.forms if form.cleaned_data and not form.cleaned_data.get('DELETE', False)]
             if action == 'submit' and not active_forms:
@@ -4790,24 +5792,43 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
                             form.add_error(field_name, 'Required for submit.')
                             is_valid = False
         else:
+            vendor_groups = self._parse_vendor_groups_from_request()
             active_forms = [form for form in article_formset.forms if form.cleaned_data and not form.cleaned_data.get('DELETE', False)]
             if action == 'submit' and not active_forms:
                 article_formset._non_form_errors = article_formset.error_class(['Add at least one item.'])
                 return False
             if action == 'submit':
                 for form in active_forms:
-                    required_fields = ['article_name', 'supplier_article_name', 'description', 'quantity', 'unit_price']
-                    if not self.is_purchase_order_mode():
-                        required_fields.extend(['gst_no', 'cheque_in_favour'])
+                    required_fields = ['article_name', 'quantity', 'unit_price']
                     for field_name in required_fields:
                         value = form.cleaned_data.get(field_name)
                         if value in (None, '', 0, '0'):
                             form.add_error(field_name, 'Required for submit.')
                             is_valid = False
+                    if not self.is_purchase_order_mode():
+                        group_key = str(self.request.POST.get(f'{form.prefix}-vendor_group_key') or '').strip()
+                        if not group_key or group_key not in vendor_groups:
+                            form.add_error('article_name', 'Select a vendor.')
+                            is_valid = False
+                            continue
+                        group = vendor_groups[group_key]
+                        for value in [
+                            group.get('vendor_name'),
+                            group.get('gst_no'),
+                            group.get('vendor_address'),
+                            group.get('vendor_city'),
+                            group.get('vendor_state'),
+                            group.get('vendor_pincode'),
+                            group.get('cheque_in_favour'),
+                        ]:
+                            if not str(value or '').strip():
+                                form.add_error('article_name', 'Complete the selected vendor details.')
+                                is_valid = False
+                                break
         return is_valid
 
     def _validate_article_header_fields(self, form, fr, action):
-        if action != 'submit' or fr.fund_request_type != models.FundRequestTypeChoices.ARTICLE:
+        if action != 'submit' or fr.fund_request_type != models.FundRequestTypeChoices.ARTICLE or not self.is_purchase_order_mode():
             return True
         valid = True
         labels = [
@@ -4848,10 +5869,17 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
             fr.created_by = self.request.user
         self._set_fund_request_status(fr, action)
 
-        header_ok = self._validate_article_header_fields(form, fr, action)
-
         recipient_formset, article_formset = self._build_formsets(fr)
         formsets_ok = recipient_formset.is_valid() and article_formset.is_valid()
+
+        header_ok = True
+        if fr.fund_request_type == models.FundRequestTypeChoices.AID and action == 'submit' and not (fr.aid_type or '').strip():
+            form.add_error('aid_type', 'Select the aid type before submit.')
+            header_ok = False
+        if formsets_ok and fr.fund_request_type == models.FundRequestTypeChoices.ARTICLE:
+            self._apply_article_vendor_summary(fr, article_formset, self._parse_vendor_groups_from_request())
+        header_ok = self._validate_article_header_fields(form, fr, action) and header_ok
+
         if not header_ok or not formsets_ok or not self._validate_fund_request_formsets(fr, action, recipient_formset, article_formset):
             messages.error(self.request, 'Please fix errors in recipients/articles before saving.')
             return self.render_to_response(
@@ -4910,18 +5938,33 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
                     deleted_instance = getattr(deleted_form, "instance", None)
                     if deleted_instance and deleted_instance.pk:
                         deleted_instance.delete()
-                article_instances = article_formset.save(commit=False)
-                for article in article_instances:
+                vendor_groups = self._parse_vendor_groups_from_request()
+                for article_form in article_formset.forms:
+                    if not getattr(article_form, "cleaned_data", None) or article_form.cleaned_data.get("DELETE", False):
+                        continue
+                    article = article_form.save(commit=False)
                     article.fund_request = fr
                     if not article.article_id:
                         article.article = self._resolve_article_record(article.article_name)
                     if article.article and not article.article_name:
                         article.article_name = article.article.article_name
-                    article.vendor_name = fr.supplier_name
-                    article.vendor_address = fr.supplier_address
-                    article.vendor_city = fr.supplier_city
-                    article.vendor_state = fr.supplier_state
-                    article.vendor_pincode = fr.supplier_pincode
+                    if self.is_purchase_order_mode():
+                        article.vendor_name = fr.supplier_name
+                        article.gst_no = fr.gst_number
+                        article.vendor_address = fr.supplier_address
+                        article.vendor_city = fr.supplier_city
+                        article.vendor_state = fr.supplier_state
+                        article.vendor_pincode = fr.supplier_pincode
+                    else:
+                        group_key = str(self.request.POST.get(f'{article_form.prefix}-vendor_group_key') or '').strip()
+                        group = vendor_groups.get(group_key, {})
+                        article.vendor_name = group.get('vendor_name', '')
+                        article.gst_no = group.get('gst_no', '')
+                        article.vendor_address = group.get('vendor_address', '')
+                        article.vendor_city = group.get('vendor_city', '')
+                        article.vendor_state = group.get('vendor_state', '')
+                        article.vendor_pincode = group.get('vendor_pincode', '')
+                        article.cheque_in_favour = group.get('cheque_in_favour', '')
                     article.unit_price = article.unit_price or 0
                     article.price_including_gst = article.unit_price * (article.quantity or 0)
                     article.value = article.price_including_gst
@@ -4973,6 +6016,12 @@ class FundRequestDetailView(LoginRequiredMixin, RoleRequiredMixin, DetailView):
     template_name = "dashboard/fund_request_detail.html"
     context_object_name = "fund_request"
 
+    def get_queryset(self):
+        return (
+            models.FundRequest.objects.select_related("created_by")
+            .prefetch_related("recipients", "articles")
+        )
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["media_url"] = settings.MEDIA_URL
@@ -4982,6 +6031,15 @@ class FundRequestDetailView(LoginRequiredMixin, RoleRequiredMixin, DetailView):
             models.ModuleKeyChoices.ORDER_FUND_REQUEST,
             "delete",
         )
+        context["back_url"] = reverse("ui:fund-request-list")
+        recipient_rows = list(self.object.recipients.all())
+        for recipient in recipient_rows:
+            recipient.beneficiary_display = _fund_request_recipient_display_name(recipient)
+        context["recipient_rows"] = recipient_rows
+        article_rows = list(self.object.articles.all())
+        for article in article_rows:
+            article.beneficiary_display = _fund_request_article_beneficiary_display(article)
+        context["article_rows"] = article_rows
         return context
 
 
@@ -5128,9 +6186,11 @@ def _purchase_order_sequence(value):
 def _purchase_order_article_choices():
     return [
         {
-            'id': article.id,
-            'article_name': article.article_name,
-            'cost_per_unit': str(article.cost_per_unit or 0),
+            'name': article.article_name,
+            'label': article.article_name,
+            'article_id': article.id,
+            'default_price': str(article.cost_per_unit or 0),
+            'pending_qty': 0,
         }
         for article in models.Article.objects.filter(
             item_type=models.ItemTypeChoices.ARTICLE,
@@ -5408,6 +6468,9 @@ class PurchaseOrderPDFView(LoginRequiredMixin, RoleRequiredMixin, View):
         filename_base = purchase_order.purchase_order_number or f"PO-DRAFT-{purchase_order.pk}"
         response = HttpResponse(pdf_buffer.getvalue(), content_type="application/pdf")
         response["Content-Disposition"] = f'inline; filename="{filename_base}.pdf"'
+        response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response["Pragma"] = "no-cache"
+        response["Expires"] = "0"
         return response
 
 
@@ -5583,6 +6646,3540 @@ class MasterDataHistoryView(MasterDataBaseView):
 def _csv_reader_from_upload(uploaded_file):
     uploaded_file.seek(0)
     return csv.DictReader(io.StringIO(uploaded_file.read().decode("utf-8-sig")))
+
+
+def _tabular_rows_from_upload(uploaded_file):
+    name = str(getattr(uploaded_file, "name", "") or "").lower()
+    if name.endswith((".xlsx", ".xlsm")):
+        uploaded_file.seek(0)
+        workbook = load_workbook(uploaded_file, read_only=True, data_only=True)
+        sheet = workbook.active
+        values = list(sheet.iter_rows(values_only=True))
+        if not values:
+            return [], []
+        raw_headers = list(values[0] or [])
+        headers = [str(header or "").strip() for header in raw_headers]
+        rows = []
+        for row_values in values[1:]:
+            row = {}
+            for index, header in enumerate(headers):
+                if not header:
+                    continue
+                cell_value = row_values[index] if index < len(row_values) else ""
+                row[header] = "" if cell_value is None else str(cell_value)
+            if any(str(value or "").strip() for value in row.values()):
+                rows.append(row)
+        return headers, rows
+    reader = _csv_reader_from_upload(uploaded_file)
+    return list(reader.fieldnames or []), list(reader)
+
+
+PHASE2_MASTER_REQUIRED_HEADERS = [
+    "Application Number",
+    "Beneficiary Name",
+    "Requested Item",
+    "Quantity",
+    "Beneficiary Type",
+    "Item Type",
+]
+
+
+def _phase2_parse_number(value):
+    raw = str(value or "").replace(",", "").strip()
+    try:
+        number = int(Decimal(raw or "0"))
+    except (InvalidOperation, ValueError):
+        return 0
+    return max(number, 0)
+
+
+def _phase2_normalize_text(value):
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _phase2_active_or_latest_session():
+    return (
+        models.EventSession.objects.order_by("-is_active", "-event_year", "session_name", "-id").first()
+    )
+
+
+def _phase2_get_or_create_default_session():
+    session = _phase2_active_or_latest_session()
+    if session:
+        return session
+    year = timezone.localdate().year
+    return models.EventSession.objects.create(
+        session_name=f"{year} Event",
+        event_year=year,
+        is_active=True,
+    )
+
+
+def _phase2_selected_session(request):
+    session_id = (request.GET.get("session") or request.POST.get("session") or "").strip()
+    if session_id:
+        try:
+            return models.EventSession.objects.get(pk=session_id)
+        except (ValueError, models.EventSession.DoesNotExist):
+            return _phase2_active_or_latest_session()
+    return _phase2_active_or_latest_session()
+
+
+def _phase2_session_querystring(request, session):
+    params = request.GET.copy()
+    params["session"] = str(session.pk)
+    return params.urlencode()
+
+
+def _phase2_redirect_url(request, view_name, session=None, *, filter_keys=None):
+    params = request.GET.copy()
+    if filter_keys is not None:
+        filtered = params.__class__(mutable=True)
+        for key in filter_keys:
+            if key in params:
+                values = params.getlist(key)
+                if values:
+                    filtered.setlist(key, values)
+        params = filtered
+    if session:
+        params["session"] = str(session.pk)
+    elif "session" in params:
+        del params["session"]
+    query = params.urlencode()
+    base_url = reverse(view_name)
+    return f"{base_url}?{query}" if query else base_url
+
+
+def _phase2_url_with_extra_params(request, view_name, session=None, *, filter_keys=None, extra_params=None):
+    params = request.GET.copy()
+    if filter_keys is not None:
+        filtered = params.__class__(mutable=True)
+        for key in filter_keys:
+            if key in params:
+                values = params.getlist(key)
+                if values:
+                    filtered.setlist(key, values)
+        params = filtered
+    if session:
+        params["session"] = str(session.pk)
+    if extra_params:
+        for key, value in extra_params.items():
+            if value in (None, ""):
+                params.pop(key, None)
+            else:
+                params[key] = value
+    query = params.urlencode()
+    base_url = reverse(view_name)
+    return f"{base_url}?{query}" if query else base_url
+
+
+def _phase2_distinct_beneficiary_key(application_number, beneficiary_name, beneficiary_type):
+    return (
+        _phase2_normalize_text(beneficiary_type),
+        str(application_number or "").strip(),
+        str(beneficiary_name or "").strip(),
+    )
+
+
+def _phase2_reconciliation_snapshot(*, source_rows, grouped_rows, total_value_getter):
+    source_unique_items = set()
+    grouped_unique_items = set()
+    source_beneficiaries = {}
+    grouped_beneficiaries = {}
+    source_quantity_total = 0
+    grouped_quantity_total = 0
+    source_value_total = 0
+    grouped_value_total = 0
+
+    for row in source_rows:
+        beneficiary_type = str(row.get("Beneficiary Type") or "").strip()
+        application_number = str(row.get("Application Number") or "").strip()
+        beneficiary_name = str(row.get("Beneficiary Name") or "").strip()
+        requested_item = str(row.get("Requested Item") or "").strip()
+        quantity = _phase2_parse_number(row.get("Quantity"))
+        source_quantity_total += quantity
+        source_value_total += total_value_getter(row)
+        if requested_item:
+            source_unique_items.add(requested_item)
+        if beneficiary_type or application_number or beneficiary_name:
+            source_beneficiaries.setdefault(beneficiary_type or "Unknown", set()).add(
+                _phase2_distinct_beneficiary_key(application_number, beneficiary_name, beneficiary_type)
+            )
+
+    for row in grouped_rows:
+        beneficiary_type = str(row.get("beneficiary_type") or "").strip()
+        application_number = str(row.get("application_number") or "").strip()
+        beneficiary_name = str(row.get("beneficiary_name") or "").strip()
+        requested_item = str(row.get("requested_item") or "").strip()
+        quantity = int(row.get("quantity") or 0)
+        grouped_quantity_total += quantity
+        grouped_value_total += total_value_getter(row)
+        if requested_item:
+            grouped_unique_items.add(requested_item)
+        if beneficiary_type or application_number or beneficiary_name:
+            grouped_beneficiaries.setdefault(beneficiary_type or "Unknown", set()).add(
+                _phase2_distinct_beneficiary_key(application_number, beneficiary_name, beneficiary_type)
+            )
+
+    beneficiary_labels = [
+        models.RecipientTypeChoices.DISTRICT,
+        models.RecipientTypeChoices.PUBLIC,
+        models.RecipientTypeChoices.INSTITUTIONS,
+        models.RecipientTypeChoices.OTHERS,
+    ]
+    beneficiary_metrics = []
+    for label in beneficiary_labels:
+        source_count = len(source_beneficiaries.get(label, set()))
+        grouped_count = len(grouped_beneficiaries.get(label, set()))
+        if source_count or grouped_count:
+            beneficiary_metrics.append(
+                {
+                    "label": f"{label} Beneficiaries",
+                    "source": source_count,
+                    "grouped": grouped_count,
+                }
+            )
+
+    return {
+        "source_row_count": len(source_rows),
+        "grouped_row_count": len(grouped_rows),
+        "source_quantity_total": source_quantity_total,
+        "grouped_quantity_total": grouped_quantity_total,
+        "source_total_value": source_value_total,
+        "grouped_total_value": grouped_value_total,
+        "source_unique_items": len(source_unique_items),
+        "grouped_unique_items": len(grouped_unique_items),
+        "beneficiary_metrics": beneficiary_metrics,
+    }
+
+
+def _phase2_reconciliation_checks(reconciliation_snapshot):
+    if not reconciliation_snapshot:
+        return []
+    checks = [
+        {
+            "label": "Quantity",
+            "matched": reconciliation_snapshot.get("source_quantity_total", 0) == reconciliation_snapshot.get("grouped_quantity_total", 0),
+            "source": reconciliation_snapshot.get("source_quantity_total", 0),
+            "grouped": reconciliation_snapshot.get("grouped_quantity_total", 0),
+        },
+        {
+            "label": "Total Value",
+            "matched": reconciliation_snapshot.get("source_total_value", 0) == reconciliation_snapshot.get("grouped_total_value", 0),
+            "source": reconciliation_snapshot.get("source_total_value", 0),
+            "grouped": reconciliation_snapshot.get("grouped_total_value", 0),
+        },
+        {
+            "label": "Unique Items",
+            "matched": reconciliation_snapshot.get("source_unique_items", 0) == reconciliation_snapshot.get("grouped_unique_items", 0),
+            "source": reconciliation_snapshot.get("source_unique_items", 0),
+            "grouped": reconciliation_snapshot.get("grouped_unique_items", 0),
+        },
+    ]
+    for metric in reconciliation_snapshot.get("beneficiary_metrics") or []:
+        checks.append(
+            {
+                "label": metric.get("label") or "Beneficiaries",
+                "matched": metric.get("source", 0) == metric.get("grouped", 0),
+                "source": metric.get("source", 0),
+                "grouped": metric.get("grouped", 0),
+            }
+        )
+    return checks
+
+
+def _phase2_split_reconciliation(rows, pending_waiting_by_id=None):
+    pending_waiting_by_id = pending_waiting_by_id or {}
+    total_quantity = 0
+    total_waiting = 0
+    total_token = 0
+    row_mismatch_count = 0
+    row_count = 0
+
+    for row in rows:
+        row_count += 1
+        quantity = int(row.quantity or 0)
+        total_quantity += quantity
+        if str(row.id) in pending_waiting_by_id:
+            waiting = pending_waiting_by_id[str(row.id)]
+            waiting = max(min(int(waiting or 0), quantity), 0)
+            token = max(quantity - waiting, 0)
+        else:
+            waiting = int(row.waiting_hall_quantity or 0)
+            token = int(row.token_quantity or 0)
+        total_waiting += waiting
+        total_token += token
+        if waiting + token != quantity:
+            row_mismatch_count += 1
+
+    return {
+        "row_count": row_count,
+        "row_mismatch_count": row_mismatch_count,
+        "rowwise_matched": row_mismatch_count == 0,
+        "total_quantity": total_quantity,
+        "total_waiting": total_waiting,
+        "total_token": total_token,
+        "overall_matched": (total_waiting + total_token) == total_quantity,
+    }
+
+
+def _phase2_group_key(application_number, beneficiary_name, district, requested_item):
+    return (
+        str(application_number or "").strip(),
+        str(beneficiary_name or "").strip(),
+        str(district or "").strip(),
+        str(requested_item or "").strip(),
+    )
+
+
+def _phase2_row_identity_key(data):
+    if hasattr(data, "master_row"):
+        master_row = getattr(data, "master_row", None) or {}
+        master_headers = getattr(data, "master_headers", None) or []
+    else:
+        master_row = (data.get("master_row") or {}) if isinstance(data, dict) else {}
+        master_headers = (data.get("master_headers") or []) if isinstance(data, dict) else []
+
+    if master_row:
+        headers = list(master_headers) if master_headers else list(master_row.keys())
+        filtered_headers = [
+            header
+            for header in headers
+            if _phase2_normalize_text(header) not in {"waiting hall quantity", "token quantity", "sequence no", "sequence list"}
+        ]
+        return (
+            "master_row",
+            tuple(
+                (header, str(master_row.get(header, "") or "").strip())
+                for header in filtered_headers
+            ),
+        )
+
+    if hasattr(data, "application_number"):
+        application_number = getattr(data, "application_number", "")
+        beneficiary_name = getattr(data, "beneficiary_name", "")
+        district = getattr(data, "district", "")
+        requested_item = getattr(data, "requested_item", "")
+        quantity = getattr(data, "quantity", 0)
+        beneficiary_type = getattr(data, "beneficiary_type", "")
+        item_type = getattr(data, "item_type", "")
+        comments = getattr(data, "comments", "")
+    else:
+        application_number = data.get("application_number", "") if isinstance(data, dict) else ""
+        beneficiary_name = data.get("beneficiary_name", "") if isinstance(data, dict) else ""
+        district = data.get("district", "") if isinstance(data, dict) else ""
+        requested_item = data.get("requested_item", "") if isinstance(data, dict) else ""
+        quantity = data.get("quantity", 0) if isinstance(data, dict) else 0
+        beneficiary_type = data.get("beneficiary_type", "") if isinstance(data, dict) else ""
+        item_type = data.get("item_type", "") if isinstance(data, dict) else ""
+        comments = data.get("comments", "") if isinstance(data, dict) else ""
+
+    return (
+        "fallback",
+        str(application_number or "").strip(),
+        str(beneficiary_name or "").strip(),
+        str(district or "").strip(),
+        str(requested_item or "").strip(),
+        int(quantity or 0),
+        str(beneficiary_type or "").strip(),
+        str(item_type or "").strip(),
+        str(comments or "").strip(),
+    )
+
+
+def _phase2_row_identity_candidates(data):
+    primary = _phase2_row_identity_key(data)
+    candidates = [primary]
+
+    if hasattr(data, "application_number"):
+        application_number = getattr(data, "application_number", "")
+        beneficiary_name = getattr(data, "beneficiary_name", "")
+        district = getattr(data, "district", "")
+        requested_item = getattr(data, "requested_item", "")
+        quantity = getattr(data, "quantity", 0)
+        beneficiary_type = getattr(data, "beneficiary_type", "")
+        item_type = getattr(data, "item_type", "")
+        comments = getattr(data, "comments", "")
+    else:
+        application_number = data.get("application_number", "") if isinstance(data, dict) else ""
+        beneficiary_name = data.get("beneficiary_name", "") if isinstance(data, dict) else ""
+        district = data.get("district", "") if isinstance(data, dict) else ""
+        requested_item = data.get("requested_item", "") if isinstance(data, dict) else ""
+        quantity = data.get("quantity", 0) if isinstance(data, dict) else 0
+        beneficiary_type = data.get("beneficiary_type", "") if isinstance(data, dict) else ""
+        item_type = data.get("item_type", "") if isinstance(data, dict) else ""
+        comments = data.get("comments", "") if isinstance(data, dict) else ""
+
+    fallback = (
+        "fallback",
+        str(application_number or "").strip(),
+        str(beneficiary_name or "").strip(),
+        str(district or "").strip(),
+        str(requested_item or "").strip(),
+        int(quantity or 0),
+        str(beneficiary_type or "").strip(),
+        str(item_type or "").strip(),
+        str(comments or "").strip(),
+    )
+    structural = (
+        "structural",
+        str(application_number or "").strip(),
+        str(beneficiary_name or "").strip(),
+        str(district or "").strip(),
+        str(requested_item or "").strip(),
+    )
+    if structural not in candidates:
+        candidates.append(structural)
+    if fallback not in candidates:
+        candidates.append(fallback)
+    return candidates
+
+
+def _phase2_preview_row_from_upload(row):
+    return {
+        "beneficiary_type": str(row.get("beneficiary_type") or "").strip(),
+        "application_number": str(row.get("application_number") or "").strip(),
+        "beneficiary_name": str(row.get("beneficiary_name") or "").strip(),
+        "requested_item": str(row.get("requested_item") or "").strip(),
+    }
+
+
+def _phase2_preview_row_from_existing(row):
+    return {
+        "beneficiary_type": str(row.beneficiary_type or "").strip(),
+        "application_number": str(row.application_number or "").strip(),
+        "beneficiary_name": str(row.beneficiary_name or "").strip(),
+        "requested_item": str(row.requested_item or "").strip(),
+    }
+
+
+def _phase2_preserve_existing_split_state(session, upload_rows):
+    existing_rows = list(models.SeatAllocationRow.objects.filter(session=session))
+    existing_map = {}
+    for row in existing_rows:
+        for key in _phase2_row_identity_candidates(row):
+            existing_map.setdefault(key, []).append(row)
+    preserved_count = 0
+    matched_existing_ids = set()
+    matched_count = 0
+
+    for row in upload_rows:
+        existing = None
+        for key in _phase2_row_identity_candidates(row):
+            existing_candidates = existing_map.get(key) or []
+            while existing_candidates and str(existing_candidates[0].id) in matched_existing_ids:
+                existing_candidates.pop(0)
+            if existing_candidates:
+                existing = existing_candidates.pop(0)
+                break
+        if not existing:
+            continue
+        matched_existing_ids.add(str(existing.id))
+        quantity = int(row.get("quantity") or 0)
+        preserved_waiting = min(int(existing.waiting_hall_quantity or 0), quantity)
+        row["waiting_hall_quantity"] = preserved_waiting
+        row["token_quantity"] = max(quantity - preserved_waiting, 0)
+        row["sequence_no"] = existing.sequence_no
+        preserved_count += 1
+        matched_count += 1
+
+    removed_count = max(len(existing_rows) - len(matched_existing_ids), 0)
+    new_count = max(len(upload_rows) - matched_count, 0)
+    return {
+        "rows": upload_rows,
+        "preserved_count": preserved_count,
+        "new_count": new_count,
+        "removed_count": removed_count,
+    }
+
+
+def _phase2_preview_sync_state(session, upload_rows):
+    existing_rows = list(models.SeatAllocationRow.objects.filter(session=session))
+    existing_map = {}
+    for row in existing_rows:
+        for key in _phase2_row_identity_candidates(row):
+            existing_map.setdefault(key, []).append(row)
+
+    preserved_count = 0
+    added_rows = []
+    matched_existing_ids = set()
+    for row in upload_rows:
+        matched = False
+        for key in _phase2_row_identity_candidates(row):
+            existing_candidates = existing_map.get(key) or []
+            while existing_candidates and str(existing_candidates[0].id) in matched_existing_ids:
+                existing_candidates.pop(0)
+            if existing_candidates:
+                matched_existing_ids.add(str(existing_candidates.pop(0).id))
+                matched = True
+                break
+        if matched:
+            preserved_count += 1
+            continue
+        if len(added_rows) < 8:
+            added_rows.append(_phase2_preview_row_from_upload(row))
+
+    removed_rows = []
+    unmatched_existing = [row for row in existing_rows if str(row.id) not in matched_existing_ids]
+    removed_count = len(unmatched_existing)
+    for row in unmatched_existing[:8]:
+        removed_rows.append(_phase2_preview_row_from_existing(row))
+
+    new_count = max(len(upload_rows) - preserved_count, 0)
+    return {
+        "preserved_count": preserved_count,
+        "new_count": new_count,
+        "removed_count": removed_count,
+        "added_rows": added_rows,
+        "removed_rows": removed_rows,
+    }
+
+
+def _phase2_master_change_state(session, upload_rows):
+    existing_rows = list(models.SeatAllocationRow.objects.filter(session=session))
+    existing_map = {}
+    for row in existing_rows:
+        for key in _phase2_row_identity_candidates(row):
+            existing_map.setdefault(key, []).append(row)
+
+    new_count = 0
+    removed_count = 0
+    updated_count = 0
+    updated_rows = []
+    matched_existing_ids = set()
+
+    field_labels = {
+        "Application Number": "Application Number",
+        "Beneficiary Name": "Beneficiary Name",
+        "Requested Item": "Requested Item",
+        "Quantity": "Quantity",
+        "Cost Per Unit": "Cost Per Unit",
+        "Total Value": "Total Value",
+        "Beneficiary Type": "Beneficiary Type",
+        "Item Type": "Item Type",
+        "Comments": "Comments",
+        "Aadhar Number": "Aadhaar Number",
+        "Name of Beneficiary": "Name of Beneficiary",
+        "Name of Institution": "Name of Institution",
+        "Cheque / RTGS in Favour": "Cheque / RTGS in Favour",
+    }
+
+    for incoming in upload_rows:
+        matched = False
+        matched_row = None
+        for key in _phase2_row_identity_candidates(incoming):
+            existing_candidates = existing_map.get(key) or []
+            while existing_candidates and str(existing_candidates[0].id) in matched_existing_ids:
+                existing_candidates.pop(0)
+            if existing_candidates:
+                matched_row = existing_candidates.pop(0)
+                matched_existing_ids.add(str(matched_row.id))
+                matched = True
+                break
+        if matched:
+            incoming_master = incoming.get("master_row") or {}
+            existing_master = matched_row.master_row or {}
+            changes = []
+            for header, label in field_labels.items():
+                incoming_value = str(incoming_master.get(header, "") or "").strip()
+                existing_value = str(existing_master.get(header, "") or "").strip()
+                if incoming_value != existing_value:
+                    changes.append(
+                        f"{label} {existing_value or '-'} -> {incoming_value or '-'}"
+                    )
+            if changes:
+                updated_count += 1
+                if len(updated_rows) < 8:
+                    updated_rows.append(
+                        {
+                            "beneficiary_type": str(incoming.get("beneficiary_type") or "").strip(),
+                            "application_number": str(incoming.get("application_number") or "").strip(),
+                            "beneficiary_name": str(incoming.get("beneficiary_name") or "").strip(),
+                            "requested_item": str(incoming.get("requested_item") or "").strip(),
+                            "changes": changes[:3],
+                        }
+                    )
+            continue
+        new_count += 1
+        if len(updated_rows) < 8:
+            updated_rows.append(
+                {
+                    "beneficiary_type": str(incoming.get("beneficiary_type") or "").strip(),
+                    "application_number": str(incoming.get("application_number") or "").strip(),
+                    "beneficiary_name": str(incoming.get("beneficiary_name") or "").strip(),
+                    "requested_item": str(incoming.get("requested_item") or "").strip(),
+                    "changes": ["New or changed row"],
+                }
+            )
+
+    removed_count = max(len(existing_rows) - len(matched_existing_ids), 0)
+
+    return {
+        "has_changes": bool(new_count or removed_count or updated_count),
+        "new_count": new_count,
+        "removed_count": removed_count,
+        "updated_count": updated_count,
+        "updated_rows": updated_rows,
+    }
+
+
+def _phase2_export_rows(rows, *, include_sequence=False):
+    rows = list(rows)
+    if not rows:
+        return [], []
+
+    base_headers = []
+    for row in rows:
+        if row.master_headers:
+            base_headers = list(row.master_headers)
+            break
+    if not base_headers:
+        base_headers = [
+            "Application Number",
+            "Beneficiary Name",
+            "Requested Item",
+            "Quantity",
+            "Beneficiary Type",
+            "Item Type",
+            "Comments",
+        ]
+
+    filtered_headers = [
+        header for header in base_headers
+        if _phase2_normalize_text(header) not in {"waiting hall quantity", "token quantity", "sequence no"}
+    ]
+    export_headers = [*filtered_headers, "Waiting Hall Quantity", "Token Quantity"]
+    if include_sequence:
+        export_headers.append("Sequence No")
+    export_rows = []
+    for row in rows:
+        export_row = {}
+        for header in filtered_headers:
+            export_row[header] = (row.master_row or {}).get(header, "")
+        export_row["Waiting Hall Quantity"] = row.waiting_hall_quantity
+        export_row["Token Quantity"] = row.token_quantity
+        if include_sequence:
+            export_row["Sequence No"] = row.sequence_no or ""
+        export_rows.append(export_row)
+    return export_rows, export_headers
+
+
+def _sequence_project_rows(rows, headers):
+    projected_rows = []
+    for row in rows:
+        projected_rows.append({header: row.get(header, "") for header in headers})
+    return projected_rows
+
+
+def _sequence_row_key(row, headers):
+    return tuple("" if row.get(header) is None else str(row.get(header)) for header in headers)
+
+
+def _sequence_row_label(row):
+    return " / ".join(
+        [
+            str(row.get("Application Number") or "-").strip() or "-",
+            str(row.get("Beneficiary Name") or "-").strip() or "-",
+            str(row.get("Requested Item") or "-").strip() or "-",
+        ]
+    )
+
+
+def _sequence_prepare_export_row(row, *, sequence_no=None):
+    prepared = dict(row or {})
+    application_number = str(prepared.get("Application Number") or "").strip()
+    beneficiary_name = str(prepared.get("Beneficiary Name") or "").strip()
+    beneficiary_type = str(prepared.get("Beneficiary Type") or "").strip()
+
+    if beneficiary_type == "District":
+        prepared["Names"] = beneficiary_name
+    elif application_number and beneficiary_name:
+        prepared["Names"] = f"{application_number} - {beneficiary_name}"
+    else:
+        prepared["Names"] = application_number or beneficiary_name
+
+    if beneficiary_type == "Public":
+        prepared["R_Names"] = "AA_Public"
+    elif beneficiary_type == "Institutions":
+        prepared["R_Names"] = "A_Institutions"
+    else:
+        prepared["R_Names"] = beneficiary_name
+
+    if sequence_no is not None:
+        prepared["Sequence No"] = sequence_no
+    elif "Sequence No" not in prepared:
+        prepared["Sequence No"] = ""
+
+    for header in list(prepared.keys()):
+        value = prepared.get(header)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            prepared[header] = "0" if header in TOKEN_GENERATION_NUMERIC_HEADERS else "N/A"
+    return prepared
+
+
+def _sequence_prepare_export_rows(rows):
+    return [_sequence_prepare_export_row(row) for row in rows]
+
+
+def _sequence_final_headers(seat_headers):
+    headers = []
+    inserted_names = False
+    for header in seat_headers:
+        headers.append(header)
+        if header == "Application Number":
+            headers.append("Names")
+            inserted_names = True
+    if not inserted_names:
+        headers.append("Names")
+    headers.extend(["Sequence No", "R_Names"])
+    return headers
+
+
+def _phase2_unique_headers(headers):
+    unique_headers = []
+    seen = set()
+    for header in list(headers or []):
+        key = str(header or "")
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_headers.append(key)
+    return unique_headers
+
+
+def _token_generation_empty_value_summary(rows, headers):
+    entries = []
+    for header in headers:
+        empty_count = 0
+        for row in rows:
+            value = row.get(header, "")
+            if value is None or (isinstance(value, str) and not value.strip()):
+                empty_count += 1
+        if empty_count:
+            entries.append(
+                {
+                    "column": header,
+                    "count": empty_count,
+                    "fill_value": "0" if header in TOKEN_GENERATION_NUMERIC_HEADERS else "N/A",
+                }
+            )
+    return entries
+
+
+def _token_generation_invalid_value_summary(rows):
+    checks = [
+        ("Quantity", "Quantity"),
+        ("Cost Per Unit", "Cost Per Unit"),
+        ("Total Value", "Total Value"),
+    ]
+    entries = []
+    for header, label in checks:
+        invalid_count = 0
+        for row in rows:
+            value = _reconciliation_parse_decimal(row.get(header))
+            if value < Decimal("1"):
+                invalid_count += 1
+        if invalid_count:
+            entries.append(
+                {
+                    "column": header,
+                    "label": label,
+                    "count": invalid_count,
+                }
+            )
+    return entries
+
+
+def _token_generation_sequence_no(value):
+    parsed = _phase2_parse_number(value)
+    if parsed is None:
+        return 10**9
+    try:
+        return int(parsed)
+    except (TypeError, ValueError):
+        return 10**9
+
+
+def _token_generation_sort_order(row):
+    beneficiary_type = str(row.get("Beneficiary Type") or "").strip()
+    requested_item = str(row.get("Requested Item") or "")
+    application_number = str(row.get("Application Number") or "").strip()
+    handicapped_status = str(row.get("Handicapped Status") or "").strip().lower()
+    names_value = str(row.get("Names") or "").strip()
+    is_public_laptop = beneficiary_type == "Public" and "laptop" in requested_item.lower()
+    p116_top = 0 if is_public_laptop and application_number == "P116" else 1
+    handicap_first = 0 if handicapped_status == "yes" else 1
+    return (
+        _token_generation_sequence_no(row.get("Sequence No")),
+        TOKEN_GENERATION_BENEFICIARY_ORDER.get(beneficiary_type, 99),
+        p116_top,
+        handicap_first,
+        names_value.lower(),
+        str(row.get("Requested Item") or "").strip().lower(),
+        application_number.lower(),
+    )
+
+
+def _token_generation_apply_names_cleanup(row):
+    names_value = str(row.get("Names") or "").strip()
+    if names_value in TOKEN_GENERATION_RENAME_MAP:
+        row["Names"] = TOKEN_GENERATION_RENAME_MAP[names_value]
+    token_name = str(row.get("Token Name") or "").strip()
+    if token_name == "Wet Grinder Floor 2L":
+        row["Token Name"] = "Wet Grinder FLR 2L"
+    return row
+
+
+def _token_generation_token_print_flag(row):
+    token_quantity = max(_phase2_parse_number(row.get("Token Quantity")) or 0, 0)
+    item_type = str(row.get("Item Type") or "").strip()
+    requested_item = str(row.get("Requested Item") or "").strip()
+    flag = 1 if item_type == models.ItemTypeChoices.ARTICLE and requested_item not in TOKEN_GENERATION_ARTICLE_PRINT_EXCLUDES else 0
+    if token_quantity <= 0:
+        flag = 0
+    row["Token Print for ARTL"] = str(flag)
+    return row
+
+
+def _token_generation_apply_token_ranges(rows):
+    running_end = 0
+    for row in rows:
+        token_quantity = max(_phase2_parse_number(row.get("Token Quantity")) or 0, 0)
+        if token_quantity > 0:
+            start_token = running_end + 1
+            end_token = running_end + token_quantity
+            running_end = end_token
+        else:
+            start_token = 0
+            end_token = 0
+        row["Start Token No"] = str(start_token)
+        row["End Token No"] = str(end_token)
+    return rows
+
+
+def _token_generation_quality_checks(rows):
+    sequence_to_items = {}
+    item_to_sequences = {}
+    token_quantity_total = 0
+    printable_token_total = 0
+    zero_token_rows = 0
+    duplicate_rows = 0
+    duplicate_example = None
+    row_counter = Counter()
+
+    for row in rows:
+        row_key = tuple((key, "" if row.get(key) is None else str(row.get(key))) for key in sorted(row.keys()))
+        row_counter[row_key] += 1
+        sequence_no = _phase2_parse_number(row.get("Sequence No"))
+        requested_item = str(row.get("Requested Item") or "").strip()
+        if sequence_no:
+            sequence_to_items.setdefault(int(sequence_no), set()).add(requested_item)
+        if requested_item:
+            item_to_sequences.setdefault(requested_item, set())
+            if sequence_no:
+                item_to_sequences[requested_item].add(int(sequence_no))
+
+        token_quantity = max(_phase2_parse_number(row.get("Token Quantity")) or 0, 0)
+        token_quantity_total += token_quantity
+        if token_quantity == 0:
+            zero_token_rows += 1
+        if str(row.get("Token Print for ARTL") or "").strip() == "1":
+            printable_token_total += token_quantity
+
+    sequence_item_conflicts = [
+        {
+            "sequence_no": sequence_no,
+            "items": sorted(item for item in items if item),
+        }
+        for sequence_no, items in sorted(sequence_to_items.items())
+        if len({item for item in items if item}) > 1
+    ]
+    article_sequence_conflicts = [
+        {
+            "requested_item": requested_item,
+            "sequence_numbers": sorted(sequence_numbers),
+        }
+        for requested_item, sequence_numbers in sorted(item_to_sequences.items())
+        if len(sequence_numbers) > 1
+    ]
+
+    sequence_numbers = sorted(
+        int(number)
+        for number in {
+            _phase2_parse_number(row.get("Sequence No"))
+            for row in rows
+        }
+        if number
+    )
+    max_sequence = max(sequence_numbers) if sequence_numbers else 0
+    missing_sequences = [number for number in range(1, max_sequence + 1) if number not in set(sequence_numbers)]
+
+    for row_key, count in row_counter.items():
+        if count > 1:
+            duplicate_rows += count - 1
+            if duplicate_example is None:
+                row_map = dict(row_key)
+                duplicate_example = _sequence_row_label(row_map)
+
+    return {
+        "sequence_item_conflicts": sequence_item_conflicts,
+        "article_sequence_conflicts": article_sequence_conflicts,
+        "missing_sequences": missing_sequences,
+        "token_quantity_total": token_quantity_total,
+        "printable_token_total": printable_token_total,
+        "zero_token_rows": zero_token_rows,
+        "duplicate_rows": duplicate_rows,
+        "duplicate_example": duplicate_example or "",
+    }
+
+
+def _sequence_exact_compare(*, left_rows, left_headers, right_rows, right_headers, matched_label, mismatch_label):
+    if list(left_headers) != list(right_headers):
+        return {
+            "matched": False,
+            "details": (
+                f"{mismatch_label}. Column mismatch: final has {len(left_headers)} column(s), "
+                f"expected {len(right_headers)} column(s)."
+            ),
+        }
+
+    left_counter = Counter(_sequence_row_key(row, left_headers) for row in left_rows)
+    right_counter = Counter(_sequence_row_key(row, right_headers) for row in right_rows)
+    if left_counter == right_counter:
+        return {
+            "matched": True,
+            "details": matched_label,
+        }
+
+    missing_counter = right_counter - left_counter
+    extra_counter = left_counter - right_counter
+    parts = []
+    if missing_counter:
+        missing_key = next(iter(missing_counter))
+        missing_row = {header: missing_key[idx] for idx, header in enumerate(right_headers)}
+        parts.append(
+            f"missing {sum(missing_counter.values())} row(s), e.g. {_sequence_row_label(missing_row)}"
+        )
+    if extra_counter:
+        extra_key = next(iter(extra_counter))
+        extra_row = {header: extra_key[idx] for idx, header in enumerate(left_headers)}
+        parts.append(
+            f"extra {sum(extra_counter.values())} row(s), e.g. {_sequence_row_label(extra_row)}"
+        )
+
+    return {
+        "matched": False,
+        "details": f"{mismatch_label}. " + " | ".join(parts),
+    }
+
+
+def _sequence_final_export_rows(session, sequence_map):
+    seat_rows = list(
+        models.SeatAllocationRow.objects.filter(session=session).order_by(
+            "sort_order",
+            "requested_item",
+            "application_number",
+            "id",
+        )
+    )
+    seat_export_rows, seat_export_headers = _phase2_export_rows(seat_rows, include_sequence=False)
+    final_export_rows = []
+    for row in seat_export_rows:
+        item_name = str(row.get("Requested Item") or "").strip()
+        final_row = dict(row)
+        final_row["Sequence No"] = sequence_map.get(item_name, "")
+        final_export_rows.append(final_row)
+    return {
+        "seat_rows": seat_export_rows,
+        "seat_headers": seat_export_headers,
+        "final_rows": final_export_rows,
+        "final_headers": [*seat_export_headers, "Sequence No"],
+    }
+
+
+def _sequence_map_from_seat_allocation(session):
+    sequence_map = {}
+    for item_name, sequence_no in (
+        models.SeatAllocationRow.objects.filter(session=session)
+        .exclude(sequence_no__isnull=True)
+        .values_list("requested_item", "sequence_no")
+    ):
+        item_name = str(item_name or "").strip()
+        if item_name and sequence_no and item_name not in sequence_map:
+            sequence_map[item_name] = int(sequence_no)
+    return sequence_map
+
+
+def _token_generation_headers(base_headers):
+    headers = []
+    inserted_names = False
+    base_headers = _phase2_unique_headers(base_headers)
+    for header in list(base_headers or []):
+        headers.append(header)
+        if header == "Application Number" and "Names" not in headers:
+            headers.append("Names")
+            inserted_names = True
+    if not inserted_names and "Names" not in headers:
+        headers.append("Names")
+    if "Token Print for ARTL" not in headers:
+        headers.append("Token Print for ARTL")
+    return _phase2_unique_headers(headers)
+
+
+def _token_generation_generated_headers(base_headers):
+    headers = _phase2_unique_headers(base_headers)
+    if "Start Token No" not in headers:
+        headers.append("Start Token No")
+    if "End Token No" not in headers:
+        headers.append("End Token No")
+    return _phase2_unique_headers(headers)
+
+
+def _token_generation_prepare_row(row):
+    prepared = dict(row or {})
+    application_number = str(prepared.get("Application Number") or "").strip()
+    beneficiary_name = str(prepared.get("Beneficiary Name") or "").strip()
+    beneficiary_type = str(prepared.get("Beneficiary Type") or "").strip()
+    if beneficiary_type == "District":
+        prepared["Names"] = beneficiary_name
+    elif application_number and beneficiary_name:
+        prepared["Names"] = f"{application_number} - {beneficiary_name}"
+    else:
+        prepared["Names"] = application_number or beneficiary_name
+    for header in list(prepared.keys()):
+        value = prepared.get(header)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            prepared[header] = "0" if header in TOKEN_GENERATION_NUMERIC_HEADERS else "N/A"
+    prepared = _token_generation_apply_names_cleanup(prepared)
+    prepared = _token_generation_token_print_flag(prepared)
+    return prepared
+
+
+def _token_generation_prepare_dataset(rows, headers):
+    prepared_headers = _token_generation_headers(headers)
+    prepared_rows = [_token_generation_prepare_row(row) for row in rows]
+    prepared_rows = _token_generation_sort_dataset(prepared_rows)
+    blank_summary = _token_generation_empty_value_summary(rows, prepared_headers)
+    quality_checks = _token_generation_quality_checks(prepared_rows)
+    return {
+        "headers": prepared_headers,
+        "rows": prepared_rows,
+        "blank_summary": blank_summary,
+        "quality_checks": quality_checks,
+    }
+
+
+def _token_generation_sort_dataset(rows):
+    sorted_rows = [dict(row) for row in rows]
+    sorted_rows.sort(key=_token_generation_sort_order)
+    return sorted_rows
+
+
+def _token_generation_generate_dataset(rows, headers):
+    generated_rows = _token_generation_sort_dataset(rows)
+    generated_rows = _token_generation_apply_token_ranges(generated_rows)
+    return {
+        "headers": _token_generation_generated_headers(headers),
+        "rows": generated_rows,
+    }
+
+
+def _token_generation_is_sorted(rows):
+    if not rows:
+        return False
+    return [dict(row) for row in rows] == _token_generation_sort_dataset(rows)
+
+
+def _token_generation_is_generated(rows):
+    if not rows:
+        return False
+    has_any_token = False
+    for row in rows:
+        token_quantity = max(_phase2_parse_number(row.get("Token Quantity")) or 0, 0)
+        start_token = _phase2_parse_number(row.get("Start Token No"))
+        end_token = _phase2_parse_number(row.get("End Token No"))
+        if token_quantity > 0:
+            has_any_token = True
+            if not start_token or not end_token:
+                return False
+        else:
+            if (start_token or 0) != 0 or (end_token or 0) != 0:
+                return False
+    return has_any_token
+
+
+def _token_generation_edit_candidates(rows, *, length_limit):
+    unique_names = []
+    unique_token_names = []
+    seen_names = set()
+    seen_token_names = set()
+    for row in rows:
+        names_value = str(row.get("Names") or "").strip()
+        token_name_value = str(row.get("Token Name") or "").strip()
+        if len(names_value) > length_limit and names_value not in seen_names:
+            seen_names.add(names_value)
+            unique_names.append({"value": names_value, "length": len(names_value)})
+        if len(token_name_value) > length_limit and token_name_value not in seen_token_names:
+            seen_token_names.add(token_name_value)
+            unique_token_names.append({"value": token_name_value, "length": len(token_name_value)})
+    return {
+        "names": unique_names,
+        "token_names": unique_token_names,
+    }
+
+
+def _token_generation_parse_rule_lines(raw_value):
+    lines = []
+    seen = set()
+    for line in str(raw_value or "").splitlines():
+        value = line.strip()
+        normalized = value.lower()
+        if value and normalized not in seen:
+            seen.add(normalized)
+            lines.append(value)
+    return lines
+
+
+def _token_generation_filter_state(request):
+    return {
+        "application_number": str(request.GET.get("filter_application_number") or "").strip(),
+        "beneficiary_name": str(request.GET.get("filter_beneficiary_name") or "").strip(),
+        "beneficiary_type": str(request.GET.get("filter_beneficiary_type") or "").strip(),
+        "requested_item": str(request.GET.get("filter_requested_item") or "").strip(),
+        "item_type": str(request.GET.get("filter_item_type") or "").strip(),
+        "comments": str(request.GET.get("filter_comments") or "").strip(),
+    }
+
+
+def _token_generation_filter_rows(rows, filters):
+    entries = []
+    for index, row in enumerate(rows):
+        application_number = str(row.get("Application Number") or "").strip()
+        beneficiary_name = str(row.get("Beneficiary Name") or "").strip()
+        beneficiary_type = str(row.get("Beneficiary Type") or "").strip()
+        requested_item = str(row.get("Requested Item") or "").strip()
+        item_type = str(row.get("Item Type") or "").strip()
+        comments = str(row.get("Comments") or "").strip()
+
+        if filters["application_number"] and filters["application_number"].lower() not in application_number.lower():
+            continue
+        if filters["beneficiary_name"] and filters["beneficiary_name"].lower() not in beneficiary_name.lower():
+            continue
+        if filters["beneficiary_type"] and filters["beneficiary_type"].lower() != beneficiary_type.lower():
+            continue
+        if filters["requested_item"] and filters["requested_item"].lower() not in requested_item.lower():
+            continue
+        if filters["item_type"] and filters["item_type"].lower() != item_type.lower():
+            continue
+        if filters["comments"] and filters["comments"].lower() not in comments.lower():
+            continue
+
+        entries.append(
+            {
+                "row_index": index,
+                "application_number": application_number,
+                "beneficiary_name": beneficiary_name,
+                "beneficiary_type": beneficiary_type,
+                "requested_item": requested_item,
+                "item_type": item_type,
+                "comments": comments,
+            }
+        )
+    return entries
+
+
+def _token_generation_has_active_filters(filters):
+    return any(str(value or "").strip() for value in (filters or {}).values())
+
+
+def _token_generation_article_toggle_rows(rows):
+    article_rows = {}
+    for row in rows:
+        if str(row.get("Item Type") or "").strip() != models.ItemTypeChoices.ARTICLE:
+            continue
+        requested_item = str(row.get("Requested Item") or "").strip()
+        if not requested_item:
+            continue
+        article_rows.setdefault(requested_item, []).append(row)
+
+    entries = []
+    for requested_item in sorted(article_rows.keys(), key=str.lower):
+        item_rows = article_rows[requested_item]
+        skip_label = all(str(row.get("Token Print for ARTL") or "").strip() == "0" for row in item_rows)
+        token_total = sum(max(_phase2_parse_number(row.get("Token Quantity")) or 0, 0) for row in item_rows)
+        entries.append(
+            {
+                "requested_item": requested_item,
+                "token_total": token_total,
+                "skip_label": skip_label,
+            }
+        )
+    return entries
+
+
+def _token_generation_source_dataset(session):
+    seat_rows = models.SeatAllocationRow.objects.filter(session=session).order_by(
+        F("sequence_no").asc(nulls_last=True),
+        "sort_order",
+        "requested_item",
+        "application_number",
+        "id",
+    )
+    source_rows, source_headers = _phase2_export_rows(seat_rows, include_sequence=True)
+    return {
+        "headers": source_headers,
+        "rows": source_rows,
+        "blank_summary": _token_generation_empty_value_summary(source_rows, source_headers),
+        "quality_checks": _token_generation_quality_checks(source_rows),
+    }
+
+
+def _token_generation_store_dataset(*, session, dataset, source_name, user):
+    models.TokenGenerationRow.objects.filter(session=session).delete()
+    rows = dataset["rows"]
+    headers = _phase2_unique_headers(dataset["headers"])
+    models.TokenGenerationRow.objects.bulk_create(
+        [
+            models.TokenGenerationRow(
+                session=session,
+                source_file_name=source_name,
+                application_number=str(row.get("Application Number") or "").strip() or None,
+                beneficiary_name=str(row.get("Beneficiary Name") or "").strip() or None,
+                requested_item=str(row.get("Requested Item") or "").strip() or None,
+                beneficiary_type=str(row.get("Beneficiary Type") or "").strip() or None,
+                sequence_no=_phase2_parse_number(row.get("Sequence No")) or None,
+                start_token_no=_phase2_parse_number(row.get("Start Token No")) or 0,
+                end_token_no=_phase2_parse_number(row.get("End Token No")) or 0,
+                row_data=row,
+                headers=headers,
+                sort_order=index + 1,
+                created_by=user,
+                updated_by=user,
+            )
+            for index, row in enumerate(rows)
+        ]
+    )
+
+
+def _token_generation_saved_dataset(session):
+    rows = list(
+        models.TokenGenerationRow.objects.filter(session=session).order_by(
+            "sort_order",
+            F("sequence_no").asc(nulls_last=True),
+            "requested_item",
+            "application_number",
+            "id",
+        )
+    )
+    if not rows:
+        return {"headers": [], "rows": [], "source_name": "", "saved_at": None}
+    headers = _phase2_unique_headers(rows[0].headers or [])
+    return {
+        "headers": headers,
+        "rows": [dict(row.row_data or {}) for row in rows],
+        "source_name": rows[0].source_file_name or "",
+        "saved_at": rows[0].updated_at,
+    }
+
+
+def _token_generation_stage_state(request, session):
+    state_map = request.session.get("token_generation_stage_state", {})
+    return dict(state_map.get(str(session.pk), {}))
+
+
+def _token_generation_set_stage_state(request, session, **updates):
+    state_map = dict(request.session.get("token_generation_stage_state", {}))
+    session_state = dict(state_map.get(str(session.pk), {}))
+    session_state.update(updates)
+    state_map[str(session.pk)] = session_state
+    request.session["token_generation_stage_state"] = state_map
+    request.session.modified = True
+
+
+def _token_generation_latest_source_marker(session):
+    latest_source_updated_at = (
+        models.SeatAllocationRow.objects.filter(session=session)
+        .order_by("-updated_at", "-created_at")
+        .values_list("updated_at", flat=True)
+        .first()
+    )
+    if not latest_source_updated_at:
+        return ""
+    return timezone.localtime(latest_source_updated_at).isoformat()
+
+
+def _token_generation_sync_required(request, session, dataset=None):
+    dataset = dataset or _token_generation_saved_dataset(session)
+    if not dataset["rows"]:
+        return False
+    source_name = str(dataset.get("source_name") or "")
+    if not source_name.startswith("Synced from Sequence List"):
+        return False
+    stage_state = _token_generation_stage_state(request, session)
+    return str(stage_state.get("source_sync_marker") or "") != _token_generation_latest_source_marker(session)
+
+
+LABELS_DEFAULT_2L_ITEMS = [
+    "Tiffen Set",
+    "Tiffen Set + Alu Idli Box + MS Stove 2 Burner",
+    "Tiffen Set + MS Stove 2 Burner",
+    "Tiffen Set + Tea Can 10 Ltrs SS",
+    "Push Cart Without Top",
+    "Push Cart With Top",
+    "Push Cart With Top + Alu Idli Box + MS Stove 2 Burner",
+    "Office Table 4 X 2",
+    "S Type Chair",
+    "Steel Cupboard 6 1/2'",
+]
+
+
+def _labels_saved_dataset(session):
+    rows = list(
+        models.LabelGenerationRow.objects.filter(session=session).order_by(
+            "sort_order",
+            F("sequence_no").asc(nulls_last=True),
+            "requested_item",
+            "application_number",
+            "id",
+        )
+    )
+    if not rows:
+        return {"headers": [], "rows": [], "source_name": "", "saved_at": None}
+    headers = _phase2_unique_headers(rows[0].headers or [])
+    return {
+        "headers": headers,
+        "rows": [dict(row.row_data or {}) for row in rows],
+        "source_name": rows[0].source_file_name or "",
+        "saved_at": rows[0].updated_at,
+    }
+
+
+def _labels_store_dataset(*, session, dataset, source_name, user):
+    rows = [dict(row) for row in list(dataset.get("rows") or [])]
+    headers = _phase2_unique_headers(dataset.get("headers") or [])
+    with transaction.atomic():
+        models.LabelGenerationRow.objects.filter(session=session).delete()
+        models.LabelGenerationRow.objects.bulk_create(
+            [
+                models.LabelGenerationRow(
+                    session=session,
+                    source_file_name=source_name or "",
+                    application_number=str(row.get("Application Number") or "").strip() or None,
+                    beneficiary_name=str(row.get("Beneficiary Name") or "").strip() or None,
+                    requested_item=str(row.get("Requested Item") or "").strip() or None,
+                    beneficiary_type=str(row.get("Beneficiary Type") or "").strip() or None,
+                    sequence_no=_phase2_parse_number(row.get("Sequence No")) or None,
+                    start_token_no=_phase2_parse_number(row.get("Start Token No")) or 0,
+                    end_token_no=_phase2_parse_number(row.get("End Token No")) or 0,
+                    row_data=row,
+                    headers=headers,
+                    sort_order=index + 1,
+                    created_by=user,
+                    updated_by=user,
+                )
+                for index, row in enumerate(rows)
+            ]
+        )
+
+
+def _labels_source_dataset(session):
+    dataset = _token_generation_saved_dataset(session)
+    return _labels_normalize_dataset({
+        "headers": _phase2_unique_headers(dataset.get("headers") or []),
+        "rows": [dict(row) for row in list(dataset.get("rows") or [])],
+    })
+
+
+def _labels_stage_state(request, session):
+    state_map = request.session.get("labels_stage_state", {})
+    session_state = dict(state_map.get(str(session.pk), {}))
+    selected_items = session_state.get("large_items")
+    if not isinstance(selected_items, list):
+        selected_items = list(LABELS_DEFAULT_2L_ITEMS)
+    session_state["large_items"] = selected_items
+    session_state["large_items_saved"] = bool(session_state.get("large_items_saved"))
+    return session_state
+
+
+def _labels_set_stage_state(request, session, **updates):
+    state_map = dict(request.session.get("labels_stage_state", {}))
+    session_state = dict(state_map.get(str(session.pk), {}))
+    session_state.update(updates)
+    state_map[str(session.pk)] = session_state
+    request.session["labels_stage_state"] = state_map
+    request.session.modified = True
+
+
+def _labels_latest_source_marker(session):
+    latest_source_updated_at = (
+        models.TokenGenerationRow.objects.filter(session=session)
+        .order_by("-updated_at", "-created_at")
+        .values_list("updated_at", flat=True)
+        .first()
+    )
+    if not latest_source_updated_at:
+        return ""
+    return timezone.localtime(latest_source_updated_at).isoformat()
+
+
+def _labels_sync_required(request, session, dataset=None):
+    dataset = dataset or _labels_saved_dataset(session)
+    if not dataset["rows"]:
+        return False
+    source_name = str(dataset.get("source_name") or "")
+    if not source_name.startswith("Synced from Token Generation"):
+        return False
+    stage_state = _labels_stage_state(request, session)
+    return str(stage_state.get("source_sync_marker") or "") != _labels_latest_source_marker(session)
+
+
+def _labels_has_generated_tokens(rows):
+    return bool(rows) and all(
+        _phase2_parse_number(row.get("Start Token No")) is not None
+        and _phase2_parse_number(row.get("End Token No")) is not None
+        for row in rows
+    )
+
+
+def _labels_available_requested_items(rows):
+    items = []
+    seen = set()
+    for row in rows:
+        requested_item = str(row.get("Requested Item") or "").strip()
+        if not requested_item or requested_item in seen:
+            continue
+        seen.add(requested_item)
+        items.append(requested_item)
+    return items
+
+
+def _labels_expand_entries(rows, *, row_filter=None, group_by=None, sort_key=None):
+    filtered_rows = []
+    for row in rows:
+        if row_filter and not row_filter(row):
+            continue
+        filtered_rows.append(dict(row))
+    if sort_key:
+        filtered_rows.sort(key=sort_key)
+
+    entries = []
+    for row in filtered_rows:
+        start = _phase2_parse_number(row.get("Start Token No")) or 0
+        end = _phase2_parse_number(row.get("End Token No")) or 0
+        if start <= 0 or end < start:
+            continue
+        name_value = str(row.get("Names") or row.get("Beneficiary Name") or "").strip()
+        article_value = str(row.get("Token Name") or row.get("Requested Item") or "").strip()
+        group_value = group_by(row) if group_by else ""
+        for token in range(start, end + 1):
+            entries.append(
+                {
+                    "token": str(token),
+                    "name": name_value,
+                    "article": article_value,
+                    "group": str(group_value or ""),
+                }
+            )
+    return entries
+
+
+def _labels_audit_download(rows, *, download_kind, large_items):
+    large_items = set(large_items or [])
+
+    def token_qty(row):
+        return max(_phase2_parse_number(row.get("Token Quantity")) or 0, 0)
+
+    def is_printable_article(row):
+        return token_qty(row) > 0 and (_phase2_parse_number(row.get("Token Print for ARTL")) or 0) != 0
+
+    def sort_by_name_and_start(row):
+        return (
+            str(row.get("Names") or "").strip(),
+            _phase2_parse_number(row.get("Start Token No")) or 0,
+        )
+
+    row_filter = None
+    group_by = None
+    sort_key = None
+    labels_per_page = 12
+
+    if download_kind in {"article_12l_separate", "article_12l_continuous"}:
+        row_filter = lambda row: is_printable_article(row) and str(row.get("Requested Item") or "").strip() not in large_items
+        if download_kind == "article_12l_separate":
+            group_by = lambda row: str(row.get("Token Name") or row.get("Requested Item") or "").strip()
+    elif download_kind == "article_2l_continuous":
+        row_filter = lambda row: token_qty(row) > 0 and str(row.get("Requested Item") or "").strip() in large_items
+        labels_per_page = 2
+    elif download_kind in {"district_separate", "district_continuous"}:
+        row_filter = lambda row: token_qty(row) > 0 and str(row.get("Beneficiary Type") or "").strip() == "District"
+        sort_key = sort_by_name_and_start
+        if download_kind == "district_separate":
+            group_by = lambda row: str(row.get("Names") or "").strip()
+    elif download_kind == "institution":
+        row_filter = lambda row: token_qty(row) > 0 and str(row.get("Beneficiary Type") or "").strip() == "Institutions"
+        sort_key = sort_by_name_and_start
+    elif download_kind == "public":
+        row_filter = lambda row: token_qty(row) > 0 and str(row.get("Beneficiary Type") or "").strip() == "Public"
+        sort_key = sort_by_name_and_start
+    elif download_kind in {"chair_separate", "chair_continuous"}:
+        if download_kind == "chair_separate":
+            row_filter = lambda row: (_phase2_parse_number(row.get("Token Print for ARTL")) or 0) != 0
+            group_by = lambda row: str(row.get("Token Name") or row.get("Requested Item") or "").strip()
+        else:
+            row_filter = lambda row: token_qty(row) > 0
+    else:
+        return {
+            "ready": False,
+            "status_label": "Needs Review",
+            "status_class": "bad",
+            "reason": "Unknown label download type.",
+            "included_rows": 0,
+            "expected_labels": 0,
+            "actual_labels": 0,
+            "first_token": 0,
+            "last_token": 0,
+            "duplicate_tokens": 0,
+            "invalid_range_rows": 0,
+            "missing_labels": 0,
+            "page_count": 0,
+        }
+
+    filtered_rows = [dict(row) for row in rows if not row_filter or row_filter(row)]
+    expected_labels = sum(token_qty(row) for row in filtered_rows)
+    invalid_range_rows = 0
+    for row in filtered_rows:
+        start = _phase2_parse_number(row.get("Start Token No")) or 0
+        end = _phase2_parse_number(row.get("End Token No")) or 0
+        qty = token_qty(row)
+        if qty <= 0:
+            continue
+        if start <= 0 or end < start or (end - start + 1) != qty:
+            invalid_range_rows += 1
+
+    entries = _labels_expand_entries(filtered_rows, group_by=group_by, sort_key=sort_key)
+    tokens = [int(entry["token"]) for entry in entries if str(entry.get("token") or "").strip().isdigit()]
+    actual_labels = len(entries)
+    duplicate_tokens = max(actual_labels - len(set(tokens)), 0)
+    missing_labels = max(expected_labels - actual_labels, 0)
+    page_count = ((actual_labels - 1) // labels_per_page) + 1 if actual_labels else 0
+    ready = expected_labels > 0 and duplicate_tokens == 0 and invalid_range_rows == 0 and missing_labels == 0
+    reason = ""
+    status_label = "Data Ready"
+    status_class = "ok"
+    if expected_labels <= 0:
+        status_label = "No Matching Rows"
+        status_class = "neutral"
+        reason = "No matching token rows are currently available for this label type."
+    elif duplicate_tokens > 0:
+        status_label = "Needs Review"
+        status_class = "bad"
+        reason = f"{duplicate_tokens} duplicate token number(s) found."
+    elif invalid_range_rows > 0:
+        status_label = "Needs Review"
+        status_class = "bad"
+        reason = f"{invalid_range_rows} row(s) have invalid token ranges."
+    elif missing_labels > 0:
+        status_label = "Needs Review"
+        status_class = "bad"
+        reason = f"{missing_labels} expected label(s) are missing from token ranges."
+
+    return {
+        "ready": ready,
+        "status_label": status_label,
+        "status_class": status_class,
+        "reason": reason,
+        "included_rows": len(filtered_rows),
+        "expected_labels": expected_labels,
+        "actual_labels": actual_labels,
+        "first_token": min(tokens) if tokens else 0,
+        "last_token": max(tokens) if tokens else 0,
+        "duplicate_tokens": duplicate_tokens,
+        "invalid_range_rows": invalid_range_rows,
+        "missing_labels": missing_labels,
+        "page_count": page_count,
+    }
+
+
+def _labels_normalize_row(row):
+    normalized = dict(row or {})
+    if "Token Name" not in normalized or not str(normalized.get("Token Name") or "").strip():
+        legacy_token_name = str(normalized.get("Requested Item Tk") or "").strip()
+        normalized["Token Name"] = legacy_token_name or str(normalized.get("Requested Item") or "").strip()
+    if "Start Token No" not in normalized:
+        normalized["Start Token No"] = normalized.get("Start Token No.", "")
+    if "End Token No" not in normalized:
+        normalized["End Token No"] = normalized.get("End Token No.", "")
+    if "Names" not in normalized or not str(normalized.get("Names") or "").strip():
+        application_number = str(normalized.get("Application Number") or "").strip()
+        beneficiary_name = str(normalized.get("Beneficiary Name") or "").strip()
+        beneficiary_type = str(normalized.get("Beneficiary Type") or "").strip()
+        if beneficiary_type == "District":
+            normalized["Names"] = beneficiary_name
+        else:
+            normalized["Names"] = f"{application_number} - {beneficiary_name}".strip(" -") if (application_number or beneficiary_name) else ""
+    start_token = _phase2_parse_number(normalized.get("Start Token No"))
+    end_token = _phase2_parse_number(normalized.get("End Token No"))
+    if "Token Quantity" not in normalized or not str(normalized.get("Token Quantity") or "").strip():
+        normalized["Token Quantity"] = str(max(end_token - start_token + 1, 0) if start_token and end_token >= start_token else 0)
+    if "Token Print for ARTL" not in normalized or not str(normalized.get("Token Print for ARTL") or "").strip():
+        normalized["Token Print for ARTL"] = "1" if (_phase2_parse_number(normalized.get("Token Quantity")) or 0) > 0 else "0"
+    return normalized
+
+
+def _labels_normalize_headers(headers, rows):
+    normalized_headers = []
+    for header in _phase2_unique_headers(headers):
+        if header == "Requested Item Tk":
+            if "Token Name" not in normalized_headers:
+                normalized_headers.append("Token Name")
+            continue
+        if header == "Start Token No.":
+            if "Start Token No" not in normalized_headers:
+                normalized_headers.append("Start Token No")
+            continue
+        if header == "End Token No.":
+            if "End Token No" not in normalized_headers:
+                normalized_headers.append("End Token No")
+            continue
+        if header not in normalized_headers:
+            normalized_headers.append(header)
+    for required_header in ["Names", "Token Name", "Token Quantity", "Token Print for ARTL", "Start Token No", "End Token No"]:
+        if any(required_header in row for row in rows) and required_header not in normalized_headers:
+            normalized_headers.append(required_header)
+    return _phase2_unique_headers(normalized_headers)
+
+
+def _labels_normalize_dataset(dataset):
+    rows = [_labels_normalize_row(row) for row in list(dataset.get("rows") or [])]
+    headers = _labels_normalize_headers(dataset.get("headers") or [], rows)
+    return {
+        "headers": headers,
+        "rows": rows,
+    }
+
+
+def _labels_download_filename(prefix):
+    timestamp = timezone.localtime().strftime("%d_%b_%y_%H_%M")
+    return f"{prefix}_{timestamp}.pdf"
+
+
+def _sequence_seat_allocation_integrity(session):
+    source_rows = _phase2_master_export_rows()
+    seat_rows = list(models.SeatAllocationRow.objects.filter(session=session))
+    grouped_rows = [
+        {
+            "application_number": row.application_number or "",
+            "beneficiary_name": row.beneficiary_name or "",
+            "district": row.district or "",
+            "requested_item": row.requested_item or "",
+            "quantity": int(row.quantity or 0),
+            "waiting_hall_quantity": int(row.waiting_hall_quantity or 0),
+            "token_quantity": int(row.token_quantity or 0),
+            "beneficiary_type": row.beneficiary_type or "",
+            "item_type": row.item_type or "",
+            "comments": row.comments or "",
+            "master_row": row.master_row or {},
+            "master_headers": row.master_headers or [],
+        }
+        for row in seat_rows
+    ]
+    snapshot = _phase2_reconciliation_snapshot(
+        source_rows=source_rows,
+        grouped_rows=grouped_rows,
+        total_value_getter=lambda row: _phase2_parse_number(
+            row.get("Total Value")
+            if isinstance(row, dict) and "Total Value" in row
+            else (row.get("master_row") or {}).get("Total Value")
+        ),
+    )
+    return {
+        "snapshot": snapshot,
+        "checks": _phase2_reconciliation_checks(snapshot),
+        "split_check": _phase2_split_reconciliation(seat_rows),
+    }
+
+
+def _phase2_build_rows_from_master_export_rows(rows, *, source_file_name):
+    headers = list(rows[0].keys()) if rows else []
+    order = 0
+    source_rows_for_reconciliation = []
+    raw_rows = []
+    for source_row in rows:
+        application_number = str(source_row.get("Application Number") or "").strip()
+        beneficiary_name = str(source_row.get("Beneficiary Name") or "").strip()
+        requested_item = str(source_row.get("Requested Item") or "").strip()
+        beneficiary_type = str(source_row.get("Beneficiary Type") or "").strip()
+        item_type = str(source_row.get("Item Type") or "").strip()
+        comments = str(source_row.get("Comments") or "").strip()
+        quantity = _phase2_parse_number(source_row.get("Quantity"))
+        if not (application_number or beneficiary_name or requested_item or quantity):
+            continue
+        source_rows_for_reconciliation.append(source_row)
+        district = beneficiary_name if _phase2_normalize_text(beneficiary_type) == "district" else "Non-District"
+        master_row = {header: source_row.get(header, "") for header in headers}
+        order += 1
+        raw_rows.append(
+            {
+                "source_file_name": source_file_name,
+                "application_number": application_number,
+                "beneficiary_name": beneficiary_name,
+                "district": district,
+                "requested_item": requested_item,
+                "quantity": quantity,
+                "waiting_hall_quantity": 0,
+                "token_quantity": quantity,
+                "beneficiary_type": beneficiary_type,
+                "item_type": item_type,
+                "comments": comments,
+                "master_row": master_row,
+                "master_headers": headers,
+                "sort_order": order,
+            }
+        )
+    reconciliation_snapshot = _phase2_reconciliation_snapshot(
+        source_rows=source_rows_for_reconciliation,
+        grouped_rows=raw_rows,
+        total_value_getter=lambda row: _phase2_parse_number(
+            row.get("Total Value")
+            if isinstance(row, dict) and "Total Value" in row
+            else (row.get("master_row") or {}).get("Total Value")
+        ),
+    )
+    return {
+        "rows": raw_rows,
+        "headers": headers,
+        **reconciliation_snapshot,
+        "reconciliation_snapshot": reconciliation_snapshot,
+    }
+
+
+def _phase2_master_export_rows():
+    district_rows = _district_export_rows(_build_district_entry_summaries())
+    public_rows = _public_export_rows(models.PublicBeneficiaryEntry.objects.select_related("article").all())
+    institution_rows = _institution_export_rows(_build_institution_entry_summaries())
+    return district_rows + public_rows + institution_rows
+
+
+def _phase2_replace_session_rows(session, upload_rows, *, source_file_name, user, reconciliation=None):
+    with transaction.atomic():
+        models.SeatAllocationRow.objects.filter(session=session).delete()
+        for row in upload_rows:
+            models.SeatAllocationRow.objects.create(
+                session=session,
+                source_file_name=source_file_name,
+                application_number=row["application_number"],
+                beneficiary_name=row["beneficiary_name"],
+                district=row["district"],
+                requested_item=row["requested_item"],
+                quantity=row["quantity"],
+                waiting_hall_quantity=row["waiting_hall_quantity"],
+                token_quantity=row["token_quantity"],
+                beneficiary_type=row["beneficiary_type"],
+                item_type=row["item_type"],
+                comments=row["comments"],
+                master_row=row["master_row"],
+                master_headers=row["master_headers"],
+                sort_order=row["sort_order"],
+                sequence_no=row.get("sequence_no"),
+                created_by=user,
+                updated_by=user,
+            )
+        if reconciliation is None:
+            reconciliation = {}
+        session.phase2_source_name = source_file_name
+        session.phase2_source_row_count = int(reconciliation.get("source_row_count") or len(upload_rows))
+        session.phase2_grouped_row_count = int(reconciliation.get("grouped_row_count") or len(upload_rows))
+        session.phase2_source_quantity_total = int(
+            reconciliation.get("source_quantity_total")
+            if reconciliation.get("source_quantity_total") is not None
+            else sum(int(row.get("quantity") or 0) for row in upload_rows)
+        )
+        session.phase2_grouped_quantity_total = int(
+            reconciliation.get("grouped_quantity_total")
+            if reconciliation.get("grouped_quantity_total") is not None
+            else sum(int(row.get("quantity") or 0) for row in upload_rows)
+        )
+        session.phase2_reconciliation_snapshot = reconciliation.get("reconciliation_snapshot") or {}
+        session.save(
+            update_fields=[
+                "phase2_source_name",
+                "phase2_source_row_count",
+                "phase2_grouped_row_count",
+                "phase2_source_quantity_total",
+                "phase2_grouped_quantity_total",
+                "phase2_reconciliation_snapshot",
+                "updated_at",
+            ]
+        )
+
+
+def _phase2_build_upload_rows(uploaded_file):
+    reader = _csv_reader_from_upload(uploaded_file)
+    headers = list(reader.fieldnames or [])
+    if not headers:
+        raise ValueError("Uploaded CSV is empty.")
+
+    normalized_headers = {_phase2_normalize_text(header): header for header in headers}
+    missing = [header for header in PHASE2_MASTER_REQUIRED_HEADERS if _phase2_normalize_text(header) not in normalized_headers]
+    if missing:
+        raise ValueError(f"Missing required column(s): {', '.join(missing)}")
+
+    quantity_header = normalized_headers[_phase2_normalize_text("Quantity")]
+    application_header = normalized_headers[_phase2_normalize_text("Application Number")]
+    beneficiary_header = normalized_headers[_phase2_normalize_text("Beneficiary Name")]
+    requested_item_header = normalized_headers[_phase2_normalize_text("Requested Item")]
+    beneficiary_type_header = normalized_headers[_phase2_normalize_text("Beneficiary Type")]
+    item_type_header = normalized_headers[_phase2_normalize_text("Item Type")]
+    comments_header = normalized_headers.get(_phase2_normalize_text("Comments"))
+    total_value_header = normalized_headers.get(_phase2_normalize_text("Total Value"))
+    waiting_hall_header = normalized_headers.get(_phase2_normalize_text("Waiting Hall Quantity"))
+    token_header = normalized_headers.get(_phase2_normalize_text("Token Quantity"))
+
+    order = 0
+    source_rows_for_reconciliation = []
+    raw_rows = []
+    for source_row in reader:
+        application_number = str(source_row.get(application_header) or "").strip()
+        beneficiary_name = str(source_row.get(beneficiary_header) or "").strip()
+        requested_item = str(source_row.get(requested_item_header) or "").strip()
+        beneficiary_type = str(source_row.get(beneficiary_type_header) or "").strip()
+        item_type = str(source_row.get(item_type_header) or "").strip()
+        comments = str(source_row.get(comments_header) or "").strip() if comments_header else ""
+        quantity = _phase2_parse_number(source_row.get(quantity_header))
+        if not (application_number or beneficiary_name or requested_item or quantity):
+            continue
+        waiting_hall_quantity = _phase2_parse_number(source_row.get(waiting_hall_header)) if waiting_hall_header else None
+        token_quantity = _phase2_parse_number(source_row.get(token_header)) if token_header else None
+        if waiting_hall_quantity is None and token_quantity is None:
+            waiting_hall_quantity = 0
+            token_quantity = quantity
+        elif waiting_hall_quantity is None:
+            token_quantity = max(min(token_quantity, quantity), 0)
+            waiting_hall_quantity = max(quantity - token_quantity, 0)
+        else:
+            waiting_hall_quantity = max(min(waiting_hall_quantity, quantity), 0)
+            token_quantity = max(quantity - waiting_hall_quantity, 0)
+        normalized_source_row = {header: source_row.get(header, "") for header in headers}
+        source_rows_for_reconciliation.append(
+            {
+                "Application Number": normalized_source_row.get(application_header, ""),
+                "Beneficiary Name": normalized_source_row.get(beneficiary_header, ""),
+                "Requested Item": normalized_source_row.get(requested_item_header, ""),
+                "Quantity": normalized_source_row.get(quantity_header, ""),
+                "Beneficiary Type": normalized_source_row.get(beneficiary_type_header, ""),
+                "Item Type": normalized_source_row.get(item_type_header, ""),
+                "Total Value": normalized_source_row.get(total_value_header, "") if total_value_header else "",
+            }
+        )
+
+        district = beneficiary_name if _phase2_normalize_text(beneficiary_type) == "district" else "Non-District"
+        master_row = normalized_source_row
+        order += 1
+        raw_rows.append(
+            {
+                "application_number": application_number,
+                "beneficiary_name": beneficiary_name,
+                "district": district,
+                "requested_item": requested_item,
+                "quantity": quantity,
+                "waiting_hall_quantity": waiting_hall_quantity,
+                "token_quantity": token_quantity,
+                "beneficiary_type": beneficiary_type,
+                "item_type": item_type,
+                "comments": comments,
+                "master_row": master_row,
+                "master_headers": headers,
+                "sort_order": order,
+            }
+        )
+    reconciliation_snapshot = _phase2_reconciliation_snapshot(
+        source_rows=source_rows_for_reconciliation,
+        grouped_rows=raw_rows,
+        total_value_getter=lambda row: _phase2_parse_number(
+            row.get("Total Value")
+            if isinstance(row, dict) and "Total Value" in row
+            else (row.get("master_row") or {}).get(total_value_header, "")
+        ),
+    )
+    return {
+        "rows": raw_rows,
+        "headers": headers,
+        **reconciliation_snapshot,
+        "reconciliation_snapshot": reconciliation_snapshot,
+    }
+
+
+class SeatAllocationListView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
+    module_key = models.ModuleKeyChoices.SEAT_ALLOCATION
+    permission_action = "view"
+    template_name = "dashboard/seat_allocation_list.html"
+    preserved_filter_keys = ("q", "beneficiary_type", "district_filter", "item_filter", "sort", "dir")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        submit_result = self.request.session.pop("seat_allocation_submit_result", None)
+        session = kwargs.get("selected_session") or _phase2_selected_session(self.request)
+        all_rows = []
+        if session:
+            all_rows = list(
+                models.SeatAllocationRow.objects.filter(session=session).order_by(
+                    "sort_order", "district", "requested_item", "application_number", "id"
+                )
+            )
+
+        beneficiary_type_filter = (self.request.GET.get("beneficiary_type") or "all").strip()
+        q = (self.request.GET.get("q") or "").strip().lower()
+        district_filter = (self.request.GET.get("district_filter") or "all").strip()
+        item_filter = (self.request.GET.get("item_filter") or "all").strip()
+        sort_key = (self.request.GET.get("sort") or "").strip()
+        sort_dir = "asc" if (self.request.GET.get("dir") or "asc").lower() == "asc" else "desc"
+
+        normalized_type = _phase2_normalize_text(beneficiary_type_filter)
+        is_district_type = normalized_type == "district"
+        is_institution_like_type = normalized_type in {"institutions", "others"}
+
+        type_scoped_rows = [
+            row for row in all_rows
+            if beneficiary_type_filter == "all"
+            or (normalized_type == "institutions" and _phase2_normalize_text(row.beneficiary_type) in {"institution", "institutions", "instn"})
+            or _phase2_normalize_text(row.beneficiary_type) == normalized_type
+        ]
+        district_options_source = type_scoped_rows
+        if item_filter != "all":
+            district_options_source = [row for row in district_options_source if row.requested_item == item_filter]
+        if is_district_type:
+            district_options = sorted({row.district for row in district_options_source if row.district})
+        elif is_institution_like_type:
+            district_options = sorted({row.beneficiary_name for row in district_options_source if row.beneficiary_name})
+        else:
+            district_options = []
+
+        article_options_source = type_scoped_rows
+        if district_filter != "all":
+            if is_district_type:
+                article_options_source = [row for row in article_options_source if row.district == district_filter]
+            elif is_institution_like_type:
+                article_options_source = [row for row in article_options_source if row.beneficiary_name == district_filter]
+        article_options = sorted({row.requested_item for row in article_options_source if row.requested_item})
+
+        rows = type_scoped_rows
+        if district_filter != "all":
+            if is_district_type:
+                rows = [row for row in rows if row.district == district_filter]
+            elif is_institution_like_type:
+                rows = [row for row in rows if row.beneficiary_name == district_filter]
+        if item_filter != "all":
+            rows = [row for row in rows if row.requested_item == item_filter]
+        if q:
+            rows = [
+                row for row in rows
+                if q in str(row.application_number or "").lower()
+                or q in str(row.beneficiary_name or "").lower()
+                or q in str(row.district or "").lower()
+                or q in str(row.requested_item or "").lower()
+                or q in str(row.comments or "").lower()
+            ]
+
+        sort_map = {
+            "district": lambda row: row.district or "",
+            "application_number": lambda row: row.application_number or "",
+            "beneficiary_name": lambda row: row.beneficiary_name or "",
+            "requested_item": lambda row: row.requested_item or "",
+            "quantity": lambda row: int(row.quantity or 0),
+            "waiting_hall_quantity": lambda row: int(row.waiting_hall_quantity or 0),
+            "token_quantity": lambda row: int(row.token_quantity or 0),
+        }
+        if sort_key in sort_map:
+            rows = sorted(rows, key=sort_map[sort_key], reverse=(sort_dir == "desc"))
+
+        totals = {
+            "quantity": sum(int(row.quantity or 0) for row in rows),
+            "waiting_hall_quantity": sum(int(row.waiting_hall_quantity or 0) for row in rows),
+            "token_quantity": sum(int(row.token_quantity or 0) for row in rows),
+        }
+        overall_totals = {
+            "quantity": sum(int(row.quantity or 0) for row in all_rows),
+            "waiting_hall_quantity": sum(int(row.waiting_hall_quantity or 0) for row in all_rows),
+            "token_quantity": sum(int(row.token_quantity or 0) for row in all_rows),
+        }
+        all_rows_count = len(all_rows)
+        seat_unique_item_count = len({str(row.requested_item or "").strip() for row in all_rows if str(row.requested_item or "").strip()})
+        last_saved_at = None
+        if all_rows:
+            last_saved_at = max((row.updated_at or row.created_at) for row in all_rows)
+        elif session:
+            last_saved_at = session.updated_at
+        if last_saved_at:
+            last_saved_at = timezone.localtime(last_saved_at)
+        sync_preview = None
+        if session and self.request.GET.get("preview_sync") == "1":
+            source_rows = _phase2_master_export_rows()
+            preview_upload_result = _phase2_build_rows_from_master_export_rows(source_rows, source_file_name="master-entry-db")
+            sync_preview = {
+                **_phase2_preview_sync_state(session, preview_upload_result["rows"]),
+                "source_row_count": preview_upload_result["source_row_count"],
+                "grouped_row_count": preview_upload_result["grouped_row_count"],
+            }
+        master_change_state = None
+        if session:
+            source_rows = _phase2_master_export_rows()
+            current_master_result = _phase2_build_rows_from_master_export_rows(source_rows, source_file_name="master-entry-db")
+            master_change_state = _phase2_master_change_state(session, current_master_result["rows"])
+        reconciliation_snapshot = (session.phase2_reconciliation_snapshot or {}) if session else {}
+        reconciliation_checks = _phase2_reconciliation_checks(reconciliation_snapshot) if session else []
+        def build_sort_params(column):
+            params = self.request.GET.copy()
+            params["session"] = str(session.pk) if session else ""
+            params["sort"] = column
+            params["dir"] = "desc" if sort_key == column and sort_dir == "asc" else "asc"
+            return params.urlencode()
+        context.update(
+            {
+                "page_title": "Seat Allocation",
+                "selected_session": session,
+                "event_sessions": list(models.EventSession.objects.order_by("-is_active", "-event_year", "session_name")),
+                "seat_rows": rows,
+                "totals": totals,
+                "overall_totals": overall_totals,
+                "percentages": {
+                    "waiting_hall": round((totals["waiting_hall_quantity"] / totals["quantity"]) * 100, 1) if totals["quantity"] else 0,
+                    "token": round((totals["token_quantity"] / totals["quantity"]) * 100, 1) if totals["quantity"] else 0,
+                },
+                "all_rows_count": all_rows_count,
+                "seat_unique_item_count": seat_unique_item_count,
+                "last_saved_at": last_saved_at,
+                "filters": {
+                    "q": self.request.GET.get("q", ""),
+                    "beneficiary_type": beneficiary_type_filter,
+                    "district_filter": district_filter,
+                    "item_filter": item_filter,
+                    "sort": sort_key,
+                    "dir": sort_dir,
+                },
+                "district_options": district_options,
+                "article_options": article_options,
+                "beneficiary_type_choices": [
+                    (models.RecipientTypeChoices.DISTRICT, "District"),
+                    (models.RecipientTypeChoices.PUBLIC, "Public"),
+                    (models.RecipientTypeChoices.INSTITUTIONS, "Institutions"),
+                    (models.RecipientTypeChoices.OTHERS, "Others"),
+                    ("all", "All Types"),
+                ],
+                "is_district_type": is_district_type,
+                "is_institution_like_type": is_institution_like_type,
+                "sort_querystrings": {
+                    "district": build_sort_params("district"),
+                    "application_number": build_sort_params("application_number"),
+                    "beneficiary_name": build_sort_params("beneficiary_name"),
+                    "requested_item": build_sort_params("requested_item"),
+                    "quantity": build_sort_params("quantity"),
+                    "waiting_hall_quantity": build_sort_params("waiting_hall_quantity"),
+                    "token_quantity": build_sort_params("token_quantity"),
+                },
+                "current_sort": sort_key,
+                "current_dir": sort_dir,
+                "can_create_edit": self.request.user.has_module_permission(models.ModuleKeyChoices.SEAT_ALLOCATION, "create_edit"),
+                "can_export": self.request.user.has_module_permission(models.ModuleKeyChoices.SEAT_ALLOCATION, "export"),
+                "can_upload_replace": self.request.user.has_module_permission(models.ModuleKeyChoices.SEAT_ALLOCATION, "upload_replace"),
+                "reconciliation": {
+                    "source_name": session.phase2_source_name if session else "",
+                    "checks": reconciliation_checks,
+                    "all_matched": bool(reconciliation_checks) and all(check["matched"] for check in reconciliation_checks),
+                    "last_checked_at": timezone.localtime(session.updated_at) if session and reconciliation_snapshot else None,
+                },
+                "sync_preview": sync_preview,
+                "master_change_state": master_change_state,
+                "preview_sync_url": _phase2_url_with_extra_params(
+                    self.request,
+                    "ui:seat-allocation-list",
+                    session,
+                    filter_keys=self.preserved_filter_keys,
+                    extra_params={"preview_sync": "1"},
+                ) if session else reverse("ui:seat-allocation-list"),
+                "clear_preview_url": _phase2_url_with_extra_params(
+                    self.request,
+                    "ui:seat-allocation-list",
+                    session,
+                    filter_keys=self.preserved_filter_keys,
+                    extra_params={"preview_sync": None},
+                ) if session else reverse("ui:seat-allocation-list"),
+                "submit_result": submit_result,
+            }
+        )
+        return context
+
+    def get(self, request, *args, **kwargs):
+        session = _phase2_selected_session(request)
+        if request.GET.get("export") and session and request.user.has_module_permission(self.module_key, "export"):
+            export_rows, export_headers = _phase2_export_rows(
+                models.SeatAllocationRow.objects.filter(session=session).order_by(
+                    "sort_order", "district", "requested_item", "application_number", "id"
+                ),
+                include_sequence=False,
+            )
+            response = HttpResponse(content_type="text/csv")
+            timestamp = timezone.localtime().strftime("%d_%b_%y_%H_%M")
+            response["Content-Disposition"] = f'attachment; filename="2_Master_Data_Seat_{timestamp}.csv"'
+            writer = csv.DictWriter(response, fieldnames=export_headers)
+            writer.writeheader()
+            for row in export_rows:
+                writer.writerow(row)
+            return response
+        return self.render_to_response(self.get_context_data(selected_session=session))
+
+    def post(self, request, *args, **kwargs):
+        action = (request.POST.get("action") or "").strip()
+        session = _phase2_selected_session(request)
+
+        if action == "create_session":
+            if not request.user.has_module_permission(self.module_key, "create_edit"):
+                messages.error(request, "You do not have permission to create sessions.")
+                return HttpResponseRedirect(reverse("ui:seat-allocation-list"))
+            session_name = (request.POST.get("session_name") or "").strip()
+            event_year = _phase2_parse_number(request.POST.get("event_year")) or timezone.localdate().year
+            if not session_name:
+                messages.error(request, "Enter a session name.")
+                return HttpResponseRedirect(reverse("ui:seat-allocation-list"))
+            session = models.EventSession.objects.create(
+                session_name=session_name,
+                event_year=event_year,
+                is_active=bool(request.POST.get("is_active")),
+                notes=(request.POST.get("notes") or "").strip(),
+            )
+            messages.success(request, f'Session "{session.session_name}" created.')
+            return HttpResponseRedirect(
+                _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+            )
+
+        if not session and action in {"upload_csv", "use_existing", "save_splits", "submit_splits", "reset_splits", "reset_filtered_splits", "bulk_waiting_full", "bulk_waiting_zero"}:
+            session = _phase2_get_or_create_default_session()
+
+        if action == "activate_session":
+            if not request.user.has_module_permission(self.module_key, "create_edit"):
+                messages.error(request, "You do not have permission to activate sessions.")
+                return HttpResponseRedirect(
+                    _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+                )
+            session.is_active = True
+            session.save(update_fields=["is_active", "updated_at"])
+            messages.success(request, f'{session.session_name} is now the active event session.')
+            return HttpResponseRedirect(
+                _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+            )
+
+        if action == "upload_csv":
+            if not request.user.has_module_permission(self.module_key, "upload_replace"):
+                messages.error(request, "You do not have permission to upload seat allocation data.")
+                return HttpResponseRedirect(
+                    _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+                )
+            uploaded = request.FILES.get("file")
+            if not uploaded:
+                messages.error(request, "Choose a master-entry export CSV file.")
+                return HttpResponseRedirect(
+                    _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+                )
+            try:
+                upload_result = _phase2_build_upload_rows(uploaded)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                return HttpResponseRedirect(
+                    _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+                )
+            upload_rows = upload_result["rows"]
+            _phase2_replace_session_rows(
+                session,
+                upload_rows,
+                source_file_name=uploaded.name,
+                user=request.user,
+                reconciliation=upload_result,
+            )
+            messages.success(
+                request,
+                f"Uploaded {upload_result['source_row_count']} master row(s) into {session.session_name} and created "
+                f"{upload_result['grouped_row_count']} seat-allocation working row(s).",
+            )
+            return HttpResponseRedirect(
+                _phase2_url_with_extra_params(
+                    request,
+                    "ui:seat-allocation-list",
+                    session,
+                    filter_keys=self.preserved_filter_keys,
+                    extra_params={"preview_sync": None},
+                )
+            )
+
+        if action == "use_existing":
+            if not request.user.has_module_permission(self.module_key, "upload_replace"):
+                messages.error(request, "You do not have permission to load existing master-entry data.")
+                return HttpResponseRedirect(
+                    _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+                )
+            source_rows = _phase2_master_export_rows()
+            upload_result = _phase2_build_rows_from_master_export_rows(source_rows, source_file_name="master-entry-db")
+            preserve_result = _phase2_preserve_existing_split_state(session, upload_result["rows"])
+            upload_rows = preserve_result["rows"]
+            _phase2_replace_session_rows(
+                session,
+                upload_rows,
+                source_file_name="master-entry-db",
+                user=request.user,
+                reconciliation=upload_result,
+            )
+            messages.success(
+                request,
+                f"Synced {upload_result['source_row_count']} master row(s) into {upload_result['grouped_row_count']} seat-allocation working row(s). "
+                f"Preserved {preserve_result['preserved_count']} existing split row(s), added {preserve_result['new_count']}, removed {preserve_result['removed_count']}.",
+            )
+            if preserve_result["removed_count"]:
+                messages.warning(
+                    request,
+                    f"Master sync removed {preserve_result['removed_count']} seat-allocation row(s) that no longer exist in master data.",
+                )
+            return HttpResponseRedirect(
+                _phase2_url_with_extra_params(
+                    request,
+                    "ui:seat-allocation-list",
+                    session,
+                    filter_keys=self.preserved_filter_keys,
+                    extra_params={"preview_sync": None},
+                )
+            )
+
+        if action == "save_splits":
+            if not request.user.has_module_permission(self.module_key, "create_edit"):
+                messages.error(request, "You do not have permission to update seat allocation rows.")
+                return HttpResponseRedirect(
+                    _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+                )
+            row_ids = request.POST.getlist("row_id")
+            waiting_values = request.POST.getlist("waiting_hall_quantity")
+            updated_count = 0
+            rows_by_id = {
+                str(row.id): row
+                for row in models.SeatAllocationRow.objects.filter(session=session, id__in=row_ids)
+            }
+            with transaction.atomic():
+                for idx, row_id in enumerate(row_ids):
+                    row = rows_by_id.get(str(row_id))
+                    if not row:
+                        continue
+                    waiting_hall_quantity = _phase2_parse_number(waiting_values[idx] if idx < len(waiting_values) else 0)
+                    waiting_hall_quantity = min(waiting_hall_quantity, int(row.quantity or 0))
+                    row.waiting_hall_quantity = waiting_hall_quantity
+                    row.token_quantity = max(int(row.quantity or 0) - waiting_hall_quantity, 0)
+                    row.updated_by = request.user
+                    row.save(update_fields=["waiting_hall_quantity", "token_quantity", "updated_by", "updated_at"])
+                    updated_count += 1
+            messages.success(request, f"Saved split values for {updated_count} row(s).")
+            return HttpResponseRedirect(
+                _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+            )
+
+        if action == "submit_splits":
+            if not request.user.has_module_permission(self.module_key, "create_edit"):
+                messages.error(request, "You do not have permission to validate seat allocation rows.")
+                return HttpResponseRedirect(
+                    _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+                )
+            row_ids = request.POST.getlist("row_id")
+            waiting_values = request.POST.getlist("waiting_hall_quantity")
+            pending_waiting_by_id = {}
+            for idx, row_id in enumerate(row_ids):
+                raw_value = waiting_values[idx] if idx < len(waiting_values) else 0
+                pending_waiting_by_id[str(row_id)] = _phase2_parse_number(raw_value)
+            rows_by_id = {
+                str(row.id): row
+                for row in models.SeatAllocationRow.objects.filter(session=session, id__in=row_ids)
+            }
+            with transaction.atomic():
+                for idx, row_id in enumerate(row_ids):
+                    row = rows_by_id.get(str(row_id))
+                    if not row:
+                        continue
+                    waiting_hall_quantity = _phase2_parse_number(waiting_values[idx] if idx < len(waiting_values) else 0)
+                    waiting_hall_quantity = min(waiting_hall_quantity, int(row.quantity or 0))
+                    row.waiting_hall_quantity = waiting_hall_quantity
+                    row.token_quantity = max(int(row.quantity or 0) - waiting_hall_quantity, 0)
+                    row.updated_by = request.user
+                    row.save(update_fields=["waiting_hall_quantity", "token_quantity", "updated_by", "updated_at"])
+
+            all_rows = list(models.SeatAllocationRow.objects.filter(session=session))
+            source_checks = _phase2_reconciliation_checks(session.phase2_reconciliation_snapshot or {})
+            split_check = _phase2_split_reconciliation(all_rows)
+            source_ok = bool(source_checks) and all(check["matched"] for check in source_checks)
+            split_ok = split_check["rowwise_matched"] and split_check["overall_matched"]
+
+            submit_checks = []
+            for check in source_checks:
+                submit_checks.append(
+                    {
+                        "label": check["label"],
+                        "matched": check["matched"],
+                        "details": "Matched" if check["matched"] else f"Master {check['source']}, Working Copy {check['grouped']}",
+                    }
+                )
+            submit_checks.append(
+                {
+                    "label": "Row-wise split quantities",
+                    "matched": split_check["rowwise_matched"],
+                    "details": (
+                        f"All {split_check['row_count']} row(s) matched"
+                        if split_check["rowwise_matched"]
+                        else f"{split_check['row_mismatch_count']} row(s) have Quantity != Waiting Hall + Token"
+                    ),
+                }
+            )
+            submit_checks.append(
+                {
+                    "label": "Overall split quantities",
+                    "matched": split_check["overall_matched"],
+                    "details": f"Waiting Hall {split_check['total_waiting']}, Token {split_check['total_token']}, Total Quantity {split_check['total_quantity']}",
+                }
+            )
+
+            request.session["seat_allocation_submit_result"] = {
+                "all_matched": source_ok and split_ok,
+                "checks": submit_checks,
+                "checked_at_display": timezone.localtime().strftime("%d/%m/%Y %I:%M %p"),
+            }
+            return HttpResponseRedirect(
+                _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+            )
+
+        if action == "reset_splits":
+            if not request.user.has_module_permission(self.module_key, "create_edit"):
+                messages.error(request, "You do not have permission to reset split values.")
+                return HttpResponseRedirect(
+                    _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+                )
+            models.SeatAllocationRow.objects.filter(session=session).update(
+                waiting_hall_quantity=0,
+                token_quantity=F("quantity"),
+                updated_by=request.user,
+                updated_at=timezone.now(),
+            )
+            messages.success(request, "Waiting hall and token quantities were reset.")
+            return HttpResponseRedirect(
+                _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+            )
+
+        if action == "reset_filtered_splits":
+            if not request.user.has_module_permission(self.module_key, "create_edit"):
+                messages.error(request, "You do not have permission to reset split values.")
+                return HttpResponseRedirect(
+                    _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+                )
+            row_ids = request.POST.getlist("visible_row_id")
+            rows = list(models.SeatAllocationRow.objects.filter(session=session, id__in=row_ids))
+            with transaction.atomic():
+                for row in rows:
+                    row.waiting_hall_quantity = 0
+                    row.token_quantity = int(row.quantity or 0)
+                    row.updated_by = request.user
+                    row.save(update_fields=["waiting_hall_quantity", "token_quantity", "updated_by", "updated_at"])
+            messages.success(request, f"Reset split values for {len(rows)} filtered row(s).")
+            return HttpResponseRedirect(
+                _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+            )
+
+        if action in {"bulk_waiting_full", "bulk_waiting_zero"}:
+            if not request.user.has_module_permission(self.module_key, "create_edit"):
+                messages.error(request, "You do not have permission to bulk update split values.")
+                return HttpResponseRedirect(
+                    _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+                )
+            row_ids = request.POST.getlist("visible_row_id")
+            rows = list(models.SeatAllocationRow.objects.filter(session=session, id__in=row_ids))
+            with transaction.atomic():
+                for row in rows:
+                    waiting_value = int(row.quantity or 0) if action == "bulk_waiting_full" else 0
+                    row.waiting_hall_quantity = waiting_value
+                    row.token_quantity = max(int(row.quantity or 0) - waiting_value, 0)
+                    row.updated_by = request.user
+                    row.save(update_fields=["waiting_hall_quantity", "token_quantity", "updated_by", "updated_at"])
+            messages.success(
+                request,
+                f'Updated {len(rows)} filtered row(s): Waiting Hall set to {"full quantity" if action == "bulk_waiting_full" else "0"}.',
+            )
+            return HttpResponseRedirect(
+                _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+            )
+
+        return HttpResponseRedirect(
+            _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
+        )
+
+
+class SequenceListView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
+    module_key = models.ModuleKeyChoices.SEQUENCE_LIST
+    permission_action = "view"
+    template_name = "dashboard/sequence_list.html"
+
+    def _master_items(self):
+        grouped = {}
+        for row in _phase2_master_export_rows():
+            item = str(row.get("Requested Item") or "").strip()
+            if not item:
+                continue
+            grouped.setdefault(
+                item,
+                {
+                    "item": item,
+                    "category": str(row.get("Article Category") or row.get("Category") or "").strip() or "Uncategorized",
+                },
+            )
+        return list(grouped.values())
+
+    def _source_rows(self, session):
+        rows = list(
+            models.SeatAllocationRow.objects.filter(session=session).order_by(
+                F("sequence_no").asc(nulls_last=True),
+                "sort_order",
+                "requested_item",
+                "application_number",
+                "id",
+            )
+        )
+        payload = []
+        for row in rows:
+            base_headers = [
+                header
+                for header in (row.master_headers or [])
+                if _phase2_normalize_text(header) not in {"waiting hall quantity", "token quantity", "sequence no", "sequence list"}
+            ]
+            headers = [*base_headers, "Waiting Hall Quantity", "Token Quantity"]
+            row_map = {}
+            master_row = row.master_row or {}
+            for header in base_headers:
+                row_map[header] = master_row.get(header, "")
+            row_map["Waiting Hall Quantity"] = int(row.waiting_hall_quantity or 0)
+            row_map["Token Quantity"] = int(row.token_quantity or 0)
+            payload.append(
+                {
+                    "source_id": str(row.id),
+                    "requested_item": row.requested_item or "",
+                    "token_quantity": int(row.token_quantity or 0),
+                    "sequence_no": int(row.sequence_no) if row.sequence_no else None,
+                    "row_map": row_map,
+                    "headers": headers,
+                }
+            )
+        return payload
+
+    def _saved_sequence_items(self, session):
+        return list(
+            models.SequenceListItem.objects.filter(session=session)
+            .order_by("sequence_no", "sort_order", "item_name")
+            .values("item_name", "sequence_no", "sort_order")
+        )
+
+    def _seat_allocation_grouped_rows(self, session):
+        rows = list(models.SeatAllocationRow.objects.filter(session=session))
+        return [
+            {
+                "application_number": row.application_number or "",
+                "beneficiary_name": row.beneficiary_name or "",
+                "district": row.district or "",
+                "requested_item": row.requested_item or "",
+                "quantity": int(row.quantity or 0),
+                "waiting_hall_quantity": int(row.waiting_hall_quantity or 0),
+                "token_quantity": int(row.token_quantity or 0),
+                "beneficiary_type": row.beneficiary_type or "",
+                "item_type": row.item_type or "",
+                "comments": row.comments or "",
+                "master_row": row.master_row or {},
+                "master_headers": row.master_headers or [],
+            }
+            for row in rows
+        ]
+
+    def _sequence_reconciliation_state(self, session):
+        master_item_names = {
+            str(row.get("item") or "").strip()
+            for row in self._master_items()
+            if str(row.get("item") or "").strip()
+        }
+        seat_allocation_items = {
+            str(item).strip()
+            for item in models.SeatAllocationRow.objects.filter(session=session).values_list("requested_item", flat=True)
+            if str(item).strip()
+        }
+        saved_sequence_items = {
+            str(item).strip()
+            for item in models.SequenceListItem.objects.filter(session=session).values_list("item_name", flat=True)
+            if str(item).strip()
+        }
+        return {
+            "master_items": master_item_names,
+            "seat_allocation_items": seat_allocation_items,
+            "saved_sequence_items": saved_sequence_items,
+            "missing_in_seat_allocation": sorted(master_item_names - seat_allocation_items),
+            "extra_in_seat_allocation": sorted(seat_allocation_items - master_item_names),
+            "new_to_sequence": sorted(master_item_names - saved_sequence_items),
+            "extra_in_sequence": sorted(saved_sequence_items - master_item_names),
+        }
+
+    def _sequence_submit_result(self, *, reconciliation_state, sequence_item_names, sequence_number_count, exact_checks, seat_integrity):
+        master_item_count = len(reconciliation_state["master_items"])
+        seat_item_count = len(reconciliation_state["seat_allocation_items"])
+        sequence_item_count = len(sequence_item_names)
+        missing_in_seat = reconciliation_state["missing_in_seat_allocation"]
+        extra_in_seat = reconciliation_state["extra_in_seat_allocation"]
+        unassigned_master = sorted(reconciliation_state["master_items"] - sequence_item_names)
+        extra_in_sequence = sorted(sequence_item_names - reconciliation_state["master_items"])
+        split_check = seat_integrity["split_check"]
+        base_integrity_ok = (
+            all(check["matched"] for check in seat_integrity["checks"])
+            and split_check["rowwise_matched"]
+            and split_check["overall_matched"]
+            and exact_checks["master_match"]["matched"]
+            and exact_checks["seat_match"]["matched"]
+        )
+
+        checks = [
+            {
+                "label": "Final data integrity",
+                "matched": base_integrity_ok,
+                "details": (
+                    "Master Data, Seat Allocation, split totals, and final sequence output all matched."
+                    if base_integrity_ok
+                    else "One or more Master Data / Seat Allocation / split / final output checks failed."
+                ),
+            },
+            *[
+                {
+                    "label": f"Master Data vs Seat Allocation {check['label']}",
+                    "matched": check["matched"],
+                    "details": (
+                        f"Matched {check['source']}"
+                        if check["matched"]
+                        else f"Master {check['source']}, Seat Allocation {check['grouped']}"
+                    ),
+                }
+                for check in seat_integrity["checks"]
+            ],
+            {
+                "label": "Seat Allocation row-wise split",
+                "matched": split_check["rowwise_matched"],
+                "details": (
+                    f"All {split_check['row_count']} row(s) matched"
+                    if split_check["rowwise_matched"]
+                    else f"{split_check['row_mismatch_count']} row(s) have Quantity != Waiting Hall + Token"
+                ),
+            },
+            {
+                "label": "Seat Allocation overall split",
+                "matched": split_check["overall_matched"],
+                "details": (
+                    f"Waiting Hall {split_check['total_waiting']}, Token {split_check['total_token']}, Total Quantity {split_check['total_quantity']}"
+                ),
+            },
+            {
+                "label": "Final Sequence vs Master Data",
+                "matched": exact_checks["master_match"]["matched"],
+                "details": exact_checks["master_match"]["details"],
+            },
+            {
+                "label": "Final Sequence vs Seat Allocation",
+                "matched": exact_checks["seat_match"]["matched"],
+                "details": exact_checks["seat_match"]["details"],
+            },
+            {
+                "label": "Master Data items vs Sequence List",
+                "matched": not unassigned_master and not extra_in_sequence,
+                "details": (
+                    f"Matched {master_item_count} item(s)"
+                    if not unassigned_master and not extra_in_sequence
+                    else " | ".join(
+                        part
+                        for part in [
+                            (
+                                f"Unassigned master item(s): {', '.join(unassigned_master[:5])}"
+                                + (f" and {len(unassigned_master) - 5} more" if len(unassigned_master) > 5 else "")
+                            ) if unassigned_master else "",
+                            (
+                                f"Removed/stale sequence item(s): {', '.join(extra_in_sequence[:5])}"
+                                + (f" and {len(extra_in_sequence) - 5} more" if len(extra_in_sequence) > 5 else "")
+                            ) if extra_in_sequence else "",
+                        ]
+                        if part
+                    ),
+                ),
+            },
+            {
+                "label": "Item uniqueness",
+                "matched": sequence_item_count == len(sequence_item_names),
+                "details": f"{len(sequence_item_names)} unique item(s) in Sequence List",
+            },
+            {
+                "label": "Sequence number uniqueness",
+                "matched": sequence_number_count == sequence_item_count,
+                "details": (
+                    f"{sequence_number_count} unique sequence number(s) for {sequence_item_count} item(s)"
+                    if sequence_number_count == sequence_item_count
+                    else f"{sequence_number_count} unique sequence number(s) for {sequence_item_count} item(s)"
+                ),
+            },
+            {
+                "label": "Sequence coverage on Seat Allocation",
+                "matched": seat_item_count == sequence_item_count and not missing_in_seat and not extra_in_seat,
+                "details": (
+                    f"Sequence will apply to all {seat_item_count} Seat Allocation item(s)"
+                    if seat_item_count == sequence_item_count and not missing_in_seat and not extra_in_seat
+                    else f"Seat Allocation items: {seat_item_count}, Sequence items: {sequence_item_count}"
+                ),
+            },
+        ]
+        return {
+            "all_matched": all(check["matched"] for check in checks),
+            "checks": checks,
+            "checked_at_display": timezone.localtime().strftime("%d/%m/%Y %I:%M %p"),
+        }
+
+    def _item_summaries(self, session):
+        rows = list(
+            models.SeatAllocationRow.objects.filter(session=session).order_by(
+                "sequence_no", "requested_item", "application_number", "id"
+            )
+        )
+        include_only_token = (self.request.GET.get("token_only") or "").strip() == "1"
+        if include_only_token:
+            rows = [row for row in rows if int(row.token_quantity or 0) > 0]
+
+        q = (self.request.GET.get("q") or "").strip().lower()
+        grouped = {}
+        for row in rows:
+            item = (row.requested_item or "").strip()
+            if not item:
+                continue
+            summary = grouped.setdefault(
+                item,
+                {
+                    "item": item,
+                    "beneficiary_type": row.beneficiary_type or "",
+                    "item_type": row.item_type or "",
+                    "row_count": 0,
+                    "quantity": 0,
+                    "waiting_hall_quantity": 0,
+                    "token_quantity": 0,
+                    "sequence_no": row.sequence_no,
+                },
+            )
+            summary["row_count"] += 1
+            summary["quantity"] += int(row.quantity or 0)
+            summary["waiting_hall_quantity"] += int(row.waiting_hall_quantity or 0)
+            summary["token_quantity"] += int(row.token_quantity or 0)
+            if summary["sequence_no"] in {None, ""} and row.sequence_no:
+                summary["sequence_no"] = row.sequence_no
+
+        items = list(grouped.values())
+        if q:
+            items = [
+                item for item in items
+                if q in str(item["item"]).lower()
+                or q in str(item["beneficiary_type"]).lower()
+                or q in str(item["item_type"]).lower()
+            ]
+        items.sort(key=lambda item: (item["sequence_no"] is None, item["sequence_no"] or 999999, item["item"].lower()))
+        return items
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        session = kwargs.get("selected_session") or _phase2_selected_session(self.request)
+        items = self._item_summaries(session) if session else []
+        submit_result = self.request.session.pop("sequence_submit_result", None)
+        context.update(
+            {
+                "page_title": "Sequence List",
+                "selected_session": session,
+                "event_sessions": list(models.EventSession.objects.order_by("-is_active", "-event_year", "session_name")),
+                "sequence_items": items,
+                "sequence_source_rows": self._source_rows(session) if session else [],
+                "sequence_saved_items": self._saved_sequence_items(session) if session else [],
+                "sequence_master_items": self._master_items(),
+                "sequence_default_items": SEQUENCE_DEFAULT_ITEMS,
+                "filters": {
+                    "q": self.request.GET.get("q", ""),
+                    "token_only": self.request.GET.get("token_only", ""),
+                    "start_from": self.request.GET.get("start_from", "1"),
+                },
+                "can_create_edit": self.request.user.has_module_permission(models.ModuleKeyChoices.SEQUENCE_LIST, "create_edit"),
+                "can_export": self.request.user.has_module_permission(models.ModuleKeyChoices.SEQUENCE_LIST, "export"),
+                "sequence_reconciliation_state": self._sequence_reconciliation_state(session) if session else {},
+                "submit_result": submit_result,
+            }
+        )
+        return context
+
+    def get(self, request, *args, **kwargs):
+        session = _phase2_selected_session(request)
+        if request.GET.get("export") and session and request.user.has_module_permission(self.module_key, "export"):
+            export_rows, export_headers = _phase2_export_rows(
+                models.SeatAllocationRow.objects.filter(session=session).order_by(
+                    F("sequence_no").asc(nulls_last=True),
+                    "sort_order",
+                    "requested_item",
+                    "application_number",
+                    "id",
+                ),
+                include_sequence=True,
+            )
+            response = HttpResponse(content_type="text/csv")
+            timestamp = timezone.localtime().strftime("%d_%b_%y_%H_%M")
+            response["Content-Disposition"] = f'attachment; filename="3_Master_Data_Seq_{timestamp}.csv"'
+            writer = csv.DictWriter(response, fieldnames=export_headers)
+            writer.writeheader()
+            for row in export_rows:
+                writer.writerow(row)
+            return response
+        return self.render_to_response(self.get_context_data(selected_session=session))
+
+    def post(self, request, *args, **kwargs):
+        session = _phase2_selected_session(request)
+        if not session:
+            messages.error(request, "Create or select a session first.")
+            return HttpResponseRedirect(reverse("ui:sequence-list"))
+        if not request.user.has_module_permission(self.module_key, "create_edit"):
+            messages.error(request, "You do not have permission to update sequence rows.")
+            return HttpResponseRedirect(f'{reverse("ui:sequence-list")}?session={session.pk}')
+
+        action = (request.POST.get("action") or "").strip()
+        start_from = _phase2_parse_number(request.POST.get("start_from")) or 1
+
+        if action == "auto_assign":
+            items = self._item_summaries(session)
+            existing_sequences = {int(item["sequence_no"]) for item in items if item["sequence_no"]}
+            next_sequence = start_from
+            for item in items:
+                if item["sequence_no"]:
+                    continue
+                while next_sequence in existing_sequences:
+                    next_sequence += 1
+                models.SeatAllocationRow.objects.filter(session=session, requested_item=item["item"]).update(
+                    sequence_no=next_sequence,
+                    updated_by=request.user,
+                    updated_at=timezone.now(),
+                )
+                existing_sequences.add(next_sequence)
+                next_sequence += 1
+            messages.success(request, "Blank sequence numbers were assigned.")
+            return HttpResponseRedirect(f'{reverse("ui:sequence-list")}?session={session.pk}')
+
+        if action == "save_sequences":
+            item_names = request.POST.getlist("item_name")
+            sequence_values = request.POST.getlist("sequence_no")
+            attempted_sequence_names = {str(item_name or "").strip() for item_name in item_names if str(item_name or "").strip()}
+            attempted_sequence_numbers = {
+                _phase2_parse_number(raw_value)
+                for raw_value in sequence_values
+                if str(raw_value).strip() and _phase2_parse_number(raw_value)
+            }
+            reconciliation_state = self._sequence_reconciliation_state(session)
+            seat_integrity = _sequence_seat_allocation_integrity(session)
+            submitted_rows = []
+            seen_items = set()
+            seen_sequences = set()
+            validation_errors = []
+
+            for idx, item_name in enumerate(item_names):
+                item_name = str(item_name or "").strip()
+                raw_value = sequence_values[idx] if idx < len(sequence_values) else ""
+                if not item_name:
+                    continue
+                if item_name in seen_items:
+                    validation_errors.append(f"Duplicate item in sequence list: {item_name}.")
+                    continue
+                sequence_no = _phase2_parse_number(raw_value) if str(raw_value).strip() else None
+                if not sequence_no:
+                    validation_errors.append(f"Missing sequence number for {item_name}.")
+                    continue
+                if sequence_no in seen_sequences:
+                    validation_errors.append(f"Sequence number {sequence_no} is used more than once.")
+                    continue
+                seen_items.add(item_name)
+                seen_sequences.add(sequence_no)
+                submitted_rows.append(
+                    {
+                        "item_name": item_name,
+                        "sequence_no": sequence_no,
+                        "sort_order": idx + 1,
+                    }
+                )
+
+            sequence_map = {row["item_name"]: row["sequence_no"] for row in submitted_rows}
+            final_export = _sequence_final_export_rows(session, sequence_map)
+            master_export_rows = _phase2_master_export_rows()
+            exact_checks = {
+                "master_match": _sequence_exact_compare(
+                    left_rows=_sequence_project_rows(final_export["final_rows"], EXPORT_COLUMNS),
+                    left_headers=EXPORT_COLUMNS,
+                    right_rows=_sequence_project_rows(master_export_rows, EXPORT_COLUMNS),
+                    right_headers=EXPORT_COLUMNS,
+                    matched_label=f"Matched {len(master_export_rows)} row(s) across {len(EXPORT_COLUMNS)} column(s)",
+                    mismatch_label="Master Data comparison failed",
+                ),
+                "seat_match": _sequence_exact_compare(
+                    left_rows=_sequence_project_rows(final_export["final_rows"], final_export["seat_headers"]),
+                    left_headers=final_export["seat_headers"],
+                    right_rows=final_export["seat_rows"],
+                    right_headers=final_export["seat_headers"],
+                    matched_label=f"Matched {len(final_export['seat_rows'])} row(s) across {len(final_export['seat_headers'])} column(s)",
+                    mismatch_label="Seat Allocation comparison failed",
+                ),
+            }
+
+            if validation_errors:
+                request.session["sequence_submit_result"] = {
+                    "all_matched": False,
+                    "checks": [
+                        *[
+                            {
+                                "label": f"Master Data vs Seat Allocation {check['label']}",
+                                "matched": check["matched"],
+                                "details": (
+                                    f"Matched {check['source']}"
+                                    if check["matched"]
+                                    else f"Master {check['source']}, Seat Allocation {check['grouped']}"
+                                ),
+                            }
+                            for check in seat_integrity["checks"]
+                        ],
+                        {
+                            "label": "Seat Allocation row-wise split",
+                            "matched": seat_integrity["split_check"]["rowwise_matched"],
+                            "details": (
+                                f"All {seat_integrity['split_check']['row_count']} row(s) matched"
+                                if seat_integrity["split_check"]["rowwise_matched"]
+                                else f"{seat_integrity['split_check']['row_mismatch_count']} row(s) have Quantity != Waiting Hall + Token"
+                            ),
+                        },
+                        {
+                            "label": "Seat Allocation overall split",
+                            "matched": seat_integrity["split_check"]["overall_matched"],
+                            "details": (
+                                f"Waiting Hall {seat_integrity['split_check']['total_waiting']}, Token {seat_integrity['split_check']['total_token']}, Total Quantity {seat_integrity['split_check']['total_quantity']}"
+                            ),
+                        },
+                        {
+                            "label": "Final Sequence vs Master Data",
+                            "matched": exact_checks["master_match"]["matched"],
+                            "details": exact_checks["master_match"]["details"],
+                        },
+                        {
+                            "label": "Final Sequence vs Seat Allocation",
+                            "matched": exact_checks["seat_match"]["matched"],
+                            "details": exact_checks["seat_match"]["details"],
+                        },
+                        {
+                            "label": "Sequence validation",
+                            "matched": False,
+                            "details": validation_errors[0],
+                        }
+                    ],
+                    "checked_at_display": timezone.localtime().strftime("%d/%m/%Y %I:%M %p"),
+                }
+                return HttpResponseRedirect(f'{reverse("ui:sequence-list")}?session={session.pk}')
+
+            with transaction.atomic():
+                master_item_names = reconciliation_state["master_items"]
+                sequence_item_names = {row["item_name"] for row in submitted_rows}
+                unassigned_master_items = sorted(master_item_names - sequence_item_names)
+                extra_sequence_items = sorted(sequence_item_names - master_item_names)
+                submit_result = self._sequence_submit_result(
+                    reconciliation_state=reconciliation_state,
+                    sequence_item_names=sequence_item_names,
+                    sequence_number_count=len(seen_sequences),
+                    exact_checks=exact_checks,
+                    seat_integrity=seat_integrity,
+                )
+
+                models.SequenceListItem.objects.filter(session=session).delete()
+                models.SequenceListItem.objects.bulk_create(
+                    [
+                        models.SequenceListItem(
+                            session=session,
+                            item_name=row["item_name"],
+                            sequence_no=row["sequence_no"],
+                            sort_order=row["sort_order"],
+                            created_by=request.user,
+                            updated_by=request.user,
+                        )
+                        for row in submitted_rows
+                    ]
+                )
+
+                if submit_result["all_matched"] and not unassigned_master_items and not extra_sequence_items:
+                    models.SeatAllocationRow.objects.filter(session=session).update(
+                        sequence_no=None,
+                        updated_by=request.user,
+                        updated_at=timezone.now(),
+                    )
+                    for row in submitted_rows:
+                        models.SeatAllocationRow.objects.filter(
+                            session=session,
+                            requested_item=row["item_name"],
+                        ).update(
+                            sequence_no=row["sequence_no"],
+                            updated_by=request.user,
+                            updated_at=timezone.now(),
+                        )
+                else:
+                    messages.warning(
+                        request,
+                        "Sequence list was saved, but it was not applied to Seat Allocation because reconciliation is not clean yet.",
+                    )
+                request.session["sequence_submit_result"] = submit_result
+            return HttpResponseRedirect(f'{reverse("ui:sequence-list")}?session={session.pk}')
+
+        return HttpResponseRedirect(f'{reverse("ui:sequence-list")}?session={session.pk}')
+
+
+class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
+    module_key = models.ModuleKeyChoices.TOKEN_GENERATION
+    permission_action = "view"
+    template_name = "dashboard/token_generation.html"
+
+    def _token_open_section(self, session, filter_state):
+        requested = str(self.request.GET.get("open_section") or "").strip()
+        if requested:
+            return requested
+        stored = self.request.session.pop("token_generation_open_section", None)
+        if stored:
+            return stored
+        if _token_generation_has_active_filters(filter_state):
+            return "transformations"
+        return ""
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        session = kwargs.get("selected_session") or _phase2_selected_session(self.request)
+        dataset = _token_generation_saved_dataset(session) if session else {"headers": [], "rows": [], "source_name": "", "saved_at": None}
+        rows = dataset["rows"]
+        stage_state = _token_generation_stage_state(self.request, session) if session else {}
+        filter_state = _token_generation_filter_state(self.request)
+        open_section = self._token_open_section(session, filter_state)
+        name_length_limit = _phase2_parse_number(self.request.GET.get("name_limit")) or 25
+        preview_rows = rows[:10]
+        preview_table = [
+            [row.get(header, "") for header in dataset["headers"]]
+            for row in preview_rows
+        ]
+        blank_summary = _token_generation_empty_value_summary(rows, dataset["headers"]) if rows else []
+        quality_checks = _token_generation_quality_checks(rows) if rows else {
+            "sequence_item_conflicts": [],
+            "article_sequence_conflicts": [],
+            "missing_sequences": [],
+            "token_quantity_total": 0,
+            "printable_token_total": 0,
+            "zero_token_rows": 0,
+        }
+        prep_validation_summary = self.request.session.pop("token_generation_prep_validation_summary", None)
+        token_is_prepared = bool(rows) and all("Names" in row for row in rows)
+        is_sorted = _token_generation_is_sorted(rows)
+        is_generated = _token_generation_is_generated(rows)
+        token_step3_saved = bool(stage_state.get("token_print_saved")) and token_is_prepared
+        generated_start_tokens = [
+            _phase2_parse_number(row.get("Start Token No"))
+            for row in rows
+            if (_phase2_parse_number(row.get("Start Token No")) or 0) > 0
+        ]
+        generated_end_tokens = [
+            _phase2_parse_number(row.get("End Token No"))
+            for row in rows
+            if (_phase2_parse_number(row.get("End Token No")) or 0) > 0
+        ]
+        token_start_no = min(generated_start_tokens) if generated_start_tokens else 0
+        token_end_no = max(generated_end_tokens) if generated_end_tokens else 0
+        prep_checks = [
+            {"label": "Names column created", "passed": token_is_prepared and all("Names" in row for row in rows)},
+            {"label": "Empty values filled", "passed": token_is_prepared},
+            {"label": "Sorted by sequence, beneficiary type, handicapped status, and names", "passed": token_is_prepared and is_sorted},
+            {"label": "Quantity, Cost Per Unit, and Total Value are all greater than 0", "passed": token_is_prepared and not prep_validation_summary},
+            {"label": "Duplicate row check complete", "passed": token_is_prepared},
+        ]
+        edit_candidates = _token_generation_edit_candidates(rows, length_limit=name_length_limit) if token_is_prepared else []
+        article_toggle_rows = _token_generation_article_toggle_rows(rows) if token_is_prepared else []
+        filtered_rows = _token_generation_filter_rows(rows, filter_state) if rows else []
+        context.update(
+            {
+                "page_title": "Token Generation",
+                "selected_session": session,
+                "token_rows": preview_table,
+                "token_headers": dataset["headers"],
+                "token_row_count": len(rows),
+                "token_source_name": dataset["source_name"],
+                "token_saved_at_display": timezone.localtime(dataset["saved_at"]).strftime("%d/%m/%Y %I:%M %p") if dataset["saved_at"] else "",
+                "token_blank_summary": blank_summary,
+                "token_prep_validation_summary": prep_validation_summary,
+                "token_quality_checks": quality_checks,
+                "token_column_count": len(dataset["headers"]),
+                "token_prep_checks": prep_checks,
+                "token_is_prepared": token_is_prepared,
+                "token_is_sorted": is_sorted,
+                "token_is_generated": is_generated,
+                "token_step3_saved": token_step3_saved,
+                "token_start_no": token_start_no,
+                "token_end_no": token_end_no,
+                "token_edit_candidates": edit_candidates,
+                "token_name_length_limit": int(name_length_limit),
+                "token_article_toggles": article_toggle_rows,
+                "token_filter_state": filter_state,
+                "token_filtered_rows": filtered_rows,
+                "token_open_section": open_section,
+                "token_sync_required": _token_generation_sync_required(self.request, session, dataset) if session else False,
+                "can_create_edit": self.request.user.has_module_permission(self.module_key, "create_edit"),
+                "can_export": self.request.user.has_module_permission(self.module_key, "export"),
+                "can_upload_replace": self.request.user.has_module_permission(self.module_key, "upload_replace"),
+            }
+        )
+        return context
+
+    def get(self, request, *args, **kwargs):
+        session = _phase2_selected_session(request)
+        if request.GET.get("export") and session and request.user.has_module_permission(self.module_key, "export"):
+            dataset = _token_generation_saved_dataset(session)
+            if not dataset["rows"]:
+                messages.warning(request, "Sync or upload token data first.")
+                return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+            response = HttpResponse(content_type="text/csv")
+            timestamp = timezone.localtime().strftime("%d_%b_%y_%H_%M")
+            response["Content-Disposition"] = f'attachment; filename="4_Master_Data_Token_{timestamp}.csv"'
+            writer = csv.DictWriter(response, fieldnames=dataset["headers"])
+            writer.writeheader()
+            for row in dataset["rows"]:
+                writer.writerow(row)
+            return response
+        return self.render_to_response(self.get_context_data(selected_session=session))
+
+    def post(self, request, *args, **kwargs):
+        session = _phase2_selected_session(request)
+        if not session:
+            messages.error(request, "Create or select a session first.")
+            return HttpResponseRedirect(reverse("ui:token-generation"))
+        if not request.user.has_module_permission(self.module_key, "create_edit"):
+            messages.error(request, "You do not have permission to update token data.")
+            return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+
+        action = (request.POST.get("action") or "").strip()
+        if action == "sync_data":
+            dataset = _token_generation_source_dataset(session)
+            _token_generation_store_dataset(
+                session=session,
+                dataset=dataset,
+                source_name=f"Synced from Sequence List ({session.session_name})",
+                user=request.user,
+            )
+            _token_generation_set_stage_state(
+                request,
+                session,
+                token_print_saved=False,
+                source_sync_marker=_token_generation_latest_source_marker(session),
+            )
+            request.session["token_generation_open_section"] = ""
+            messages.success(
+                request,
+                (
+                    f"Token Generation synced {len(dataset['rows'])} row(s). "
+                    f"Previous-stage data loaded successfully."
+                ),
+            )
+            return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+
+        if action == "upload_csv":
+            if not request.user.has_module_permission(self.module_key, "upload_replace"):
+                messages.error(request, "You do not have permission to upload token data.")
+                return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+            uploaded_file = request.FILES.get("file")
+            if not uploaded_file:
+                messages.error(request, "Choose a CSV file to upload.")
+                return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+            reader = _csv_reader_from_upload(uploaded_file)
+            source_headers = list(reader.fieldnames or [])
+            source_rows = list(reader)
+            dataset = {
+                "headers": source_headers,
+                "rows": source_rows,
+                "blank_summary": _token_generation_empty_value_summary(source_rows, source_headers),
+                "quality_checks": _token_generation_quality_checks(source_rows),
+            }
+            _token_generation_store_dataset(
+                session=session,
+                dataset=dataset,
+                source_name=uploaded_file.name,
+                user=request.user,
+            )
+            _token_generation_set_stage_state(
+                request,
+                session,
+                token_print_saved=False,
+                source_sync_marker="",
+            )
+            request.session["token_generation_open_section"] = ""
+            messages.success(
+                request,
+                (
+                    f"Uploaded {len(dataset['rows'])} row(s) into Token Generation. "
+                    f"Previous-stage data loaded successfully."
+                ),
+            )
+            return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+
+        saved_dataset = _token_generation_saved_dataset(session)
+        if not saved_dataset["rows"]:
+            messages.warning(request, "Sync or upload token data first.")
+            return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+        if _token_generation_sync_required(request, session, saved_dataset):
+            messages.warning(request, "Click Sync Data first to load the latest Sequence List data before continuing.")
+            return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+
+        if action == "exclude_selected_rows":
+            selected_indices = {
+                _phase2_parse_number(value)
+                for value in request.POST.getlist("selected_row_index")
+                if str(value).strip()
+            }
+            selected_indices = {int(value) for value in selected_indices if value is not None}
+            original_rows = [dict(row) for row in saved_dataset["rows"]]
+            filtered_rows = [
+                row for index, row in enumerate(original_rows)
+                if index not in selected_indices
+            ]
+            removed_count = len(original_rows) - len(filtered_rows)
+            filtered_headers = [
+                header for header in list(saved_dataset["headers"] or [])
+                if header not in {"Start Token No", "End Token No"}
+            ]
+            for row in filtered_rows:
+                row.pop("Start Token No", None)
+                row.pop("End Token No", None)
+            saved_dataset["headers"] = filtered_headers
+            saved_dataset["rows"] = filtered_rows
+            _token_generation_store_dataset(
+                session=session,
+                dataset=saved_dataset,
+                source_name=saved_dataset["source_name"] or f"Rule-filtered Token Data ({session.session_name})",
+                user=request.user,
+            )
+            _token_generation_set_stage_state(request, session, token_print_saved=False)
+            request.session["token_generation_open_section"] = "transformations"
+            messages.success(
+                request,
+                f"Transformation rules applied. Removed {removed_count} selected row(s). Source data is unchanged.",
+            )
+            return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+
+        if action == "run_data_prep":
+            prepared_dataset = _token_generation_prepare_dataset(saved_dataset["rows"], saved_dataset["headers"])
+            invalid_value_summary = _token_generation_invalid_value_summary(prepared_dataset["rows"])
+            if invalid_value_summary:
+                request.session["token_generation_prep_validation_summary"] = invalid_value_summary
+                request.session["token_generation_open_section"] = "step1"
+                issue_text = ", ".join(
+                    f"{entry['label']} ({entry['count']})"
+                    for entry in invalid_value_summary
+                )
+                messages.error(
+                    request,
+                    f"Step 1 data prep is blocked. After filling empty values, values below 1 were found in: {issue_text}. Please fix the source data first.",
+                )
+                return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+            _token_generation_store_dataset(
+                session=session,
+                dataset=prepared_dataset,
+                source_name=saved_dataset["source_name"] or f"Prepared Token Data ({session.session_name})",
+                user=request.user,
+            )
+            _token_generation_set_stage_state(request, session, token_print_saved=False)
+            request.session["token_generation_open_section"] = "step1"
+            messages.success(request, "Step 1 data prep completed. Names, blanks, sorting, and duplicate checks are ready.")
+            return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+
+        if action in {"sort_data", "save_adjustments"}:
+            if not (bool(saved_dataset["rows"]) and all("Names" in row for row in saved_dataset["rows"])):
+                request.session["token_generation_open_section"] = "step2"
+                messages.warning(request, "Run Step 1 data prep before saving name changes.")
+                return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+            rows = [dict(row) for row in saved_dataset["rows"]]
+            replacements_applied = 0
+            for original_name, replacement_name in request.POST.items():
+                if original_name.startswith("replace_name__"):
+                    source = original_name.replace("replace_name__", "", 1)
+                    source = source.replace("__SLASH__", "/")
+                    replacement = (replacement_name or "").strip()
+                    if replacement:
+                        for row in rows:
+                            if str(row.get("Names") or "") == source:
+                                row["Names"] = replacement
+                                replacements_applied += 1
+                if original_name.startswith("replace_token_name__"):
+                    source = original_name.replace("replace_token_name__", "", 1)
+                    source = source.replace("__SLASH__", "/")
+                    replacement = (replacement_name or "").strip()
+                    if replacement:
+                        for row in rows:
+                            if str(row.get("Token Name") or "") == source:
+                                row["Token Name"] = replacement
+                                replacements_applied += 1
+            saved_dataset["rows"] = _token_generation_sort_dataset(rows)
+            _token_generation_store_dataset(
+                session=session,
+                dataset=saved_dataset,
+                source_name=saved_dataset["source_name"] or f"Sorted Token Data ({session.session_name})",
+                user=request.user,
+            )
+            _token_generation_set_stage_state(request, session, token_print_saved=False)
+            request.session["token_generation_open_section"] = "step2"
+            messages.success(request, f"Step 2 adjustments saved. {replacements_applied} replacement(s) were applied.")
+            return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+
+        if action == "save_token_print":
+            if not (bool(saved_dataset["rows"]) and all("Names" in row for row in saved_dataset["rows"])):
+                request.session["token_generation_open_section"] = "step3"
+                messages.warning(request, "Run Step 1 data prep before updating token print settings.")
+                return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+            rows = [dict(row) for row in saved_dataset["rows"]]
+            skip_items = {
+                value.strip()
+                for value in request.POST.getlist("skip_label_item")
+                if str(value).strip()
+            }
+            for row in rows:
+                requested_item = str(row.get("Requested Item") or "").strip()
+                if requested_item in skip_items:
+                    row["Token Print for ARTL"] = "0"
+                else:
+                    _token_generation_token_print_flag(row)
+            saved_dataset["rows"] = rows
+            _token_generation_store_dataset(
+                session=session,
+                dataset=saved_dataset,
+                source_name=saved_dataset["source_name"] or f"Token Print Updated ({session.session_name})",
+                user=request.user,
+            )
+            _token_generation_set_stage_state(request, session, token_print_saved=True)
+            request.session["token_generation_open_section"] = "step3"
+            messages.success(request, "Step 3 token print settings were saved.")
+            return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+
+        if action == "generate_tokens":
+            rows = saved_dataset["rows"]
+            if not (bool(rows) and all("Names" in row for row in rows)):
+                request.session["token_generation_open_section"] = "step4"
+                messages.warning(request, "Run Step 1 data prep before generating token numbers.")
+                return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+            if not _token_generation_is_sorted(rows):
+                request.session["token_generation_open_section"] = "step4"
+                messages.warning(request, "Complete Step 2 adjustments before generating token numbers.")
+                return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+            if not _token_generation_stage_state(request, session).get("token_print_saved"):
+                request.session["token_generation_open_section"] = "step4"
+                messages.warning(request, "Complete Step 3 token print review before generating token numbers.")
+                return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+            generated_dataset = _token_generation_generate_dataset(rows, saved_dataset["headers"])
+            saved_dataset["rows"] = generated_dataset["rows"]
+            saved_dataset["headers"] = generated_dataset["headers"]
+            _token_generation_store_dataset(
+                session=session,
+                dataset=saved_dataset,
+                source_name=saved_dataset["source_name"] or f"Generated Token Data ({session.session_name})",
+                user=request.user,
+            )
+            request.session["token_generation_open_section"] = "step4"
+            start_no = min(
+                (_phase2_parse_number(row.get("Start Token No")) or 0)
+                for row in saved_dataset["rows"]
+                if (_phase2_parse_number(row.get("Start Token No")) or 0) > 0
+            ) if saved_dataset["rows"] else 0
+            end_no = max(
+                (_phase2_parse_number(row.get("End Token No")) or 0)
+                for row in saved_dataset["rows"]
+                if (_phase2_parse_number(row.get("End Token No")) or 0) > 0
+            ) if saved_dataset["rows"] else 0
+            messages.success(request, f"Token numbers generated. Starting: {start_no}, Ending: {end_no}")
+            return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+
+        return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+
+
+class LabelGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
+    module_key = models.ModuleKeyChoices.LABELS
+    permission_action = "view"
+    template_name = "dashboard/labels.html"
+
+    def _build_download_response(self, request, session, download_kind):
+        dataset = _labels_saved_dataset(session)
+        rows = dataset["rows"]
+        if not rows:
+            messages.warning(request, "Sync or upload label data first.")
+            return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+        if _labels_sync_required(request, session, dataset):
+            messages.warning(request, "Click Sync Data first to load the latest Token Generation data before downloading labels.")
+            return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+        if not _labels_has_generated_tokens(rows):
+            messages.warning(request, "Generate token numbers in Token Generation before downloading labels.")
+            return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+
+        stage_state = _labels_stage_state(request, session)
+        large_items = set(stage_state["large_items"])
+        audit = _labels_audit_download(rows, download_kind=download_kind, large_items=large_items)
+        if not audit["ready"]:
+            if audit["expected_labels"] <= 0:
+                messages.warning(request, audit["reason"] or "No matching labels are available for this download yet.")
+            else:
+                messages.warning(
+                    request,
+                    (
+                        f"Label check failed for this download. Expected labels: {audit['expected_labels']}, "
+                        f"generated labels: {audit['actual_labels']}, duplicate tokens: {audit['duplicate_tokens']}, "
+                        f"invalid ranges: {audit['invalid_range_rows']}."
+                    ),
+                )
+            return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+
+        def token_qty(row):
+            return (_phase2_parse_number(row.get("Token Quantity")) or 0)
+
+        def is_printable_article(row):
+            return token_qty(row) > 0 and (_phase2_parse_number(row.get("Token Print for ARTL")) or 0) != 0
+
+        def sort_by_name_and_start(row):
+            return (
+                str(row.get("Names") or "").strip(),
+                _phase2_parse_number(row.get("Start Token No")) or 0,
+            )
+
+        label_buffer = None
+        filename = None
+
+        if download_kind == "article_12l_separate":
+            if not stage_state.get("large_items_saved"):
+                messages.warning(request, "Select 2L Items first before downloading article labels.")
+                return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+            entries = _labels_expand_entries(
+                rows,
+                row_filter=lambda row: is_printable_article(row) and str(row.get("Requested Item") or "").strip() not in large_items,
+                group_by=lambda row: str(row.get("Token Name") or row.get("Requested Item") or "").strip(),
+            )
+            label_buffer = services.generate_mnp_labels_pdf(entries, layout="12L", mode="separate")
+            filename = _labels_download_filename("1_Article_Labels_S")
+        elif download_kind == "article_12l_continuous":
+            if not stage_state.get("large_items_saved"):
+                messages.warning(request, "Select 2L Items first before downloading article labels.")
+                return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+            entries = _labels_expand_entries(
+                rows,
+                row_filter=lambda row: is_printable_article(row) and str(row.get("Requested Item") or "").strip() not in large_items,
+            )
+            label_buffer = services.generate_mnp_labels_pdf(entries, layout="12L", mode="continuous")
+            filename = _labels_download_filename("1_Article_Labels_C")
+        elif download_kind == "article_2l_continuous":
+            if not stage_state.get("large_items_saved"):
+                messages.warning(request, "Select 2L Items first before downloading article labels.")
+                return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+            entries = _labels_expand_entries(
+                rows,
+                row_filter=lambda row: token_qty(row) > 0 and str(row.get("Requested Item") or "").strip() in large_items,
+            )
+            label_buffer = services.generate_mnp_labels_pdf(entries, layout="2L", mode="continuous")
+            filename = _labels_download_filename("2_Article_2L_Labels")
+        elif download_kind == "district_separate":
+            entries = _labels_expand_entries(
+                rows,
+                row_filter=lambda row: token_qty(row) > 0 and str(row.get("Beneficiary Type") or "").strip() == "District",
+                group_by=lambda row: str(row.get("Names") or "").strip(),
+                sort_key=sort_by_name_and_start,
+            )
+            label_buffer = services.generate_mnp_labels_pdf(entries, layout="12L", mode="separate")
+            filename = _labels_download_filename("3_District_Labels_S")
+        elif download_kind == "district_continuous":
+            entries = _labels_expand_entries(
+                rows,
+                row_filter=lambda row: token_qty(row) > 0 and str(row.get("Beneficiary Type") or "").strip() == "District",
+                sort_key=sort_by_name_and_start,
+            )
+            label_buffer = services.generate_mnp_labels_pdf(entries, layout="12L", mode="continuous")
+            filename = _labels_download_filename("3_District_Labels_C")
+        elif download_kind == "institution":
+            entries = _labels_expand_entries(
+                rows,
+                row_filter=lambda row: token_qty(row) > 0 and str(row.get("Beneficiary Type") or "").strip() == "Institutions",
+                sort_key=sort_by_name_and_start,
+            )
+            label_buffer = services.generate_mnp_labels_pdf(entries, layout="12L", mode="continuous")
+            filename = _labels_download_filename("5_Institution_Labels")
+        elif download_kind == "public":
+            entries = _labels_expand_entries(
+                rows,
+                row_filter=lambda row: token_qty(row) > 0 and str(row.get("Beneficiary Type") or "").strip() == "Public",
+                sort_key=sort_by_name_and_start,
+            )
+            label_buffer = services.generate_mnp_labels_pdf(entries, layout="12L", mode="continuous")
+            filename = _labels_download_filename("5_Public_Labels")
+        elif download_kind == "chair_separate":
+            entries = _labels_expand_entries(
+                rows,
+                row_filter=lambda row: (_phase2_parse_number(row.get("Token Print for ARTL")) or 0) != 0,
+                group_by=lambda row: str(row.get("Token Name") or row.get("Requested Item") or "").strip(),
+            )
+            label_buffer = services.generate_mnp_labels_pdf(entries, layout="12L", mode="separate")
+            filename = _labels_download_filename("Chair_Labels_S")
+        elif download_kind == "chair_continuous":
+            entries = _labels_expand_entries(
+                rows,
+                row_filter=lambda row: token_qty(row) > 0,
+            )
+            label_buffer = services.generate_mnp_labels_pdf(entries, layout="12L", mode="continuous")
+            filename = _labels_download_filename("Chair_Labels_C")
+        else:
+            messages.warning(request, "Unknown label download requested.")
+            return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+
+        response = HttpResponse(label_buffer.getvalue(), content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        session = kwargs.get("selected_session") or _phase2_selected_session(self.request)
+        dataset = _labels_saved_dataset(session) if session else {"headers": [], "rows": [], "source_name": "", "saved_at": None}
+        rows = dataset["rows"]
+        stage_state = _labels_stage_state(self.request, session) if session else {"large_items": list(LABELS_DEFAULT_2L_ITEMS)}
+        available_items = _labels_available_requested_items(rows)
+        large_items = stage_state["large_items"] if session else list(LABELS_DEFAULT_2L_ITEMS)
+        label_audits = {
+            "article_12l_continuous": _labels_audit_download(rows, download_kind="article_12l_continuous", large_items=large_items) if rows else {},
+            "article_12l_separate": _labels_audit_download(rows, download_kind="article_12l_separate", large_items=large_items) if rows else {},
+            "article_2l_continuous": _labels_audit_download(rows, download_kind="article_2l_continuous", large_items=large_items) if rows else {},
+            "district_continuous": _labels_audit_download(rows, download_kind="district_continuous", large_items=large_items) if rows else {},
+            "district_separate": _labels_audit_download(rows, download_kind="district_separate", large_items=large_items) if rows else {},
+            "institution": _labels_audit_download(rows, download_kind="institution", large_items=large_items) if rows else {},
+            "public": _labels_audit_download(rows, download_kind="public", large_items=large_items) if rows else {},
+            "chair_continuous": _labels_audit_download(rows, download_kind="chair_continuous", large_items=large_items) if rows else {},
+            "chair_separate": _labels_audit_download(rows, download_kind="chair_separate", large_items=large_items) if rows else {},
+        }
+        context.update(
+            {
+                "page_title": "Labels",
+                "selected_session": session,
+                "label_row_count": len(rows),
+                "label_column_count": len(dataset["headers"]),
+                "label_saved_at_display": timezone.localtime(dataset["saved_at"]).strftime("%d/%m/%Y %I:%M %p") if dataset["saved_at"] else "",
+                "label_source_name": str(dataset["source_name"] or "").replace(" (Event)", ""),
+                "label_has_generated_tokens": _labels_has_generated_tokens(rows),
+                "label_sync_required": _labels_sync_required(self.request, session, dataset) if session else False,
+                "label_large_items_saved": bool(stage_state.get("large_items_saved")),
+                "label_large_items": available_items,
+                "label_selected_large_items": stage_state["large_items"],
+                "label_audits": label_audits,
+                "can_create_edit": self.request.user.has_module_permission(self.module_key, "create_edit"),
+                "can_export": self.request.user.has_module_permission(self.module_key, "export"),
+                "can_upload_replace": self.request.user.has_module_permission(self.module_key, "upload_replace"),
+            }
+        )
+        return context
+
+    def get(self, request, *args, **kwargs):
+        session = _phase2_selected_session(request)
+        if request.GET.get("download") and session and request.user.has_module_permission(self.module_key, "export"):
+            return self._build_download_response(request, session, str(request.GET.get("download") or "").strip())
+        return self.render_to_response(self.get_context_data(selected_session=session))
+
+    def post(self, request, *args, **kwargs):
+        session = _phase2_selected_session(request)
+        if not session:
+            messages.error(request, "Create or select a session first.")
+            return HttpResponseRedirect(reverse("ui:labels"))
+        if not request.user.has_module_permission(self.module_key, "create_edit"):
+            messages.error(request, "You do not have permission to update label data.")
+            return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+
+        action = (request.POST.get("action") or "").strip()
+        if action == "sync_data":
+            dataset = _labels_source_dataset(session)
+            _labels_store_dataset(
+                session=session,
+                dataset=dataset,
+                source_name="Synced from Token Generation",
+                user=request.user,
+            )
+            _labels_set_stage_state(
+                request,
+                session,
+                source_sync_marker=_labels_latest_source_marker(session),
+                large_items_saved=False,
+            )
+            messages.success(request, f"Labels synced {len(dataset['rows'])} row(s) from Token Generation.")
+            return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+
+        if action == "upload_csv":
+            if not request.user.has_module_permission(self.module_key, "upload_replace"):
+                messages.error(request, "You do not have permission to upload label data.")
+                return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+            uploaded_file = request.FILES.get("file")
+            if not uploaded_file:
+                messages.error(request, "Choose a CSV or Excel file to upload.")
+                return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+            dataset = {
+                "headers": [],
+                "rows": [],
+            }
+            dataset["headers"], dataset["rows"] = _tabular_rows_from_upload(uploaded_file)
+            dataset = _labels_normalize_dataset(dataset)
+            _labels_store_dataset(
+                session=session,
+                dataset=dataset,
+                source_name=uploaded_file.name,
+                user=request.user,
+            )
+            _labels_set_stage_state(
+                request,
+                session,
+                source_sync_marker="",
+                large_items_saved=False,
+            )
+            messages.success(request, f"Uploaded {len(dataset['rows'])} row(s) into Labels.")
+            return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+
+        if action == "save_large_items":
+            selected_large_items = [
+                value.strip()
+                for value in request.POST.getlist("large_label_item")
+                if str(value).strip()
+            ]
+            _labels_set_stage_state(request, session, large_items=selected_large_items, large_items_saved=True)
+            messages.success(request, "2L article label selections saved.")
+            return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+
+        if action == "download_custom_labels":
+            if not request.user.has_module_permission(self.module_key, "export"):
+                messages.error(request, "You do not have permission to download labels.")
+                return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+            custom_layout = str(request.POST.get("custom_label_layout") or "12L").strip().upper()
+            if custom_layout not in {"12L", "2L"}:
+                custom_layout = "12L"
+            custom_texts = request.POST.getlist("custom_label_text")
+            custom_counts = request.POST.getlist("custom_label_count")
+            custom_entries = []
+            for index, raw_text in enumerate(custom_texts):
+                text_value = str(raw_text or "").strip()
+                count_value = _phase2_parse_number(custom_counts[index] if index < len(custom_counts) else None) or 0
+                if text_value and count_value > 0:
+                    custom_entries.append({"text": text_value, "count": count_value})
+            if not custom_entries:
+                single_text = (request.POST.get("custom_label_text") or "").strip()
+                single_count = _phase2_parse_number(request.POST.get("custom_label_count")) or 0
+                if single_text and single_count > 0:
+                    custom_entries.append({"text": single_text, "count": single_count})
+            if not custom_entries:
+                messages.error(request, "Enter at least one custom label text and a count greater than zero.")
+                return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+            label_buffer = services.generate_mnp_custom_labels_pdf(custom_entries, layout=custom_layout)
+            response = HttpResponse(label_buffer.getvalue(), content_type="application/pdf")
+            response["Content-Disposition"] = f'attachment; filename="{_labels_download_filename("Custom_Labels")}"'
+            return response
+
+        return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
 
 
 def _import_district_master_csv(uploaded_file):

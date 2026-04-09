@@ -130,7 +130,7 @@
     body.sidebar-collapsed .sidebar-footer .btn-subtle { width: 40px; min-width: 40px; padding: 0; justify-content: center; }
     body.sidebar-collapsed .sidebar-footer .btn-subtle .menu-label { display: none; }
     .topbar {
-      height: 64px; padding: 12px 18px; border-bottom: 1px solid var(--border-color);
+      height: 56px; padding: 8px 12px; border-bottom: 1px solid var(--border-color);
       display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.96);
       position: sticky; top: 0; z-index: 5;
     }
@@ -181,10 +181,10 @@
       border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 999px; padding: 8px 14px; text-decoration: none; color: #1d4ed8;
     }
     .btn-subtle:hover { background: #dbeafe; color: #1e40af; }
-    .app-content { padding: 22px 24px; min-width: 0; }
+    .app-content { padding: 12px; min-width: 0; }
     .wrap { width: 100%; max-width: none; margin: 0; }
 
-    .card { background: rgba(255, 255, 255, 0.99); border: 1px solid var(--border-color); border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: 0 12px 32px rgba(37, 99, 235, 0.08); }
+    .card { background: rgba(255, 255, 255, 0.99); border: 1px solid var(--border-color); border-radius: 16px; padding: 14px; margin-bottom: 12px; box-shadow: 0 12px 32px rgba(37, 99, 235, 0.08); }
     .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
     .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     .row { display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 16px; }
@@ -353,10 +353,10 @@
     }
     .messages-floating {
       position: fixed;
-      top: 78px;
+      top: 68px;
       left: 50%;
       transform: translateX(-50%);
-      width: min(560px, calc(100vw - 32px));
+      width: min(560px, calc(100vw - 24px));
       z-index: 26;
       pointer-events: none;
     }
@@ -797,11 +797,11 @@
       }
       .row { grid-template-columns: 1fr; }
       .grid2 { grid-template-columns: 1fr; }
-      .app-content { padding: 16px; }
+      .app-content { padding: 10px; }
       .app-main { min-height: auto; }
       .topbar {
         height: auto;
-        padding: 14px 16px;
+        padding: 10px;
         align-items: flex-start;
         gap: 12px;
         flex-direction: column;
@@ -954,12 +954,12 @@
           </a>
           {% if module_perms.application_entry.can_view %}
             <a href="{% url 'ui:master-entry' %}" class="menu-item {% if 'master-entry' in request.path %}active{% endif %}">
-              <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M7 4h10l3 3v13H7z"/><path d="M17 4v4h4"/><path d="M10 12h7"/><path d="M10 16h7"/></svg></span><span class="menu-label">Application Entry</span>
+              <span class="menu-icon"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3h6v3H9z"/><path d="M8 11h8"/><path d="M8 15h8"/><path d="M8 19h5"/></svg></span><span class="menu-label">Application Entry</span>
             </a>
           {% endif %}
           {% if module_perms.article_management.can_view %}
             <a href="{% url 'ui:article-list' %}" class="menu-item {% if 'article' in request.path %}active{% endif %}">
-              <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M5 7h14v10H5z"/><path d="M9 7V5h6v2"/><path d="M9 12h6"/></svg></span><span class="menu-label">Article Management</span>
+              <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M12 3 5 7v10l7 4 7-4V7z"/><path d="M5 7l7 4 7-4"/><path d="M12 11v10"/></svg></span><span class="menu-label">Article Management</span>
             </a>
           {% endif %}
           {% if module_perms.inventory_planning.can_view %}
@@ -971,7 +971,7 @@
             <div class="menu-group {% if 'fund-request' in request.path %}open{% endif %}">
               <div class="menu-group-head">
                 <button class="menu-item menu-group-trigger {% if 'fund-request' in request.path and not request.GET.status %}active{% endif %}" type="button" aria-label="Toggle Order & Fund Request submenu" aria-expanded="{% if 'fund-request' in request.path %}true{% else %}false{% endif %}">
-                  <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"/><path d="M8 11h8"/><path d="M12 7V4"/><path d="M12 20v-3"/></svg></span><span class="menu-label">Order & Fund Request</span>
+                  <span class="menu-icon"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/><path d="M16 4v4"/><path d="M14 6h4"/></svg></span><span class="menu-label">Order & Fund Request</span>
                 </button>
               </div>
               <div class="menu-subitems">
@@ -979,6 +979,29 @@
                 <a href="{% url 'ui:fund-request-list' %}?status=submitted" class="menu-subitem {% if 'fund-request' in request.path and request.GET.status == 'submitted' %}active{% endif %}">Submitted</a>
               </div>
             </div>
+          {% endif %}
+          {% if module_perms.seat_allocation.can_view or module_perms.sequence_list.can_view or module_perms.token_generation.can_view or module_perms.labels.can_view %}
+            <div class="menu-divider"></div>
+            {% if module_perms.seat_allocation.can_view %}
+              <a href="{% url 'ui:seat-allocation-list' %}" class="menu-item {% if '/ui/seat-allocation/' in request.path %}active{% endif %}">
+                <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M7 11V7a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v4"/><path d="M6 11h12"/><path d="M8 11v6"/><path d="M16 11v6"/><path d="M5 20h14"/></svg></span><span class="menu-label">Seat Allocation</span>
+              </a>
+            {% endif %}
+            {% if module_perms.sequence_list.can_view %}
+              <a href="{% url 'ui:sequence-list' %}" class="menu-item {% if '/ui/sequence-list/' in request.path %}active{% endif %}">
+                <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M10 7h10"/><path d="M10 12h10"/><path d="M10 17h10"/><path d="M4 7h2"/><path d="M4 12h2"/><path d="M4 17h2"/><path d="M6 5v14"/><path d="m6 19 2-2"/><path d="m6 19-2-2"/></svg></span><span class="menu-label">Sequence List</span>
+              </a>
+            {% endif %}
+            {% if module_perms.token_generation.can_view %}
+              <a href="{% url 'ui:token-generation' %}" class="menu-item {% if '/ui/token-generation/' in request.path %}active{% endif %}">
+                <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M4 9a2 2 0 0 0 2-2h12a2 2 0 0 0 2 2v2a2 2 0 0 0-2 2H6a2 2 0 0 0-2-2Z"/><path d="M12 7v10"/><path d="M10 12h4"/></svg></span><span class="menu-label">Token Generation</span>
+              </a>
+            {% endif %}
+            {% if module_perms.labels.can_view %}
+              <a href="{% url 'ui:labels' %}" class="menu-item {% if '/ui/labels/' in request.path %}active{% endif %}">
+                <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M11 4H5v6l7 7 6-6-7-7Z"/><path d="M7.5 7.5h.01"/><path d="M13 7h6v6l-7 7"/></svg></span><span class="menu-label">Labels</span>
+              </a>
+            {% endif %}
           {% endif %}
           {% if module_perms.user_management.can_view or module_perms.base_files.can_view or module_perms.purchase_order.can_view or module_perms.audit_logs.can_view %}
             <div class="menu-divider"></div>
@@ -1001,7 +1024,13 @@
               <a href="{% url 'ui:application-audit-logs' %}" class="menu-item {% if 'applications/audit-logs' in request.path %}active{% endif %}">
                 <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M12 8v5l3 2"/><path d="M20 12a8 8 0 1 1-2.34-5.66"/></svg></span><span class="menu-label">Audit Logs</span>
               </a>
+              <a href="{% url 'ui:reconciliation-overview' %}" class="menu-item {% if '/ui/reconciliation/' in request.path %}active{% endif %}">
+                <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/><path d="M4 4h16v16H4z"/></svg></span><span class="menu-label">Reconciliation</span>
+              </a>
             {% endif %}
+            <a href="{% url 'ui:user-guide' %}" class="menu-item {% if '/ui/user-guide/' in request.path %}active{% endif %}">
+              <span class="menu-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/></svg></span><span class="menu-label">User Guide</span>
+            </a>
           {% endif %}
           {% endwith %}
         {% else %}

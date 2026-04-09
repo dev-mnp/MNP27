@@ -1,0 +1,601 @@
+{% extends "base.html" %}
+{% block content %}
+  <style>
+    .labels-shell { display: grid; gap: 18px; }
+    .labels-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .labels-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .labels-actions form { margin: 0; }
+    .labels-status {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      padding: 12px 16px;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: #fff;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    .labels-status strong { color: var(--text-primary); }
+    .labels-table { display: grid; gap: 12px; }
+    .labels-row {
+      background: #fff;
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      padding: 16px 18px;
+      display: grid;
+      gap: 12px;
+    }
+    .labels-row-main {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+    }
+    .labels-row-title {
+      display: grid;
+      gap: 4px;
+    }
+    .labels-row-description {
+      grid-column: 1 / -1;
+      color: var(--text-secondary);
+      font-size: 14px;
+      line-height: 1.45;
+      margin-top: -6px;
+    }
+    .labels-row h2,
+    .labels-row h3,
+    .labels-row p { margin: 0; }
+    .labels-row p { color: var(--text-secondary); font-size: 14px; }
+    .labels-inline { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .labels-list {
+      max-height: 220px;
+      overflow: auto;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 10px 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .labels-check {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+    }
+    .labels-download {
+      position: relative;
+      justify-self: end;
+    }
+    .labels-download summary {
+      list-style: none;
+      cursor: pointer;
+    }
+    .labels-download summary::-webkit-details-marker {
+      display: none;
+    }
+    .labels-menu {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 8px);
+      min-width: 210px;
+      background: #fff;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+      padding: 8px;
+      display: grid;
+      gap: 6px;
+      z-index: 5;
+    }
+    .labels-menu a {
+      display: block;
+      padding: 10px 12px;
+      border-radius: 10px;
+      color: var(--text-primary);
+      text-decoration: none;
+      font-size: 14px;
+    }
+    .labels-menu a:hover {
+      background: rgba(37, 99, 235, 0.08);
+    }
+    .labels-menu a[aria-disabled="true"] {
+      pointer-events: none;
+      opacity: 0.5;
+    }
+    .labels-save-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .labels-mini-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(37, 99, 235, 0.2);
+      background: rgba(37, 99, 235, 0.08);
+      color: #1d4ed8;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .labels-mini-btn:hover {
+      background: rgba(37, 99, 235, 0.12);
+    }
+    .labels-mini-meta {
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .labels-row-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .labels-custom-table {
+      display: grid;
+      gap: 10px;
+    }
+    .labels-custom-line {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) 120px;
+      gap: 10px;
+    }
+    .labels-custom-actions {
+      display: grid;
+      grid-template-columns: minmax(140px, 160px) auto auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .labels-audit-grid {
+      display: grid;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .labels-audit-grid.cols-2 {
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+    }
+    .labels-audit-grid.cols-3 {
+      grid-template-columns: repeat(3, minmax(220px, 1fr));
+    }
+    .labels-audit-card {
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: #fcfdff;
+      display: grid;
+      gap: 6px;
+    }
+    .labels-audit-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .labels-audit-ok {
+      color: #15803d;
+    }
+    .labels-audit-bad {
+      color: #b45309;
+    }
+    .labels-audit-neutral {
+      color: #64748b;
+    }
+    .labels-audit-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .labels-audit-reason {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    @media (max-width: 980px) {
+      .labels-row-main {
+        grid-template-columns: 1fr;
+      }
+      .labels-download {
+        justify-self: start;
+      }
+      .labels-row-description {
+        margin-top: 0;
+      }
+      .labels-custom-line,
+      .labels-custom-actions,
+      .labels-audit-grid.cols-2,
+      .labels-audit-grid.cols-3 {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+
+  <section class="labels-shell">
+    <div class="labels-header">
+      <div>
+        <h1 style="margin:0;">Labels</h1>
+        <p style="margin:6px 0 0; color:var(--text-secondary);">Download label PDFs from the synced token-stage file.</p>
+      </div>
+      <div class="labels-actions">
+        {% if can_create_edit %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="sync_data">
+            {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+            <button class="btn" type="submit">Sync Data</button>
+          </form>
+        {% endif %}
+        {% if can_upload_replace %}
+          <form id="labels-upload-form" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="upload_csv">
+            {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+            <input id="labels-upload-input" type="file" name="file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsm,application/vnd.ms-excel.sheet.macroEnabled.12" style="display:none;">
+            <button id="labels-upload-trigger" class="btn btn-subtle" type="button">Upload</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="labels-status">
+      <span><strong>Total rows:</strong> {{ label_row_count }}</span>
+      <span><strong>Total columns:</strong> {{ label_column_count }}</span>
+      <span><strong>Last sync / upload:</strong> {{ label_saved_at_display|default:"Not loaded yet" }}</span>
+      <span><strong>Source:</strong> {{ label_source_name|default:"Not loaded yet" }}</span>
+    </div>
+    {% if label_sync_required %}
+      <div class="token-muted">Token Generation has changed since the last label sync. Click <strong>Sync Data</strong> before downloading labels.</div>
+    {% endif %}
+    <div class="token-muted">Sync Data checks whether each label set is ready. The PDF itself is generated only when you click <strong>Download</strong>.</div>
+
+    <div class="labels-table">
+      <section class="labels-row">
+        <div class="labels-row-main">
+          <div class="labels-row-title">
+            <h2>Article Labels</h2>
+          </div>
+          <div></div>
+          <div class="labels-row-description">
+            Labels to be posted on articles. Save the 2L item selection first, then download the 12L or 2L sheet.
+          </div>
+        </div>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="save_large_items">
+          {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+          <div class="labels-list">
+            {% for item in label_large_items %}
+              <label class="labels-check">
+                <input type="checkbox" name="large_label_item" value="{{ item }}" {% if item in label_selected_large_items %}checked{% endif %}>
+                <span>{{ item }}</span>
+              </label>
+            {% empty %}
+              <div class="token-muted">Sync or upload label data first.</div>
+            {% endfor %}
+          </div>
+          <div class="labels-save-row">
+            <div class="labels-inline">
+              <button class="labels-mini-btn" type="submit" {% if not label_row_count %}disabled{% endif %}>Save 2L Items</button>
+              <span class="labels-mini-meta">{{ label_selected_large_items|length }} selected</span>
+            </div>
+            <details class="labels-download labels-row-actions">
+              <summary><span class="btn" {% if not label_has_generated_tokens or label_sync_required or not label_large_items_saved %}aria-disabled="true"{% endif %}>Download</span></summary>
+              <div class="labels-menu">
+                <a href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=article_12l_continuous" {% if not label_has_generated_tokens or label_sync_required or not label_large_items_saved or not label_audits.article_12l_continuous.ready %}aria-disabled="true"{% endif %}>12L Continuous</a>
+                <a href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=article_12l_separate" {% if not label_has_generated_tokens or label_sync_required or not label_large_items_saved or not label_audits.article_12l_separate.ready %}aria-disabled="true"{% endif %}>12L Separate</a>
+                <a href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=article_2l_continuous" {% if not label_has_generated_tokens or label_sync_required or not label_large_items_saved or not label_audits.article_2l_continuous.ready %}aria-disabled="true"{% endif %}>2L Continuous</a>
+              </div>
+            </details>
+          </div>
+        </form>
+        <div class="labels-audit-grid cols-3">
+          <div class="labels-audit-card">
+            <div class="labels-audit-title">
+              <span>12L Continuous</span>
+              <span class="{% if label_audits.article_12l_continuous.status_class == 'ok' %}labels-audit-ok{% elif label_audits.article_12l_continuous.status_class == 'neutral' %}labels-audit-neutral{% else %}labels-audit-bad{% endif %}">
+                {{ label_audits.article_12l_continuous.status_label|default:"Check" }}
+              </span>
+            </div>
+            <div class="labels-audit-meta">
+              <span>Rows: {{ label_audits.article_12l_continuous.included_rows|default:0 }}</span>
+              <span>Expected: {{ label_audits.article_12l_continuous.expected_labels|default:0 }}</span>
+              <span>Generated: {{ label_audits.article_12l_continuous.actual_labels|default:0 }}</span>
+              <span>Tokens: {{ label_audits.article_12l_continuous.first_token|default:0 }} - {{ label_audits.article_12l_continuous.last_token|default:0 }}</span>
+              <span>Duplicates: {{ label_audits.article_12l_continuous.duplicate_tokens|default:0 }}</span>
+              <span>Invalid: {{ label_audits.article_12l_continuous.invalid_range_rows|default:0 }}</span>
+              <span>Pages: {{ label_audits.article_12l_continuous.page_count|default:0 }}</span>
+            </div>
+            {% if label_audits.article_12l_continuous.reason %}<div class="labels-audit-reason">{{ label_audits.article_12l_continuous.reason }}</div>{% endif %}
+          </div>
+          <div class="labels-audit-card">
+            <div class="labels-audit-title">
+              <span>12L Separate</span>
+              <span class="{% if label_audits.article_12l_separate.status_class == 'ok' %}labels-audit-ok{% elif label_audits.article_12l_separate.status_class == 'neutral' %}labels-audit-neutral{% else %}labels-audit-bad{% endif %}">
+                {{ label_audits.article_12l_separate.status_label|default:"Check" }}
+              </span>
+            </div>
+            <div class="labels-audit-meta">
+              <span>Rows: {{ label_audits.article_12l_separate.included_rows|default:0 }}</span>
+              <span>Expected: {{ label_audits.article_12l_separate.expected_labels|default:0 }}</span>
+              <span>Generated: {{ label_audits.article_12l_separate.actual_labels|default:0 }}</span>
+              <span>Tokens: {{ label_audits.article_12l_separate.first_token|default:0 }} - {{ label_audits.article_12l_separate.last_token|default:0 }}</span>
+              <span>Duplicates: {{ label_audits.article_12l_separate.duplicate_tokens|default:0 }}</span>
+              <span>Invalid: {{ label_audits.article_12l_separate.invalid_range_rows|default:0 }}</span>
+              <span>Pages: {{ label_audits.article_12l_separate.page_count|default:0 }}</span>
+            </div>
+            {% if label_audits.article_12l_separate.reason %}<div class="labels-audit-reason">{{ label_audits.article_12l_separate.reason }}</div>{% endif %}
+          </div>
+          <div class="labels-audit-card">
+            <div class="labels-audit-title">
+              <span>2L Continuous</span>
+              <span class="{% if label_audits.article_2l_continuous.status_class == 'ok' %}labels-audit-ok{% elif label_audits.article_2l_continuous.status_class == 'neutral' %}labels-audit-neutral{% else %}labels-audit-bad{% endif %}">
+                {{ label_audits.article_2l_continuous.status_label|default:"Check" }}
+              </span>
+            </div>
+            <div class="labels-audit-meta">
+              <span>Rows: {{ label_audits.article_2l_continuous.included_rows|default:0 }}</span>
+              <span>Expected: {{ label_audits.article_2l_continuous.expected_labels|default:0 }}</span>
+              <span>Generated: {{ label_audits.article_2l_continuous.actual_labels|default:0 }}</span>
+              <span>Tokens: {{ label_audits.article_2l_continuous.first_token|default:0 }} - {{ label_audits.article_2l_continuous.last_token|default:0 }}</span>
+              <span>Duplicates: {{ label_audits.article_2l_continuous.duplicate_tokens|default:0 }}</span>
+              <span>Invalid: {{ label_audits.article_2l_continuous.invalid_range_rows|default:0 }}</span>
+              <span>Pages: {{ label_audits.article_2l_continuous.page_count|default:0 }}</span>
+            </div>
+            {% if label_audits.article_2l_continuous.reason %}<div class="labels-audit-reason">{{ label_audits.article_2l_continuous.reason }}</div>{% endif %}
+          </div>
+        </div>
+      </section>
+
+      <section class="labels-row">
+        <div class="labels-row-main">
+          <div class="labels-row-title">
+            <h3>District Labels</h3>
+          </div>
+          <div></div>
+          <div class="labels-row-description">Badges given to districts for token-based article collection.</div>
+          <details class="labels-download">
+            <summary><span class="btn" {% if not label_has_generated_tokens or label_sync_required %}aria-disabled="true"{% endif %}>Download</span></summary>
+            <div class="labels-menu">
+              <a href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=district_continuous" {% if not label_has_generated_tokens or label_sync_required or not label_audits.district_continuous.ready %}aria-disabled="true"{% endif %}>Continuous</a>
+              <a href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=district_separate" {% if not label_has_generated_tokens or label_sync_required or not label_audits.district_separate.ready %}aria-disabled="true"{% endif %}>Separate</a>
+            </div>
+          </details>
+        </div>
+        <div class="labels-audit-grid cols-2">
+          <div class="labels-audit-card">
+            <div class="labels-audit-title">
+              <span>Continuous</span>
+              <span class="{% if label_audits.district_continuous.status_class == 'ok' %}labels-audit-ok{% elif label_audits.district_continuous.status_class == 'neutral' %}labels-audit-neutral{% else %}labels-audit-bad{% endif %}">
+                {{ label_audits.district_continuous.status_label|default:"Check" }}
+              </span>
+            </div>
+            <div class="labels-audit-meta">
+              <span>Rows: {{ label_audits.district_continuous.included_rows|default:0 }}</span>
+              <span>Expected: {{ label_audits.district_continuous.expected_labels|default:0 }}</span>
+              <span>Generated: {{ label_audits.district_continuous.actual_labels|default:0 }}</span>
+              <span>Tokens: {{ label_audits.district_continuous.first_token|default:0 }} - {{ label_audits.district_continuous.last_token|default:0 }}</span>
+              <span>Duplicates: {{ label_audits.district_continuous.duplicate_tokens|default:0 }}</span>
+              <span>Invalid: {{ label_audits.district_continuous.invalid_range_rows|default:0 }}</span>
+              <span>Pages: {{ label_audits.district_continuous.page_count|default:0 }}</span>
+            </div>
+            {% if label_audits.district_continuous.reason %}<div class="labels-audit-reason">{{ label_audits.district_continuous.reason }}</div>{% endif %}
+          </div>
+          <div class="labels-audit-card">
+            <div class="labels-audit-title">
+              <span>Separate</span>
+              <span class="{% if label_audits.district_separate.status_class == 'ok' %}labels-audit-ok{% elif label_audits.district_separate.status_class == 'neutral' %}labels-audit-neutral{% else %}labels-audit-bad{% endif %}">
+                {{ label_audits.district_separate.status_label|default:"Check" }}
+              </span>
+            </div>
+            <div class="labels-audit-meta">
+              <span>Rows: {{ label_audits.district_separate.included_rows|default:0 }}</span>
+              <span>Expected: {{ label_audits.district_separate.expected_labels|default:0 }}</span>
+              <span>Generated: {{ label_audits.district_separate.actual_labels|default:0 }}</span>
+              <span>Tokens: {{ label_audits.district_separate.first_token|default:0 }} - {{ label_audits.district_separate.last_token|default:0 }}</span>
+              <span>Duplicates: {{ label_audits.district_separate.duplicate_tokens|default:0 }}</span>
+              <span>Invalid: {{ label_audits.district_separate.invalid_range_rows|default:0 }}</span>
+              <span>Pages: {{ label_audits.district_separate.page_count|default:0 }}</span>
+            </div>
+            {% if label_audits.district_separate.reason %}<div class="labels-audit-reason">{{ label_audits.district_separate.reason }}</div>{% endif %}
+          </div>
+        </div>
+      </section>
+
+      <section class="labels-row">
+        <div class="labels-row-main">
+          <div class="labels-row-title">
+            <h3>Institution Labels</h3>
+          </div>
+          <div></div>
+          <div class="labels-row-description">Badges to be given to institution beneficiaries.</div>
+          <form method="get" class="labels-inline" style="justify-self:end;">
+            {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+            <input type="hidden" name="download" value="institution">
+            <button class="btn" type="submit" {% if not label_has_generated_tokens or label_sync_required or not label_audits.institution.ready %}disabled{% endif %}>Download</button>
+          </form>
+        </div>
+        <div class="labels-audit-grid">
+          <div class="labels-audit-card">
+            <div class="labels-audit-title">
+              <span>Institution Labels</span>
+              <span class="{% if label_audits.institution.status_class == 'ok' %}labels-audit-ok{% elif label_audits.institution.status_class == 'neutral' %}labels-audit-neutral{% else %}labels-audit-bad{% endif %}">
+                {{ label_audits.institution.status_label|default:"Check" }}
+              </span>
+            </div>
+            <div class="labels-audit-meta">
+              <span>Rows: {{ label_audits.institution.included_rows|default:0 }}</span>
+              <span>Expected: {{ label_audits.institution.expected_labels|default:0 }}</span>
+              <span>Generated: {{ label_audits.institution.actual_labels|default:0 }}</span>
+              <span>Tokens: {{ label_audits.institution.first_token|default:0 }} - {{ label_audits.institution.last_token|default:0 }}</span>
+              <span>Duplicates: {{ label_audits.institution.duplicate_tokens|default:0 }}</span>
+              <span>Invalid: {{ label_audits.institution.invalid_range_rows|default:0 }}</span>
+              <span>Pages: {{ label_audits.institution.page_count|default:0 }}</span>
+            </div>
+            {% if label_audits.institution.reason %}<div class="labels-audit-reason">{{ label_audits.institution.reason }}</div>{% endif %}
+          </div>
+        </div>
+      </section>
+
+      <section class="labels-row">
+        <div class="labels-row-main">
+          <div class="labels-row-title">
+            <h3>Public Labels</h3>
+          </div>
+          <div></div>
+          <div class="labels-row-description">Badges to be given to public beneficiaries.</div>
+          <form method="get" class="labels-inline" style="justify-self:end;">
+            {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+            <input type="hidden" name="download" value="public">
+            <button class="btn" type="submit" {% if not label_has_generated_tokens or label_sync_required or not label_audits.public.ready %}disabled{% endif %}>Download</button>
+          </form>
+        </div>
+        <div class="labels-audit-grid">
+          <div class="labels-audit-card">
+            <div class="labels-audit-title">
+              <span>Public Labels</span>
+              <span class="{% if label_audits.public.status_class == 'ok' %}labels-audit-ok{% elif label_audits.public.status_class == 'neutral' %}labels-audit-neutral{% else %}labels-audit-bad{% endif %}">
+                {{ label_audits.public.status_label|default:"Check" }}
+              </span>
+            </div>
+            <div class="labels-audit-meta">
+              <span>Rows: {{ label_audits.public.included_rows|default:0 }}</span>
+              <span>Expected: {{ label_audits.public.expected_labels|default:0 }}</span>
+              <span>Generated: {{ label_audits.public.actual_labels|default:0 }}</span>
+              <span>Tokens: {{ label_audits.public.first_token|default:0 }} - {{ label_audits.public.last_token|default:0 }}</span>
+              <span>Duplicates: {{ label_audits.public.duplicate_tokens|default:0 }}</span>
+              <span>Invalid: {{ label_audits.public.invalid_range_rows|default:0 }}</span>
+              <span>Pages: {{ label_audits.public.page_count|default:0 }}</span>
+            </div>
+            {% if label_audits.public.reason %}<div class="labels-audit-reason">{{ label_audits.public.reason }}</div>{% endif %}
+          </div>
+        </div>
+      </section>
+
+      <section class="labels-row">
+        <div class="labels-row-main">
+          <div class="labels-row-title">
+            <h3>Chair Labels</h3>
+          </div>
+          <div></div>
+          <div class="labels-row-description">Chair or seat labels for arranged token distribution.</div>
+          <details class="labels-download">
+            <summary><span class="btn" {% if not label_has_generated_tokens or label_sync_required %}aria-disabled="true"{% endif %}>Download</span></summary>
+            <div class="labels-menu">
+              <a href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=chair_continuous" {% if not label_has_generated_tokens or label_sync_required or not label_audits.chair_continuous.ready %}aria-disabled="true"{% endif %}>Continuous</a>
+              <a href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=chair_separate" {% if not label_has_generated_tokens or label_sync_required or not label_audits.chair_separate.ready %}aria-disabled="true"{% endif %}>Separate</a>
+            </div>
+          </details>
+        </div>
+        <div class="labels-audit-grid cols-2">
+          <div class="labels-audit-card">
+            <div class="labels-audit-title">
+              <span>Continuous</span>
+              <span class="{% if label_audits.chair_continuous.status_class == 'ok' %}labels-audit-ok{% elif label_audits.chair_continuous.status_class == 'neutral' %}labels-audit-neutral{% else %}labels-audit-bad{% endif %}">
+                {{ label_audits.chair_continuous.status_label|default:"Check" }}
+              </span>
+            </div>
+            <div class="labels-audit-meta">
+              <span>Rows: {{ label_audits.chair_continuous.included_rows|default:0 }}</span>
+              <span>Expected: {{ label_audits.chair_continuous.expected_labels|default:0 }}</span>
+              <span>Generated: {{ label_audits.chair_continuous.actual_labels|default:0 }}</span>
+              <span>Tokens: {{ label_audits.chair_continuous.first_token|default:0 }} - {{ label_audits.chair_continuous.last_token|default:0 }}</span>
+              <span>Duplicates: {{ label_audits.chair_continuous.duplicate_tokens|default:0 }}</span>
+              <span>Invalid: {{ label_audits.chair_continuous.invalid_range_rows|default:0 }}</span>
+              <span>Pages: {{ label_audits.chair_continuous.page_count|default:0 }}</span>
+            </div>
+            {% if label_audits.chair_continuous.reason %}<div class="labels-audit-reason">{{ label_audits.chair_continuous.reason }}</div>{% endif %}
+          </div>
+          <div class="labels-audit-card">
+            <div class="labels-audit-title">
+              <span>Separate</span>
+              <span class="{% if label_audits.chair_separate.status_class == 'ok' %}labels-audit-ok{% elif label_audits.chair_separate.status_class == 'neutral' %}labels-audit-neutral{% else %}labels-audit-bad{% endif %}">
+                {{ label_audits.chair_separate.status_label|default:"Check" }}
+              </span>
+            </div>
+            <div class="labels-audit-meta">
+              <span>Rows: {{ label_audits.chair_separate.included_rows|default:0 }}</span>
+              <span>Expected: {{ label_audits.chair_separate.expected_labels|default:0 }}</span>
+              <span>Generated: {{ label_audits.chair_separate.actual_labels|default:0 }}</span>
+              <span>Tokens: {{ label_audits.chair_separate.first_token|default:0 }} - {{ label_audits.chair_separate.last_token|default:0 }}</span>
+              <span>Duplicates: {{ label_audits.chair_separate.duplicate_tokens|default:0 }}</span>
+              <span>Invalid: {{ label_audits.chair_separate.invalid_range_rows|default:0 }}</span>
+              <span>Pages: {{ label_audits.chair_separate.page_count|default:0 }}</span>
+            </div>
+            {% if label_audits.chair_separate.reason %}<div class="labels-audit-reason">{{ label_audits.chair_separate.reason }}</div>{% endif %}
+          </div>
+        </div>
+      </section>
+
+      <section class="labels-row">
+        <div class="labels-row-main">
+          <div class="labels-row-title">
+            <h3>Custom Labels</h3>
+          </div>
+          <div></div>
+          <div class="labels-row-description">Type one or more custom label names with counts, choose 12L or 2L, then download the sheet.</div>
+          <form method="post" class="labels-inline" style="justify-self:end;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="download_custom_labels">
+            {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+            <div class="labels-custom-table" id="custom-label-lines">
+              <div class="labels-custom-line">
+                <input class="input" type="text" name="custom_label_text" placeholder="Label text">
+                <input class="input" type="number" name="custom_label_count" min="1" value="1">
+              </div>
+            </div>
+            <div class="labels-custom-actions">
+              <select class="input" name="custom_label_layout">
+                <option value="12L">12L</option>
+                <option value="2L">2L</option>
+              </select>
+              <button id="custom-label-add" class="btn btn-subtle" type="button">Add Row</button>
+              <button class="btn" type="submit" {% if not can_export %}disabled{% endif %}>Download</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </div>
+
+    {% if not label_has_generated_tokens and label_row_count %}
+      <div class="token-muted">Generate token numbers in Token Generation before downloading label PDFs.</div>
+    {% endif %}
+  </section>
+
+  <script>
+    (function () {
+      const uploadInput = document.getElementById('labels-upload-input');
+      const uploadTrigger = document.getElementById('labels-upload-trigger');
+      const uploadForm = document.getElementById('labels-upload-form');
+      const customAdd = document.getElementById('custom-label-add');
+      const customLines = document.getElementById('custom-label-lines');
+
+      if (uploadInput && uploadTrigger && uploadForm) {
+        uploadTrigger.addEventListener('click', () => uploadInput.click());
+        uploadInput.addEventListener('change', () => {
+          if (uploadInput.files && uploadInput.files.length) {
+            uploadForm.submit();
+          }
+        });
+      }
+
+      if (customAdd && customLines) {
+        customAdd.addEventListener('click', () => {
+          const row = document.createElement('div');
+          row.className = 'labels-custom-line';
+          row.innerHTML = `
+            <input class="input" type="text" name="custom_label_text" placeholder="Label text">
+            <input class="input" type="number" name="custom_label_count" min="1" value="1">
+          `;
+          customLines.appendChild(row);
+        });
+      }
+    })();
+  </script>
+{% endblock %}

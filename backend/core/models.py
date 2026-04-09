@@ -57,6 +57,10 @@ class ModuleKeyChoices(models.TextChoices):
     ARTICLE_MANAGEMENT = "article_management", "Article Management"
     BASE_FILES = "base_files", "Base Files"
     INVENTORY_PLANNING = "inventory_planning", "Inventory Planning"
+    SEAT_ALLOCATION = "seat_allocation", "Seat Allocation"
+    SEQUENCE_LIST = "sequence_list", "Sequence List"
+    TOKEN_GENERATION = "token_generation", "Token Generation"
+    LABELS = "labels", "Labels"
     ORDER_FUND_REQUEST = "order_fund_request", "Order & Fund Request"
     PURCHASE_ORDER = "purchase_order", "Purchase Order"
     AUDIT_LOGS = "audit_logs", "Audit Logs"
@@ -98,6 +102,26 @@ MODULE_PERMISSION_DEFINITIONS = [
         "actions": ("view", "export"),
     },
     {
+        "key": ModuleKeyChoices.SEAT_ALLOCATION,
+        "label": "Seat Allocation",
+        "actions": ("view", "create_edit", "export", "upload_replace"),
+    },
+    {
+        "key": ModuleKeyChoices.SEQUENCE_LIST,
+        "label": "Sequence List",
+        "actions": ("view", "create_edit", "export"),
+    },
+    {
+        "key": ModuleKeyChoices.TOKEN_GENERATION,
+        "label": "Token Generation",
+        "actions": ("view", "create_edit", "export", "upload_replace"),
+    },
+    {
+        "key": ModuleKeyChoices.LABELS,
+        "label": "Labels",
+        "actions": ("view", "create_edit", "export", "upload_replace"),
+    },
+    {
         "key": ModuleKeyChoices.ORDER_FUND_REQUEST,
         "label": "Order & Fund Request",
         "actions": ("view", "create_edit", "delete", "submit", "reopen"),
@@ -129,6 +153,10 @@ ROLE_MODULE_PERMISSION_DEFAULTS = {
         ModuleKeyChoices.ARTICLE_MANAGEMENT: {"view", "create_edit"},
         ModuleKeyChoices.BASE_FILES: {"view", "upload_replace"},
         ModuleKeyChoices.INVENTORY_PLANNING: {"view", "export"},
+        ModuleKeyChoices.SEAT_ALLOCATION: {"view", "create_edit", "export", "upload_replace"},
+        ModuleKeyChoices.SEQUENCE_LIST: {"view", "create_edit", "export"},
+        ModuleKeyChoices.TOKEN_GENERATION: {"view", "create_edit", "export", "upload_replace"},
+        ModuleKeyChoices.LABELS: {"view", "create_edit", "export", "upload_replace"},
         ModuleKeyChoices.ORDER_FUND_REQUEST: {"view", "create_edit", "submit", "reopen"},
         ModuleKeyChoices.PURCHASE_ORDER: {"view", "create_edit", "submit", "reopen"},
         ModuleKeyChoices.AUDIT_LOGS: set(),
@@ -139,6 +167,10 @@ ROLE_MODULE_PERMISSION_DEFAULTS = {
         ModuleKeyChoices.ARTICLE_MANAGEMENT: {"view"},
         ModuleKeyChoices.BASE_FILES: {"view"},
         ModuleKeyChoices.INVENTORY_PLANNING: {"view"},
+        ModuleKeyChoices.SEAT_ALLOCATION: {"view"},
+        ModuleKeyChoices.SEQUENCE_LIST: {"view"},
+        ModuleKeyChoices.TOKEN_GENERATION: {"view"},
+        ModuleKeyChoices.LABELS: {"view"},
         ModuleKeyChoices.ORDER_FUND_REQUEST: {"view"},
         ModuleKeyChoices.PURCHASE_ORDER: {"view"},
         ModuleKeyChoices.AUDIT_LOGS: set(),
@@ -664,6 +696,7 @@ class PurchaseOrder(BaseTimestampedModel):
     purchase_order_number = models.CharField(max_length=80, unique=True, blank=True, null=True)
     status = models.CharField(max_length=12, choices=FundRequestStatusChoices.choices, default=FundRequestStatusChoices.DRAFT)
     vendor_name = models.CharField(max_length=255)
+    gst_number = models.CharField(max_length=64, blank=True, null=True)
     vendor_address = models.TextField()
     vendor_city = models.CharField(max_length=120)
     vendor_state = models.CharField(max_length=120)
@@ -722,6 +755,208 @@ class PurchaseOrderItem(BaseTimestampedModel):
         self.total_value = unit_price * quantity
         self.save(update_fields=["quantity", "unit_price", "total_value"])
 
+
+class EventSession(BaseTimestampedModel):
+    session_name = models.CharField(max_length=120, unique=True)
+    event_year = models.PositiveIntegerField(default=timezone.localdate().year)
+    is_active = models.BooleanField(default=False)
+    notes = models.TextField(blank=True, null=True)
+    phase2_source_name = models.CharField(max_length=255, blank=True, null=True)
+    phase2_source_row_count = models.PositiveIntegerField(default=0)
+    phase2_grouped_row_count = models.PositiveIntegerField(default=0)
+    phase2_source_quantity_total = models.PositiveIntegerField(default=0)
+    phase2_grouped_quantity_total = models.PositiveIntegerField(default=0)
+    phase2_reconciliation_snapshot = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = "event_sessions"
+        verbose_name = "Event Session"
+        verbose_name_plural = "Event Sessions"
+        ordering = ["-is_active", "-event_year", "session_name"]
+        indexes = [
+            models.Index(fields=["is_active"]),
+            models.Index(fields=["event_year"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.session_name
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.is_active:
+            self.__class__.objects.exclude(pk=self.pk).filter(is_active=True).update(is_active=False)
+
+
+class SeatAllocationRow(BaseTimestampedModel):
+    session = models.ForeignKey(EventSession, on_delete=models.CASCADE, related_name="seat_allocation_rows")
+    source_file_name = models.CharField(max_length=255, blank=True, null=True)
+    application_number = models.CharField(max_length=120, blank=True, null=True)
+    beneficiary_name = models.CharField(max_length=255, blank=True, null=True)
+    district = models.CharField(max_length=255, blank=True, null=True)
+    requested_item = models.CharField(max_length=255)
+    quantity = models.PositiveIntegerField(default=0)
+    waiting_hall_quantity = models.PositiveIntegerField(default=0)
+    token_quantity = models.PositiveIntegerField(default=0)
+    beneficiary_type = models.CharField(max_length=30, blank=True, null=True)
+    item_type = models.CharField(max_length=30, blank=True, null=True)
+    comments = models.TextField(blank=True, null=True)
+    master_row = models.JSONField(default=dict, blank=True)
+    master_headers = models.JSONField(default=list, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    sequence_no = models.PositiveIntegerField(blank=True, null=True)
+    created_by = models.ForeignKey(
+        AppUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_seat_allocation_rows",
+    )
+    updated_by = models.ForeignKey(
+        AppUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_seat_allocation_rows",
+    )
+
+    class Meta:
+        db_table = "seat_allocation_rows"
+        verbose_name = "Seat Allocation Row"
+        verbose_name_plural = "Seat Allocation Rows"
+        ordering = ["session", "sort_order", "district", "requested_item", "application_number", "id"]
+        indexes = [
+            models.Index(fields=["session", "sort_order"]),
+            models.Index(fields=["session", "beneficiary_type"]),
+            models.Index(fields=["session", "requested_item"]),
+            models.Index(fields=["session", "sequence_no"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.application_number or '-'} - {self.requested_item}"
+
+
+class SequenceListItem(BaseTimestampedModel):
+    session = models.ForeignKey(EventSession, on_delete=models.CASCADE, related_name="sequence_list_items")
+    item_name = models.CharField(max_length=255)
+    sequence_no = models.PositiveIntegerField()
+    sort_order = models.PositiveIntegerField(default=0)
+    created_by = models.ForeignKey(
+        AppUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_sequence_list_items",
+    )
+    updated_by = models.ForeignKey(
+        AppUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_sequence_list_items",
+    )
+
+    class Meta:
+        db_table = "sequence_list_items"
+        verbose_name = "Sequence List Item"
+        verbose_name_plural = "Sequence List Items"
+        ordering = ["session", "sequence_no", "sort_order", "item_name"]
+        indexes = [
+            models.Index(fields=["session", "sequence_no"]),
+            models.Index(fields=["session", "sort_order"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=["session", "item_name"], name="uniq_sequence_item_per_session"),
+            models.UniqueConstraint(fields=["session", "sequence_no"], name="uniq_sequence_no_per_session"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.sequence_no} - {self.item_name}"
+
+
+class TokenGenerationRow(BaseTimestampedModel):
+    session = models.ForeignKey(EventSession, on_delete=models.CASCADE, related_name="token_generation_rows")
+    source_file_name = models.CharField(max_length=255, blank=True, null=True)
+    application_number = models.CharField(max_length=120, blank=True, null=True)
+    beneficiary_name = models.CharField(max_length=255, blank=True, null=True)
+    requested_item = models.CharField(max_length=255, blank=True, null=True)
+    beneficiary_type = models.CharField(max_length=30, blank=True, null=True)
+    sequence_no = models.PositiveIntegerField(blank=True, null=True)
+    start_token_no = models.PositiveIntegerField(blank=True, null=True)
+    end_token_no = models.PositiveIntegerField(blank=True, null=True)
+    row_data = models.JSONField(default=dict, blank=True)
+    headers = models.JSONField(default=list, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_by = models.ForeignKey(
+        AppUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_token_generation_rows",
+    )
+    updated_by = models.ForeignKey(
+        AppUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_token_generation_rows",
+    )
+
+    class Meta:
+        db_table = "token_generation_rows"
+        verbose_name = "Token Generation Row"
+        verbose_name_plural = "Token Generation Rows"
+        ordering = ["session", "sort_order", "sequence_no", "requested_item", "application_number", "id"]
+        indexes = [
+            models.Index(fields=["session", "sort_order"]),
+            models.Index(fields=["session", "sequence_no"]),
+            models.Index(fields=["session", "requested_item"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.application_number or '-'} - {self.requested_item or '-'}"
+
+
+class LabelGenerationRow(BaseTimestampedModel):
+    session = models.ForeignKey(EventSession, on_delete=models.CASCADE, related_name="label_generation_rows")
+    source_file_name = models.CharField(max_length=255, blank=True, null=True)
+    application_number = models.CharField(max_length=120, blank=True, null=True)
+    beneficiary_name = models.CharField(max_length=255, blank=True, null=True)
+    requested_item = models.CharField(max_length=255, blank=True, null=True)
+    beneficiary_type = models.CharField(max_length=30, blank=True, null=True)
+    sequence_no = models.PositiveIntegerField(blank=True, null=True)
+    start_token_no = models.PositiveIntegerField(blank=True, null=True)
+    end_token_no = models.PositiveIntegerField(blank=True, null=True)
+    row_data = models.JSONField(default=dict, blank=True)
+    headers = models.JSONField(default=list, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_by = models.ForeignKey(
+        AppUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_label_generation_rows",
+    )
+    updated_by = models.ForeignKey(
+        AppUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_label_generation_rows",
+    )
+
+    class Meta:
+        db_table = "label_generation_rows"
+        verbose_name = "Label Generation Row"
+        verbose_name_plural = "Label Generation Rows"
+        ordering = ["session", "sort_order", "sequence_no", "requested_item", "application_number", "id"]
+        indexes = [
+            models.Index(fields=["session", "sort_order"]),
+            models.Index(fields=["session", "sequence_no"]),
+            models.Index(fields=["session", "requested_item"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.application_number or '-'} - {self.requested_item or '-'}"
 
 class DistrictBeneficiaryEntry(BaseTimestampedModel):
     district = models.ForeignKey(DistrictMaster, on_delete=models.RESTRICT, related_name="beneficiaries")

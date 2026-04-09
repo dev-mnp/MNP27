@@ -81,7 +81,7 @@
       <div class="toolbar" style="margin-top: 0; justify-content: space-between;">
         <div>
           <h3 class="section-title" style="margin: 0 0 4px;">Items</h3>
-          <div class="section-note">Use the headers to sort the current rows. Institutions can have multiple articles or aids.</div>
+          <div class="section-note">Use the headers to sort the current rows. All items can include comments, and aids include additional beneficiary fields.</div>
         </div>
       </div>
 
@@ -91,9 +91,10 @@
           <col style="width: 38%;">
           <col style="width: 10%;">
           <col style="width: 16%;">
-          <col style="width: 13%;">
-          <col style="width: 13%;">
-          <col style="width: 8%;">
+          <col style="width: 12%;">
+          <col style="width: 12%;">
+          <col style="width: 16%;">
+          <col style="width: 6%;">
         </colgroup>
         <thead>
           <tr>
@@ -103,6 +104,7 @@
             <th><button class="table-sort-btn" type="button" data-sort-key="quantity">Quantity <span class="required-star">*</span> <span class="sort-indicator">⇅</span></button></th>
             <th><button class="table-sort-btn" type="button" data-sort-key="unit_cost">Unit Price <span class="required-star">*</span> <span class="sort-indicator">⇅</span></button></th>
             <th><button class="table-sort-btn" type="button" data-sort-key="total">Total <span class="sort-indicator">⇅</span></button></th>
+            <th>Comments</th>
             <th>Action</th>
           </tr>
         </thead>
@@ -110,6 +112,7 @@
           {% for row in institution_rows %}
             <tr class="institution-item-row">
               <td class="row-serial-cell">
+                <input type="hidden" name="entry_id" value="{{ row.entry_id|default:'' }}">
                 <div class="row-serial-wrap">
                   <span class="row-serial-label">{{ forloop.counter }}</span>
                   <button class="btn icon-btn aid-toggle-btn{% if row.item_type != 'Aid' %} is-hidden{% endif %}" type="button" title="Collapse aid details" aria-label="Collapse aid details" aria-expanded="{% if row.item_type == 'Aid' %}true{% else %}false{% endif %}">
@@ -143,31 +146,34 @@
                 <input class="line-total" type="hidden" value="0">
               </td>
               <td>
+                <textarea class="textarea inline-notes-input" name="notes" rows="2" placeholder="Comments" {% if row.item_type == 'Aid' %}hidden disabled{% endif %}>{{ row.notes }}</textarea>
+              </td>
+              <td>
                 <button class="btn btn-danger icon-btn remove-row-btn" type="button" title="Remove item" aria-label="Remove item">
                   <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
                 </button>
               </td>
             </tr>
-            <tr class="institution-item-aid-row" {% if row.item_type != "Aid" %}hidden{% endif %}>
+            <tr class="institution-item-aid-row" {% if row.item_type != 'Aid' %}hidden{% endif %}>
               <td colspan="8" class="aid-row-shell">
                 <div class="cheque-wrap aid-details-card">
-                  <div class="item-row-subfield">
+                  <div class="item-row-subfield aid-only-field">
                     <div class="item-row-subfield-label">Name of Beneficiary</div>
                     <input class="input beneficiary-name-input" name="name_of_beneficiary" value="{{ row.name_of_beneficiary }}" placeholder="Optional">
                   </div>
                   <div class="item-row-subfield item-row-details-block">
-                    <div class="item-row-subfield-label">Details</div>
-                    <textarea class="textarea notes-input item-notes" name="notes" rows="2" placeholder="Optional">{{ row.notes }}</textarea>
+                    <div class="item-row-subfield-label notes-field-label">Details / Comments</div>
+                    <textarea class="textarea notes-input item-notes" name="notes" rows="2" placeholder="Optional" {% if row.item_type != 'Aid' %}disabled{% endif %}>{{ row.notes }}</textarea>
                   </div>
-                  <div class="item-row-subfield">
+                  <div class="item-row-subfield aid-only-field">
                     <div class="item-row-subfield-label">Cheque / RTGS in Favour</div>
                     <textarea class="textarea cheque-input" name="cheque_rtgs_in_favour" rows="2">{{ row.cheque_rtgs_in_favour }}</textarea>
                   </div>
-                  <div class="item-row-subfield">
+                  <div class="item-row-subfield aid-only-field">
                     <div class="item-row-subfield-label">Aadhaar Number</div>
                     <input class="input aadhar-input" name="aadhar_number" value="{{ row.aadhar_number }}" placeholder="Optional">
                   </div>
-                  <div class="item-row-subfield">
+                  <div class="item-row-subfield aid-only-field">
                     <div class="item-row-subfield-label">Name of Institution</div>
                     <input class="input institution-name-input" name="name_of_institution" value="{{ row.name_of_institution }}" placeholder="Optional">
                   </div>
@@ -186,6 +192,7 @@
       <template id="institution-item-row-template">
         <tr class="institution-item-row">
           <td class="row-serial-cell">
+            <input type="hidden" name="entry_id" value="">
             <div class="row-serial-wrap">
               <span class="row-serial-label">1</span>
               <button class="btn icon-btn aid-toggle-btn is-hidden" type="button" title="Collapse aid details" aria-label="Collapse aid details" aria-expanded="false">
@@ -219,6 +226,9 @@
             <input class="line-total" type="hidden" value="0">
           </td>
           <td>
+            <textarea class="textarea inline-notes-input" name="notes" rows="2" placeholder="Comments"></textarea>
+          </td>
+          <td>
             <button class="btn btn-danger icon-btn remove-row-btn" type="button" title="Remove item" aria-label="Remove item">
               <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
             </button>
@@ -227,23 +237,23 @@
         <tr class="institution-item-aid-row" hidden>
           <td colspan="8" class="aid-row-shell">
             <div class="cheque-wrap aid-details-card">
-              <div class="item-row-subfield">
+              <div class="item-row-subfield aid-only-field">
                 <div class="item-row-subfield-label">Name of Beneficiary</div>
                 <input class="input beneficiary-name-input" name="name_of_beneficiary" value="" placeholder="Optional">
               </div>
               <div class="item-row-subfield item-row-details-block">
-                <div class="item-row-subfield-label">Details</div>
-                <textarea class="textarea notes-input item-notes" name="notes" rows="2" placeholder="Optional"></textarea>
+                <div class="item-row-subfield-label notes-field-label">Details / Comments</div>
+                <textarea class="textarea notes-input item-notes" name="notes" rows="2" placeholder="Optional" disabled></textarea>
               </div>
-              <div class="item-row-subfield">
+              <div class="item-row-subfield aid-only-field">
                 <div class="item-row-subfield-label">Cheque / RTGS in Favour</div>
                 <textarea class="textarea cheque-input" name="cheque_rtgs_in_favour" rows="2"></textarea>
               </div>
-              <div class="item-row-subfield">
+              <div class="item-row-subfield aid-only-field">
                 <div class="item-row-subfield-label">Aadhaar Number</div>
                 <input class="input aadhar-input" name="aadhar_number" value="" placeholder="Optional">
               </div>
-              <div class="item-row-subfield">
+              <div class="item-row-subfield aid-only-field">
                 <div class="item-row-subfield-label">Name of Institution</div>
                 <input class="input institution-name-input" name="name_of_institution" value="" placeholder="Optional">
               </div>
@@ -458,6 +468,9 @@
         const lineTotalDisplay = row.querySelector(".line-total-display");
         const duplicateIndicator = row.querySelector(".duplicate-indicator");
         const notesInput = aidRow?.querySelector(".notes-input");
+        const inlineNotesInput = row.querySelector(".inline-notes-input");
+        const notesLabel = aidRow?.querySelector(".notes-field-label");
+        const aidOnlyFields = aidRow ? Array.from(aidRow.querySelectorAll(".aid-only-field")) : [];
         const chequeWrap = aidRow?.querySelector(".cheque-wrap");
         const chequeInput = aidRow?.querySelector(".cheque-input");
         const aadharInput = aidRow?.querySelector(".aadhar-input");
@@ -465,6 +478,13 @@
         const qtyPlusBtn = row.querySelector(".qty-plus");
         const removeBtn = row.querySelector(".remove-row-btn");
         let lastArticleId = articleSelect.value;
+        const initialUnitCostValue = (unitCostInput.value || "").trim();
+
+        function syncNotes(target, value) {
+          if (target && target.value !== value) {
+            target.value = value;
+          }
+        }
 
         function syncAidToggle(showAid) {
           if (!aidToggleBtn) return;
@@ -489,15 +509,26 @@
             const beneficiaryNameInput = aidRow?.querySelector(".beneficiary-name-input");
             const institutionNameInput = aidRow?.querySelector(".institution-name-input");
             const collapsed = row.dataset.aidCollapsed === "true";
+            const hasSelection = !!selectedArticleId && selectedArticleId !== "__create_new__";
             if (aidRow) {
-              aidRow.hidden = !showCheque || collapsed;
+              aidRow.hidden = !showCheque || !hasSelection || collapsed;
+            }
+            aidOnlyFields.forEach(function(field) {
+              field.hidden = !showCheque;
+            });
+            if (notesLabel) {
+              notesLabel.textContent = "Details / Comments";
+            }
+            if (inlineNotesInput) {
+              inlineNotesInput.hidden = showCheque;
+              inlineNotesInput.disabled = showCheque;
+            }
+            if (notesInput) {
+              notesInput.disabled = !showCheque;
             }
             row.classList.toggle("row-has-aid-open", showCheque && !collapsed);
             if (!showCheque && beneficiaryNameInput) {
               beneficiaryNameInput.value = "";
-            }
-            if (!showCheque && notesInput) {
-              notesInput.value = "";
             }
             if (!showCheque && chequeInput) {
               chequeInput.value = "";
@@ -511,11 +542,13 @@
             syncAidToggle(showCheque);
           }
           if (articleCost > 0) {
-            unitCostInput.value = formatInputNumber(articleCost);
+            if (articleChanged || !unitCostInput.value.trim()) {
+              unitCostInput.value = formatInputNumber(articleCost);
+            }
             unitCostInput.readOnly = true;
           } else {
             if (articleChanged) {
-              unitCostInput.value = "0";
+              unitCostInput.value = initialUnitCostValue || "0";
             }
             unitCostInput.readOnly = false;
           }
@@ -544,6 +577,16 @@
         });
         quantityInput.addEventListener("input", updateRow);
         unitCostInput.addEventListener("input", updateRow);
+        if (inlineNotesInput && notesInput) {
+          inlineNotesInput.addEventListener("input", function() {
+            syncNotes(notesInput, inlineNotesInput.value);
+            updateSaveState();
+          });
+          notesInput.addEventListener("input", function() {
+            syncNotes(inlineNotesInput, notesInput.value);
+            updateSaveState();
+          });
+        }
         qtyMinusBtn.addEventListener("click", function() {
           const current = Math.max(1, Number(quantityInput.value || 1));
           quantityInput.value = Math.max(1, current - 1);
@@ -726,6 +769,8 @@
         }
         allowNavigation = true;
       });
+      form.addEventListener("input", updateSaveState);
+      form.addEventListener("change", updateSaveState);
 
       itemsBody.querySelectorAll(".institution-item-row").forEach(bindRow);
       if (!itemsBody.children.length) {

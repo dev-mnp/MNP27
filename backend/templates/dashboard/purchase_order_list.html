@@ -305,7 +305,7 @@
             <td>{{ purchase_order.created_at|date:"d/m/Y H:i" }}</td>
             <td style="text-align:left;">
               <div class="purchase-order-actions">
-                <a class="btn icon-btn po-download-btn" href="{% url 'ui:purchase-order-pdf' purchase_order.id %}" title="Download Purchase Order PDF" aria-label="Download Purchase Order PDF" target="_blank" rel="noopener">
+                <a class="btn icon-btn po-download-btn" href="{% url 'ui:purchase-order-pdf' purchase_order.id %}?v={{ purchase_order.updated_at|date:'U' }}" title="Download Purchase Order PDF" aria-label="Download Purchase Order PDF" target="_blank" rel="noopener">
                   <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
                 </a>
                 {% if can_create_edit and purchase_order.status == 'draft' %}
@@ -348,6 +348,10 @@
                   <div class="summary-meta-item">
                     <span class="summary-meta-label">Vendor Name</span>
                     <span>{{ purchase_order.vendor_name|default:"-" }}</span>
+                  </div>
+                  <div class="summary-meta-item">
+                    <span class="summary-meta-label">GST Number</span>
+                    <span>{{ purchase_order.gst_number|default:"-" }}</span>
                   </div>
                   <div class="summary-meta-item">
                     <span class="summary-meta-label">Status</span>

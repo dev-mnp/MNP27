@@ -404,6 +404,7 @@ class PurchaseOrderForm(forms.ModelForm):
         model = models.PurchaseOrder
         fields = [
             "vendor_name",
+            "gst_number",
             "vendor_address",
             "vendor_city",
             "vendor_state",
@@ -412,6 +413,7 @@ class PurchaseOrderForm(forms.ModelForm):
         ]
         widgets = {
             "vendor_name": forms.TextInput(attrs={"class": "input"}),
+            "gst_number": forms.TextInput(attrs={"class": "input"}),
             "vendor_address": forms.Textarea(attrs={"class": "textarea", "rows": 3}),
             "vendor_city": forms.TextInput(attrs={"class": "input"}),
             "vendor_state": forms.TextInput(attrs={"class": "input"}),

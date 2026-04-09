@@ -65,6 +65,7 @@
         <div class="small" style="color: var(--text-secondary);">{% if fund_request.status == "submitted" %}This request has already moved its mapped quantities to ordered in Inventory Planning.{% else %}This request is still a draft and has not changed Inventory Planning yet.{% endif %}</div>
       </div>
       <div class="actions-inline fund-request-actions">
+        <a class="btn" href="{{ back_url }}">Back</a>
         <a class="btn icon-btn fund-request-neutral-action" title="Download PDF" aria-label="Download PDF" href="{% url 'ui:fund-request-pdf' fund_request.id %}" target="_blank" rel="noopener">
           <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
         </a>
@@ -94,12 +95,11 @@
         <p style="margin: 0;"><strong>Type:</strong> {{ fund_request.get_fund_request_type_display }}</p>
         <p style="margin: 0;"><strong>Status:</strong> {{ fund_request.get_status_display }}</p>
         <p style="margin: 0;"><strong>Total:</strong> Rs.{{ fund_request.total_amount|rupees }}</p>
-        <p style="margin: 0;"><strong>Created by:</strong> {{ fund_request.created_by.email|default:"system" }}</p>
+        <p style="margin: 0;"><strong>Created by:</strong> {{ fund_request.created_by.get_full_name|default:fund_request.created_by.email|default:"system" }}</p>
         {% if fund_request.fund_request_type == "Aid" %}
           <p style="margin: 0;"><strong>Aid Type:</strong> {{ fund_request.aid_type|default:"-" }}</p>
         {% else %}
           <p style="margin: 0;"><strong>Supplier:</strong> {{ fund_request.supplier_name|default:"-" }}</p>
-          <p style="margin: 0;"><strong>GST No.:</strong> {{ fund_request.gst_number|default:"-" }}</p>
         {% endif %}
         <p style="margin: 0;"><strong>Inventory effect:</strong> {% if fund_request.status == "submitted" %}Moved to ordered{% else %}No inventory change until submit{% endif %}</p>
       </div>
@@ -118,29 +118,31 @@
     <table>
       <thead>
         <tr>
-          <th>Recipient</th>
+          <th>Beneficiary</th>
           <th>Type</th>
+          <th>Name of Beneficiary</th>
+          <th>Name of Institution</th>
+          <th>Aadhaar No.</th>
           <th>Details</th>
           <th>Fund requested</th>
-          <th>Aadhaar No.</th>
           <th>Cheque / RTGS in Favour</th>
-          <th>Cheque No.</th>
         </tr>
       </thead>
       <tbody>
-        {% for rec in fund_request.recipients.all %}
+        {% for rec in recipient_rows %}
           <tr>
-            <td>{{ rec.recipient_name }}</td>
+            <td>{{ rec.beneficiary_display|default:"-" }}</td>
             <td>{{ rec.beneficiary_type }}</td>
+            <td>{{ rec.name_of_beneficiary|default:"-" }}</td>
+            <td>{{ rec.name_of_institution|default:"-" }}</td>
+            <td>{{ rec.aadhar_number|default:"-" }}</td>
             <td>{{ rec.details|default:rec.notes|default:"-" }}</td>
             <td>{{ rec.fund_requested }}</td>
-            <td>{{ rec.aadhar_number|default:"-" }}</td>
             <td>{{ rec.cheque_in_favour|default:"-" }}</td>
-            <td>{{ rec.cheque_no|default:"-" }}</td>
           </tr>
         {% empty %}
           <tr>
-            <td colspan="7">No recipients added.</td>
+            <td colspan="8">No recipients added.</td>
           </tr>
         {% endfor %}
       </tbody>
@@ -154,31 +156,29 @@
         <tr>
           <th>Article</th>
           <th>Beneficiary</th>
-          <th>Supplier Article</th>
-          <th>Description</th>
+          <th>Vendor Name</th>
+          <th>GST No.</th>
           <th>Qty</th>
           <th>Unit</th>
           <th>Line value</th>
           <th>Cheque / RTGS in Favour</th>
-          <th>Cheque No.</th>
         </tr>
       </thead>
       <tbody>
-        {% for item in fund_request.articles.all %}
+        {% for item in article_rows %}
           <tr>
             <td>{{ item.article_name }}</td>
-            <td>{{ item.beneficiary }}</td>
-            <td>{{ item.supplier_article_name|default:"-" }}</td>
-            <td>{{ item.description|default:"-" }}</td>
+            <td>{{ item.beneficiary_display|default:"-" }}</td>
+            <td>{{ item.vendor_name|default:"-" }}</td>
+            <td>{{ item.gst_no|default:"-" }}</td>
             <td>{{ item.quantity }}</td>
             <td>{{ item.unit_price }}</td>
             <td>{{ item.value }}</td>
             <td>{{ item.cheque_in_favour|default:"-" }}</td>
-            <td>{{ item.cheque_no|default:"-" }}</td>
           </tr>
         {% empty %}
           <tr>
-            <td colspan="9">No items added.</td>
+            <td colspan="8">No items added.</td>
           </tr>
         {% endfor %}
       </tbody>

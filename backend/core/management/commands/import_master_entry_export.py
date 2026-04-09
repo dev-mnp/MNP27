@@ -32,22 +32,12 @@ def _int(value, default=0):
         return default
 
 
-def _legacy_disability_sample_values():
-    excluded = {
-        models.HandicappedStatusChoices.NO,
-        models.HandicappedStatusChoices.MIXED,
-        models.HandicappedStatusChoices.CEREBRAL_PALSY,
-        models.HandicappedStatusChoices.LEPROSY_CURED,
-        models.HandicappedStatusChoices.DWARFISM,
-        models.HandicappedStatusChoices.ACID_ATTACK_VICTIM,
-        models.HandicappedStatusChoices.MUSCULAR_DYSTROPHY,
-        models.HandicappedStatusChoices.AUTISM_SPECTRUM_DISORDER,
-    }
-    return [
-        value
-        for value, _label in models.HandicappedStatusChoices.choices
-        if value not in excluded
-    ]
+def _optional_text(row, *column_names):
+    for column_name in column_names:
+        value = _clean(row.get(column_name))
+        if value:
+            return value
+    return None
 
 
 class Command(BaseCommand):
@@ -90,7 +80,6 @@ class Command(BaseCommand):
             "Item Type",
             "Article Category",
             "Super Category Article",
-            "Requested Item Tk",
             "Comments",
         }
         missing = sorted(required_headers - set(rows[0].keys()))
@@ -115,7 +104,7 @@ class Command(BaseCommand):
                     "combo": "+" in article_name,
                 },
             )
-            payload["article_name_tk"] = payload["article_name_tk"] or _clean(row.get("Requested Item Tk"))
+            payload["article_name_tk"] = payload["article_name_tk"] or _optional_text(row, "Requested Item Tk", "Token Name") or ""
             payload["category"] = payload["category"] or _clean(row.get("Article Category"))
             payload["master_category"] = payload["master_category"] or _clean(row.get("Super Category Article"))
             payload["comments"] = payload["comments"] or _clean(row.get("Comments"))
@@ -182,8 +171,6 @@ class Command(BaseCommand):
             "public": 0,
             "institutions": 0,
         }
-        disability_sample_values = _legacy_disability_sample_values()
-        disability_sample_index = 0
 
         for row in rows:
             beneficiary_type = _clean(row.get("Beneficiary Type"))
@@ -198,6 +185,11 @@ class Command(BaseCommand):
             unit_cost = _decimal(row.get("Cost Per Unit"))
             total_value = _decimal(row.get("Total Value"))
             notes = _clean(row.get("Comments")) or None
+            name_of_beneficiary = _optional_text(row, "Name of Beneficiary", "Name of Beneficiary/Article")
+            name_of_institution = _optional_text(row, "Name of Institution", "Name of Institution/Article")
+            cheque_in_favour = _optional_text(row, "Cheque / RTGS in Favour", "Cheque in Favour")
+            internal_notes = _clean(row.get("Internal Notes")) or None
+            aadhar_number = _clean(row.get("Aadhar Number")) or None
 
             if beneficiary_type == "District":
                 district = district_map.get(beneficiary_name)
@@ -210,20 +202,21 @@ class Command(BaseCommand):
                     article_cost_per_unit=unit_cost,
                     quantity=quantity,
                     total_amount=total_value,
-                    cheque_rtgs_in_favour=None,
+                    name_of_beneficiary=name_of_beneficiary,
+                    name_of_institution=name_of_institution,
+                    aadhar_number=aadhar_number,
+                    cheque_rtgs_in_favour=cheque_in_favour,
                     notes=notes,
+                    internal_notes=internal_notes,
                     status=models.BeneficiaryStatusChoices.SUBMITTED,
                 )
                 inserted_counts["district"] += 1
             elif beneficiary_type == "Public":
                 handicapped_status = _clean(row.get("Handicapped Status")) or models.HandicappedStatusChoices.NO
-                if handicapped_status.lower() == "yes":
-                    handicapped_status = disability_sample_values[disability_sample_index % len(disability_sample_values)]
-                    disability_sample_index += 1
                 models.PublicBeneficiaryEntry.objects.create(
                     application_number=application_number,
                     name=beneficiary_name or "Unknown",
-                    aadhar_number=_clean(row.get("Aadhar Number")),
+                    aadhar_number=aadhar_number or "",
                     is_handicapped=handicapped_status,
                     gender=_clean(row.get("Gender")) or None,
                     female_status=_clean(row.get("Gender Category")) or None,
@@ -233,7 +226,8 @@ class Command(BaseCommand):
                     article_cost_per_unit=unit_cost,
                     quantity=quantity,
                     total_amount=total_value,
-                    cheque_rtgs_in_favour=None,
+                    name_of_institution=name_of_institution,
+                    cheque_rtgs_in_favour=cheque_in_favour,
                     notes=notes,
                     status=models.BeneficiaryStatusChoices.SUBMITTED,
                 )
@@ -249,8 +243,12 @@ class Command(BaseCommand):
                     article_cost_per_unit=unit_cost,
                     quantity=quantity,
                     total_amount=total_value,
-                    cheque_rtgs_in_favour=None,
+                    name_of_beneficiary=name_of_beneficiary,
+                    name_of_institution=name_of_institution,
+                    aadhar_number=aadhar_number,
+                    cheque_rtgs_in_favour=cheque_in_favour,
                     notes=notes,
+                    internal_notes=internal_notes,
                     status=models.BeneficiaryStatusChoices.SUBMITTED,
                 )
                 inserted_counts["institutions"] += 1

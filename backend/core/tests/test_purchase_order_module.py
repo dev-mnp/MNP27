@@ -56,6 +56,8 @@ class PurchaseOrderModuleTests(TestCase):
         response = self.client.get(reverse("ui:purchase-order-create"))
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "GST Number")
+        self.assertContains(response, 'name="gst_number"', html=False)
         self.assertContains(response, "Comments or Special Instructions")
         self.assertContains(response, 'name="comments"', html=False)
         self.assertContains(response, "Purchase order issued with reference to:")
@@ -132,6 +134,7 @@ class PurchaseOrderModuleTests(TestCase):
             purchase_order_number=f"MASM/MNP001{timezone.localdate().strftime('%y')}",
             status=models.FundRequestStatusChoices.SUBMITTED,
             vendor_name="Vendor A",
+            gst_number="33ABCDE1234F1Z5",
             vendor_address="Street 1",
             vendor_city="Chennai",
             vendor_state="Tamil Nadu",
@@ -153,7 +156,39 @@ class PurchaseOrderModuleTests(TestCase):
         response = self.client.get(reverse("ui:purchase-order-list"))
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "GST Number")
+        self.assertContains(response, "33ABCDE1234F1Z5")
         self.assertContains(response, "Vendor Address")
         self.assertContains(response, "Supplier Article Name")
         self.assertContains(response, "Blue 20L water can")
         self.assertContains(response, "Delivery Period - Within a Week.")
+
+    def test_purchase_order_edit_preserves_saved_article_selection_on_draft_reopen(self):
+        purchase_order = models.PurchaseOrder.objects.create(
+            status=models.FundRequestStatusChoices.DRAFT,
+            vendor_name="Vendor A",
+            gst_number="33ABCDE1234F1Z5",
+            vendor_address="Street 1",
+            vendor_city="Chennai",
+            vendor_state="Tamil Nadu",
+            vendor_pincode="600001",
+            created_by=self.user,
+        )
+        models.PurchaseOrderItem.objects.create(
+            purchase_order=purchase_order,
+            article=self.article,
+            article_name=self.article.article_name,
+            supplier_article_name="Vendor Water Can",
+            description="Blue 20L water can",
+            quantity=2,
+            unit_price=250,
+            total_value=500,
+        )
+
+        response = self.client.get(reverse("ui:purchase-order-edit", args=[purchase_order.id]))
+
+        self.assertEqual(response.status_code, 200)
+        form = response.context["item_formset"].forms[0]
+        self.assertEqual(form["article_name"].value(), self.article.article_name)
+        self.assertIn((self.article.article_name, self.article.article_name), list(form.fields["article_name"].choices))
+        self.assertContains(response, self.article.article_name)

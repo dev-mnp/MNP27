@@ -1,0 +1,1526 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <style>
+    .sequence-page-card {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+    }
+    .sequence-header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+      align-items: center;
+      margin-left: auto;
+      flex: 0 0 auto;
+    }
+    .sequence-header-copy {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .sequence-header-actions .btn {
+      min-height: 38px;
+      padding: 0 14px;
+      font-size: 0.9rem;
+    }
+    .sequence-export-menu {
+      position: relative;
+    }
+    .sequence-export-menu summary {
+      list-style: none;
+    }
+    .sequence-export-menu summary::-webkit-details-marker {
+      display: none;
+    }
+    .sequence-export-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .sequence-export-panel {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 210px;
+      padding: 8px;
+      border: 1px solid #dbe3ef;
+      border-radius: 14px;
+      background: #ffffff;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+      display: grid;
+      gap: 6px;
+      z-index: 20;
+    }
+    .sequence-export-option {
+      display: block;
+      width: 100%;
+      padding: 10px 12px;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: #0f172a;
+      text-align: left;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .sequence-export-option:hover {
+      background: #f8fafc;
+    }
+    .sequence-source-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
+      color: var(--text-secondary);
+      font-size: 0.86rem;
+      margin-top: 12px;
+    }
+    .sequence-source-summary strong {
+      color: var(--text-primary);
+    }
+    .sequence-sync-status {
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-size: 0.84rem;
+      font-weight: 600;
+      border: 1px solid transparent;
+    }
+    .sequence-sync-status.is-ok {
+      background: #f0fdf4;
+      border-color: #bbf7d0;
+      color: #15803d;
+    }
+    .sequence-sync-status.is-warn {
+      background: #fff7ed;
+      border-color: #fed7aa;
+      color: #c2410c;
+    }
+    .sequence-sync-status.is-neutral {
+      background: #eff6ff;
+      border-color: #bfdbfe;
+      color: #1d4ed8;
+    }
+    .sequence-reconcile-block {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: #fcfdff;
+    }
+    .sequence-reconcile-block summary {
+      list-style: none;
+      cursor: pointer;
+    }
+    .sequence-reconcile-block summary::-webkit-details-marker {
+      display: none;
+    }
+    .sequence-reconcile-block.is-ok {
+      background: #f0fdf4;
+      border-color: #bbf7d0;
+    }
+    .sequence-reconcile-block.is-warn {
+      background: #fff7ed;
+      border-color: #fed7aa;
+    }
+    .sequence-reconcile-summary-line {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .sequence-reconcile-status {
+      font-size: 0.84rem;
+      font-weight: 700;
+    }
+    .sequence-reconcile-status.is-ok {
+      color: #15803d;
+    }
+    .sequence-reconcile-status.is-warn {
+      color: #b91c1c;
+    }
+    .sequence-reconcile-meta {
+      color: var(--text-secondary);
+      font-size: 0.82rem;
+    }
+    .sequence-reconcile-list {
+      list-style: none;
+      margin: 8px 0 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 6px 14px;
+    }
+    .sequence-reconcile-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 0.88rem;
+      line-height: 1.35;
+    }
+    .sequence-reconcile-item.is-ok {
+      color: #166534;
+    }
+    .sequence-reconcile-item.is-warn {
+      color: #b91c1c;
+    }
+    .sequence-reconcile-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+      flex: 0 0 auto;
+    }
+    .sequence-reconcile-text {
+      display: inline-block;
+    }
+    .sequence-control-card {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+      padding: 12px 14px;
+      margin-top: 16px;
+    }
+    .sequence-control-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+    }
+    .sequence-inline-input {
+      width: 100px;
+    }
+    .sequence-feedback {
+      margin-top: 12px;
+      padding: 9px 11px;
+      border-radius: 12px;
+      font-size: 0.86rem;
+      display: none;
+    }
+    .sequence-feedback.is-visible {
+      display: block;
+    }
+    .sequence-feedback.is-info {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1d4ed8;
+    }
+    .sequence-feedback.is-warn {
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      color: #c2410c;
+    }
+    .sequence-feedback.is-error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #b91c1c;
+    }
+    .sequence-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      gap: 16px;
+      margin-top: 18px;
+      align-items: start;
+    }
+    .sequence-panel {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+      min-height: 480px;
+    }
+    .sequence-panel-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .sequence-panel-title {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .sequence-panel-tools {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 6px;
+      align-items: center;
+      justify-content: flex-start;
+      flex: 1 1 auto;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+    .sequence-panel-tools-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+    .sequence-panel-tools-group.is-spacer {
+      margin-left: auto;
+    }
+    .sequence-panel-tools .btn {
+      min-height: 32px;
+      padding: 0 10px;
+      border-radius: 9px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .sequence-panel-tools .input,
+    .sequence-panel-tools select {
+      min-width: 132px;
+      max-width: 210px;
+      min-height: 34px;
+      font-size: 0.78rem;
+      border-radius: 9px;
+      white-space: nowrap;
+    }
+    .sequence-select-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #64748b;
+      font-size: 0.78rem;
+      font-weight: 600;
+      white-space: nowrap;
+      padding: 0 10px;
+      min-height: 32px;
+      border: 1px solid #dbe3ef;
+      border-radius: 9px;
+      background: #f8fafc;
+    }
+    .sequence-select-toggle input {
+      width: 14px;
+      height: 14px;
+      accent-color: var(--primary);
+      margin: 0;
+    }
+    .sequence-light-btn {
+      min-height: 32px;
+      padding: 0 10px;
+      border: 1px solid #dbe3ef;
+      border-radius: 9px;
+      background: #f8fafc;
+      color: #64748b;
+      font-size: 0.76rem;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .sequence-light-btn:hover {
+      background: #eef4ff;
+      color: #3559e0;
+    }
+    .sequence-list {
+      max-height: 68vh;
+      overflow: auto;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .sequence-item-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 11px;
+      border-radius: 10px;
+      border: 1px solid #e5e7eb;
+      background: #ffffff;
+    }
+    .sequence-item-row:hover {
+      background: #f8fafc;
+    }
+    .sequence-item-row.is-draggable {
+      cursor: move;
+    }
+    .sequence-item-label {
+      color: var(--text-primary);
+      font-size: 0.88rem;
+      flex: 1 1 auto;
+    }
+    .sequence-item-index {
+      width: 54px;
+      flex: 0 0 54px;
+    }
+    .sequence-item-order-input {
+      width: 100%;
+      min-height: 30px;
+      padding: 4px 6px;
+      border: 1px solid #dbe3ef;
+      border-radius: 8px;
+      background: #ffffff;
+      color: var(--text-secondary);
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-align: center;
+    }
+    .sequence-item-order-input:disabled {
+      background: #f8fafc;
+      color: #94a3b8;
+      cursor: not-allowed;
+    }
+    .sequence-move-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      justify-content: center;
+      align-items: center;
+      padding-top: 24px;
+    }
+    .sequence-move-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      border: 1px solid #dbe3ef;
+      background: #ffffff;
+      color: #334155;
+      font-size: 1.05rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .sequence-move-btn:hover {
+      background: #f8fafc;
+    }
+    .sequence-empty {
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      padding: 16px;
+      text-align: center;
+    }
+    .sequence-file-input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .sequence-note {
+      margin-top: 8px;
+      color: var(--text-secondary);
+      font-size: 0.86rem;
+    }
+    .sequence-source-state {
+      color: #b91c1c;
+      font-weight: 700;
+    }
+    @media (max-width: 1100px) {
+      .sequence-layout {
+        grid-template-columns: 1fr;
+      }
+      .sequence-move-controls {
+        flex-direction: row;
+        padding-top: 0;
+      }
+    }
+  </style>
+
+  <section class="card sequence-page-card">
+    <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 0; gap: 16px; flex-wrap: nowrap;">
+      <div class="sequence-header-copy">
+        <h1 style="margin: 0;">Sequence List</h1>
+      </div>
+      <div class="sequence-header-actions">
+        <button class="btn" id="sequence-load-db" type="button">Sync Data</button>
+        <input class="sequence-file-input" id="sequence-file-input" type="file" accept=".csv,text/csv">
+        <button class="btn" id="sequence-upload-csv" type="button">Upload CSV</button>
+        <details class="sequence-export-menu">
+          <summary class="btn btn-subtle sequence-export-trigger">
+            <span>Export</span>
+            <span aria-hidden="true">▾</span>
+          </summary>
+          <div class="sequence-export-panel">
+            <button class="sequence-export-option" id="sequence-export-sequence" type="button">Sequence List</button>
+            <button class="sequence-export-option" id="sequence-export-master" type="button">Master Data with Sequence</button>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="sequence-source-summary" id="sequence-source-summary">
+      <span class="sequence-source-state" id="sequence-source-label">Loaded from Master Database</span>
+      <span>Rows: <strong id="sequence-row-count">0</strong></span>
+      <span>Unique Items: <strong id="sequence-unique-count">0</strong></span>
+      <span>Sequenced: <strong id="sequence-assigned-count">0</strong></span>
+      <span>Unassigned: <strong id="sequence-unassigned-count">0</strong></span>
+      <span id="sequence-sync-meta" hidden>Synced: <strong id="sequence-sync-time"></strong></span>
+      <span id="sequence-file-meta" hidden>File: <strong id="sequence-file-name"></strong></span>
+    </div>
+    <div class="sequence-sync-status is-neutral" id="sequence-sync-status">
+      Sync data to check Seat Allocation reconciliation.
+    </div>
+    {% if submit_result %}
+      <details class="sequence-reconcile-block {% if submit_result.all_matched %}is-ok{% else %}is-warn{% endif %}" open>
+        <summary class="sequence-reconcile-summary-line">
+          <span class="sequence-reconcile-status {% if submit_result.all_matched %}is-ok{% else %}is-warn{% endif %}">
+            {% if submit_result.all_matched %}Sequence Reconciliation Matched{% else %}Sequence Reconciliation Needs Attention{% endif %}
+          </span>
+          <span class="sequence-reconcile-meta">Checked at: {{ submit_result.checked_at_display }}</span>
+        </summary>
+        <ul class="sequence-reconcile-list">
+          {% for check in submit_result.checks %}
+            <li class="sequence-reconcile-item {% if check.matched %}is-ok{% else %}is-warn{% endif %}">
+              <span class="sequence-reconcile-icon" aria-hidden="true">
+                {% if check.matched %}
+                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m4.5 10 3.2 3.2 7.8-7.8"></path>
+                  </svg>
+                {% else %}
+                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                    <path d="M10 5.5v5"></path>
+                    <path d="M10 14.2h.01"></path>
+                    <circle cx="10" cy="10" r="8"></circle>
+                  </svg>
+                {% endif %}
+              </span>
+              <span class="sequence-reconcile-text">
+                {% if check.matched %}
+                  {{ check.label }} matched
+                {% else %}
+                  {{ check.label }}: {{ check.details }}
+                {% endif %}
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
+      </details>
+    {% endif %}
+
+    <div class="sequence-control-card">
+      <div class="sequence-control-grid">
+        <label style="display: inline-flex; align-items: center; gap: 8px;">
+          <span>Start From</span>
+          <input class="input sequence-inline-input" id="sequence-start" type="number" min="1" step="1" value="1">
+        </label>
+        <label style="display: inline-flex; align-items: center; gap: 8px;">
+          <input id="sequence-token-only" type="checkbox">
+          <span>Include only Token Quantity &gt; 0</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="sequence-layout">
+      <div class="sequence-panel">
+        <div class="sequence-panel-header">
+          <div class="sequence-panel-title">Unassigned Items</div>
+          <div class="sequence-panel-tools">
+            <div class="sequence-panel-tools-group">
+              <label class="sequence-select-toggle" for="sequence-left-toggle">
+                <input id="sequence-left-toggle" type="checkbox">
+                <span>Select all</span>
+              </label>
+              <input class="input" id="sequence-left-search" type="text" placeholder="Search items...">
+              <select id="sequence-left-category">
+                <option value="all">All Categories</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="sequence-list" id="sequence-unassigned-list"></div>
+      </div>
+
+      <div class="sequence-move-controls">
+        <button class="sequence-move-btn" id="sequence-move-right" type="button" aria-label="Move selected right">&gt;</button>
+        <button class="sequence-move-btn" id="sequence-move-left" type="button" aria-label="Move selected left">&lt;</button>
+      </div>
+
+      <div class="sequence-panel">
+        <div class="sequence-panel-header">
+          <div class="sequence-panel-title">Sequenced Items</div>
+          <div class="sequence-panel-tools">
+            <div class="sequence-panel-tools-group">
+              <label class="sequence-select-toggle" for="sequence-right-toggle">
+                <input id="sequence-right-toggle" type="checkbox">
+                <span>Select all</span>
+              </label>
+              <label class="sequence-select-toggle" for="sequence-sort-assigned">
+                <input id="sequence-sort-assigned" type="checkbox">
+                <span>Sort by Item</span>
+              </label>
+              <select id="sequence-right-category">
+                <option value="all">All Categories</option>
+              </select>
+            </div>
+            <div class="sequence-panel-tools-group is-spacer">
+              <button class="btn btn-subtle" id="sequence-undo" type="button" disabled>Undo</button>
+              <button class="btn btn-subtle" id="sequence-reset" type="button">Reset</button>
+              {% if can_create_edit %}
+                <button class="btn" id="sequence-save" type="button">Save and Reconcile</button>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="sequence-list" id="sequence-assigned-list"></div>
+      </div>
+    </div>
+
+    {% if can_create_edit %}
+      <form method="post" id="sequence-save-form" hidden>
+        {% csrf_token %}
+        <input type="hidden" name="action" value="save_sequences">
+        {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+        <div id="sequence-save-fields"></div>
+      </form>
+    {% endif %}
+
+    {{ sequence_source_rows|json_script:"sequence-db-source" }}
+    {{ sequence_saved_items|json_script:"sequence-saved-items" }}
+    {{ sequence_master_items|json_script:"sequence-master-items" }}
+    {{ sequence_default_items|json_script:"sequence-default-items" }}
+  </section>
+
+  <script>
+    (function() {
+      const dbSourceRows = JSON.parse(document.getElementById('sequence-db-source')?.textContent || '[]');
+      const savedSequenceItems = JSON.parse(document.getElementById('sequence-saved-items')?.textContent || '[]');
+      const masterItems = JSON.parse(document.getElementById('sequence-master-items')?.textContent || '[]');
+      const defaultSequenceItems = JSON.parse(document.getElementById('sequence-default-items')?.textContent || '[]');
+
+      const fileInput = document.getElementById('sequence-file-input');
+      const loadDbButton = document.getElementById('sequence-load-db');
+      const uploadButton = document.getElementById('sequence-upload-csv');
+      const resetButton = document.getElementById('sequence-reset');
+      const exportSequenceButton = document.getElementById('sequence-export-sequence');
+      const exportMasterButton = document.getElementById('sequence-export-master');
+      const saveButton = document.getElementById('sequence-save');
+      const undoButton = document.getElementById('sequence-undo');
+      const saveForm = document.getElementById('sequence-save-form');
+      const saveFields = document.getElementById('sequence-save-fields');
+      const leftList = document.getElementById('sequence-unassigned-list');
+      const rightList = document.getElementById('sequence-assigned-list');
+      const sourceLabel = document.getElementById('sequence-source-label');
+      const rowCount = document.getElementById('sequence-row-count');
+      const uniqueCount = document.getElementById('sequence-unique-count');
+      const assignedCount = document.getElementById('sequence-assigned-count');
+      const unassignedCount = document.getElementById('sequence-unassigned-count');
+      const syncMeta = document.getElementById('sequence-sync-meta');
+      const syncTime = document.getElementById('sequence-sync-time');
+      const fileMeta = document.getElementById('sequence-file-meta');
+      const fileName = document.getElementById('sequence-file-name');
+      const syncStatus = document.getElementById('sequence-sync-status');
+      const startInput = document.getElementById('sequence-start');
+      const tokenOnlyCheckbox = document.getElementById('sequence-token-only');
+      const leftSearch = document.getElementById('sequence-left-search');
+      const leftCategory = document.getElementById('sequence-left-category');
+      const rightCategory = document.getElementById('sequence-right-category');
+      const leftToggle = document.getElementById('sequence-left-toggle');
+      const rightToggle = document.getElementById('sequence-right-toggle');
+      const sortToggle = document.getElementById('sequence-sort-assigned');
+
+      let sourceMode = 'db';
+      let sourceRows = [];
+      let sourceFileName = '';
+      let includeOnlyTokenRows = false;
+      let sequenceStart = 1;
+      let unassignedSearch = '';
+      let unassignedCategoryFilter = 'all';
+      let assignedCategoryFilter = 'all';
+      let assignedSortEnabled = false;
+      let assignedItems = [];
+      let unassignedItems = [];
+      let selectedLeft = new Set();
+      let selectedRight = new Set();
+      let draggingItem = null;
+      let undoHistory = [];
+      let lastSyncedAt = '';
+
+      const normalizeHeader = (header) => String(header || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const parseNumber = (value) => {
+        const raw = String(value ?? '').replace(/,/g, '').trim();
+        const parsed = Number(raw);
+        return Number.isFinite(parsed) ? parsed : 0;
+      };
+      const normalizeItemName = (value) => String(value || '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
+      const tokenSet = (value) => new Set(normalizeItemName(value).split(' ').map((part) => part.trim()).filter((part) => part.length > 1));
+      const overlapScore = (a, b) => {
+        if (!a.size || !b.size) return 0;
+        let common = 0;
+        a.forEach((token) => { if (b.has(token)) common += 1; });
+        return common / Math.max(a.size, b.size);
+      };
+      const formatSyncTime = (date) => {
+        try {
+          return new Intl.DateTimeFormat(undefined, {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }).format(date);
+        } catch (error) {
+          return date.toLocaleString();
+        }
+      };
+
+      const sequenceDefaultMap = new Map(defaultSequenceItems.map((item, index) => [normalizeItemName(item), index + 1]));
+      const historicalEntries = defaultSequenceItems.map((item, index) => ({
+        item,
+        normalized: normalizeItemName(item),
+        tokenSet: tokenSet(item),
+        seq: index + 1,
+      }));
+
+      function masterCategoryMap() {
+        return new Map(masterItems.map((row) => [String(row.item || '').trim(), String(row.category || '').trim() || 'Uncategorized']));
+      }
+
+      function reconciliationSummary() {
+        const masterItemNames = Array.from(new Set(masterItems.map((row) => String(row.item || '').trim()).filter(Boolean)));
+        const sourceItemSet = new Set(sourceRows.map((row) => String(row.requested_item || '').trim()).filter(Boolean));
+        const savedSequenceSet = new Set(savedSequenceItems.map((row) => String(row.item_name || row.item || '').trim()).filter(Boolean));
+        const missingInSeatAllocation = masterItemNames.filter((item) => !sourceItemSet.has(item));
+        const extraInSeatAllocation = Array.from(sourceItemSet).filter((item) => !masterItemNames.includes(item));
+        const newToSequence = masterItemNames.filter((item) => !savedSequenceSet.has(item));
+        return {
+          masterCount: masterItemNames.length,
+          sourceCount: sourceItemSet.size,
+          missingInSeatAllocation,
+          extraInSeatAllocation,
+          newToSequence,
+        };
+      }
+
+      function updateSyncStatus() {
+        if (!syncStatus) return;
+        const summary = reconciliationSummary();
+        const syncPrefix = lastSyncedAt ? `Synced at ${lastSyncedAt}. ` : '';
+        syncStatus.className = 'sequence-sync-status';
+        if (!masterItems.length) {
+          syncStatus.classList.add('is-neutral');
+          syncStatus.textContent = `${syncPrefix}No Master Data items available yet for reconciliation.`;
+          return;
+        }
+        if (!sourceRows.length) {
+          syncStatus.classList.add('is-neutral');
+          syncStatus.textContent = `${syncPrefix}Master Data is available. You can arrange the Sequence List now, but Seat Allocation must be prepared and synced before sequence numbers can be applied there.`;
+          return;
+        }
+        if (!summary.missingInSeatAllocation.length && !summary.extraInSeatAllocation.length && !summary.newToSequence.length) {
+          syncStatus.classList.add('is-ok');
+          syncStatus.textContent = `${syncPrefix}Seat Allocation and Sequence List are in sync with Master Data. ${summary.masterCount} item(s) matched.`;
+          return;
+        }
+        const parts = [];
+        if (summary.newToSequence.length) {
+          const preview = summary.newToSequence.slice(0, 5).join(', ');
+          const more = summary.newToSequence.length - 5;
+          parts.push(`new to sequence ${summary.newToSequence.length}: ${preview}${more > 0 ? ` and ${more} more` : ''}`);
+        }
+        if (summary.missingInSeatAllocation.length) {
+          const preview = summary.missingInSeatAllocation.slice(0, 5).join(', ');
+          const more = summary.missingInSeatAllocation.length - 5;
+          parts.push(`missing ${summary.missingInSeatAllocation.length}: ${preview}${more > 0 ? ` and ${more} more` : ''}`);
+        }
+        if (summary.extraInSeatAllocation.length) {
+          const preview = summary.extraInSeatAllocation.slice(0, 3).join(', ');
+          const more = summary.extraInSeatAllocation.length - 3;
+          parts.push(`extra ${summary.extraInSeatAllocation.length}: ${preview}${more > 0 ? ` and ${more} more` : ''}`);
+        }
+        syncStatus.classList.add('is-warn');
+        syncStatus.textContent = `${syncPrefix}Master Data has changed. ${parts.join(' | ')}. Sync Data here to refresh the item list, and sync/save Seat Allocation before final sequence apply.`;
+      }
+
+      function setFeedback(type, message) {
+        if (!syncStatus) return;
+        syncStatus.className = 'sequence-sync-status';
+        syncStatus.classList.add(type === 'error' ? 'is-warn' : type === 'warn' ? 'is-warn' : 'is-neutral');
+        syncStatus.textContent = message;
+      }
+
+      function snapshotState() {
+        return {
+          assignedItems: assignedItems.map((row) => ({ item: row.item })),
+          unassignedItems: unassignedItems.slice(),
+          selectedLeft: Array.from(selectedLeft),
+          selectedRight: Array.from(selectedRight),
+        };
+      }
+
+      function updateUndoState() {
+        if (!undoButton) return;
+        undoButton.disabled = undoHistory.length === 0;
+      }
+
+      function clearUndoHistory() {
+        undoHistory = [];
+        updateUndoState();
+      }
+
+      function pushUndoState() {
+        undoHistory.push(snapshotState());
+        if (undoHistory.length > 100) {
+          undoHistory.shift();
+        }
+        updateUndoState();
+      }
+
+      function restoreState(snapshot) {
+        assignedItems = (snapshot.assignedItems || []).map((row) => ({ item: row.item }));
+        unassignedItems = (snapshot.unassignedItems || []).slice();
+        selectedLeft = new Set(snapshot.selectedLeft || []);
+        selectedRight = new Set(snapshot.selectedRight || []);
+        renderAll();
+      }
+
+      function undoLastChange() {
+        if (!undoHistory.length) return;
+        const snapshot = undoHistory.pop();
+        updateUndoState();
+        restoreState(snapshot);
+        setFeedback('info', 'Undid the last sequence change.');
+      }
+
+      function getRowCategory(row) {
+        const candidates = ['Article Category', 'article category', 'Category', 'category'];
+        for (const key of candidates) {
+          const value = row.row_map?.[key];
+          if (value !== undefined && value !== null && String(value).trim()) {
+            return String(value).trim();
+          }
+        }
+        return masterCategoryMap().get(String(row.requested_item || '').trim()) || 'Uncategorized';
+      }
+
+      function getEffectiveRows(rows) {
+        return includeOnlyTokenRows ? rows.filter((row) => Number(row.token_quantity || 0) > 0) : rows.slice();
+      }
+
+      function buildFallbackOrderMap(items) {
+        const map = new Map();
+        items.forEach((item) => {
+          const normalized = normalizeItemName(item);
+          const exact = sequenceDefaultMap.get(normalized);
+          if (exact) {
+            map.set(item, exact);
+            return;
+          }
+
+          const itemTokens = tokenSet(item);
+          let bestSeq = Number.MAX_SAFE_INTEGER;
+          let bestScore = 0;
+          historicalEntries.forEach((entry) => {
+            let score = 0;
+            if (entry.normalized.includes(normalized) || normalized.includes(entry.normalized)) {
+              score = Math.max(score, 0.92);
+            }
+            const overlap = overlapScore(itemTokens, entry.tokenSet);
+            if (overlap > score) score = overlap;
+            if (score > bestScore) {
+              bestScore = score;
+              bestSeq = entry.seq;
+            }
+          });
+          map.set(item, bestScore >= 0.45 ? bestSeq : Number.MAX_SAFE_INTEGER);
+        });
+        return map;
+      }
+
+      function sortItemsByDefault(items) {
+        const orderMap = buildFallbackOrderMap(items);
+        return items.slice().sort((a, b) => {
+          const aOrder = orderMap.get(a) || Number.MAX_SAFE_INTEGER;
+          const bOrder = orderMap.get(b) || Number.MAX_SAFE_INTEGER;
+          if (aOrder !== bOrder) return aOrder - bOrder;
+          return a.localeCompare(b, undefined, { sensitivity: 'base' });
+        });
+      }
+
+      function deriveAssignedFromRows(rows) {
+        const grouped = new Map();
+        rows.forEach((row) => {
+          const item = String(row.requested_item || '').trim();
+          if (!item) return;
+          const sequenceNo = row.sequence_no ? parseNumber(row.sequence_no) : 0;
+          if (!sequenceNo) return;
+          const existing = grouped.get(item);
+          if (!existing || sequenceNo < existing.sequence_no) {
+            grouped.set(item, { item, sequence_no: sequenceNo });
+          }
+        });
+        return Array.from(grouped.values())
+          .sort((a, b) => a.sequence_no - b.sequence_no || a.item.localeCompare(b.item, undefined, { sensitivity: 'base' }))
+          .map((row) => ({ item: row.item }));
+      }
+
+      function rebuildLists(rows, options) {
+        const preserveCurrent = options?.preserveCurrent || false;
+        const forceUnassignedAll = options?.forceUnassignedAll || false;
+        const preferredAssigned = Array.isArray(options?.preferredAssigned) ? options.preferredAssigned : [];
+        const effectiveRows = getEffectiveRows(rows);
+        const seatAllocationItems = effectiveRows.map((row) => String(row.requested_item || '').trim()).filter(Boolean);
+        const masterItemNames = masterItems.map((row) => String(row.item || '').trim()).filter(Boolean);
+        const uniqueItems = Array.from(new Set(seatAllocationItems.concat(masterItemNames)));
+
+        let nextAssigned = [];
+        if (preserveCurrent) {
+          const currentSet = new Set(uniqueItems);
+          nextAssigned = assignedItems.filter((row) => currentSet.has(row.item));
+        } else if (preferredAssigned.length) {
+          const currentSet = new Set(uniqueItems);
+          nextAssigned = preferredAssigned.filter((row) => currentSet.has(row.item));
+        } else if (!forceUnassignedAll) {
+          nextAssigned = deriveAssignedFromRows(effectiveRows);
+        }
+
+        const assignedSet = new Set(nextAssigned.map((row) => row.item));
+        const nextUnassigned = sortItemsByDefault(uniqueItems.filter((item) => !assignedSet.has(item)));
+
+        assignedItems = nextAssigned;
+        unassignedItems = nextUnassigned;
+        selectedLeft = new Set();
+        selectedRight = new Set();
+        clearUndoHistory();
+        renderAll();
+      }
+
+      function parseCSVRows(text) {
+        const rows = [];
+        let row = [];
+        let field = '';
+        let inQuotes = false;
+
+        for (let i = 0; i < text.length; i += 1) {
+          const char = text[i];
+          const nextChar = text[i + 1];
+          if (char === '"') {
+            if (inQuotes && nextChar === '"') {
+              field += '"';
+              i += 1;
+            } else {
+              inQuotes = !inQuotes;
+            }
+            continue;
+          }
+          if (char === ',' && !inQuotes) {
+            row.push(field);
+            field = '';
+            continue;
+          }
+          if ((char === '\n' || char === '\r') && !inQuotes) {
+            if (char === '\r' && nextChar === '\n') i += 1;
+            row.push(field);
+            if (row.some((cell) => String(cell || '').trim() !== '')) rows.push(row);
+            row = [];
+            field = '';
+            continue;
+          }
+          field += char;
+        }
+
+        row.push(field);
+        if (row.some((cell) => String(cell || '').trim() !== '')) rows.push(row);
+        return rows;
+      }
+
+      function findHeaderName(headers, candidates) {
+        const byNormalized = new Map(headers.map((header) => [normalizeHeader(header), header]));
+        for (const candidate of candidates) {
+          const found = byNormalized.get(normalizeHeader(candidate));
+          if (found) return found;
+        }
+        return null;
+      }
+
+      function loadFromDb() {
+        sourceMode = 'db';
+        sourceRows = dbSourceRows.slice();
+        sourceFileName = '';
+        lastSyncedAt = formatSyncTime(new Date());
+        sourceLabel.textContent = 'Synced from Master Database';
+        if (syncMeta && syncTime) {
+          syncMeta.hidden = false;
+          syncTime.textContent = lastSyncedAt;
+        }
+        fileMeta.hidden = true;
+        const preferredAssigned = savedSequenceItems
+          .slice()
+          .sort((a, b) => (parseNumber(a.sequence_no) - parseNumber(b.sequence_no)) || (parseNumber(a.sort_order) - parseNumber(b.sort_order)) || String(a.item_name || '').localeCompare(String(b.item_name || ''), undefined, { sensitivity: 'base' }))
+          .map((row) => ({ item: String(row.item_name || '').trim() }))
+          .filter((row) => row.item);
+        rebuildLists(sourceRows, { preserveCurrent: false, forceUnassignedAll: false, preferredAssigned });
+        const effectiveRows = getEffectiveRows(sourceRows);
+        const uniqueItems = Array.from(new Set(effectiveRows.map((row) => String(row.requested_item || '').trim()).filter(Boolean)));
+        setFeedback(
+          'info',
+          sourceRows.length
+            ? `Sync completed at ${lastSyncedAt}. Rows: ${effectiveRows.length}. Unique items: ${uniqueItems.length}. Restored saved sequence order where available.`
+            : `Sync completed at ${lastSyncedAt}. Master Data item list is available, but Seat Allocation rows are not available yet.`
+        );
+        refreshMeta();
+        updateSaveState();
+      }
+
+      function handleUpload(file) {
+        const reader = new FileReader();
+        reader.onload = function() {
+          try {
+            const parsed = parseCSVRows(String(reader.result || ''));
+            if (parsed.length < 2) {
+              setFeedback('error', 'CSV is empty or invalid.');
+              return;
+            }
+            const headers = parsed[0].map((header) => String(header || '').trim());
+            const itemHeader = findHeaderName(headers, ['Requested Item', 'Item', 'Article', 'Article Name', 'requested_item']);
+            const tokenHeader = findHeaderName(headers, ['Token Quantity', 'Token Qty', 'token_quantity', 'Token']);
+            const sequenceHeader = findHeaderName(headers, ['Sequence No', 'Sequence List', 'sequence_no', 'sequence list']);
+            if (!itemHeader) {
+              setFeedback('error', 'CSV missing item column. Expected Requested Item / Item / Article.');
+              return;
+            }
+            const headerIndex = new Map(headers.map((header, index) => [header, index]));
+            sourceRows = parsed.slice(1).map((cells) => {
+              const rowMap = {};
+              headers.forEach((header, index) => {
+                rowMap[header] = cells[index] ?? '';
+              });
+              const tokenQuantity = tokenHeader ? parseNumber(cells[headerIndex.get(tokenHeader) || 0]) : 0;
+              const sequenceNo = sequenceHeader ? parseNumber(cells[headerIndex.get(sequenceHeader) || 0]) : 0;
+              return {
+                requested_item: String(cells[headerIndex.get(itemHeader) || 0] || '').trim(),
+                token_quantity: tokenQuantity,
+                sequence_no: sequenceNo || null,
+                row_map: rowMap,
+                headers,
+              };
+            }).filter((row) => row.requested_item);
+            sourceMode = 'csv';
+            sourceFileName = file.name;
+            lastSyncedAt = formatSyncTime(new Date());
+            sourceLabel.textContent = 'Loaded Uploaded File';
+            if (syncMeta && syncTime) {
+              syncMeta.hidden = false;
+              syncTime.textContent = lastSyncedAt;
+            }
+            fileMeta.hidden = false;
+            fileName.textContent = file.name;
+            rebuildLists(sourceRows, { preserveCurrent: false, forceUnassignedAll: false });
+            setFeedback('info', `Loaded ${sourceRows.length} row(s) from ${file.name} at ${lastSyncedAt}.`);
+            refreshMeta();
+            updateSaveState();
+          } catch (error) {
+            setFeedback('error', 'Failed to parse the uploaded CSV.');
+          }
+        };
+        reader.readAsText(file);
+      }
+
+      function refreshMeta() {
+        const effectiveRows = getEffectiveRows(sourceRows);
+        const uniqueItems = Array.from(new Set(effectiveRows.map((row) => String(row.requested_item || '').trim()).filter(Boolean)));
+        rowCount.textContent = String(effectiveRows.length);
+        uniqueCount.textContent = String(uniqueItems.length);
+        assignedCount.textContent = String(assignedItems.length);
+        unassignedCount.textContent = String(unassignedItems.length);
+        if (sourceMode === 'csv' && sourceFileName) {
+          fileMeta.hidden = false;
+          fileName.textContent = sourceFileName;
+        } else {
+          fileMeta.hidden = true;
+        }
+        updateSyncStatus();
+      }
+
+      function sequenceByItem() {
+        const map = new Map();
+        const start = Number.isFinite(sequenceStart) && sequenceStart > 0 ? Math.floor(sequenceStart) : 1;
+        assignedItems.forEach((row, index) => {
+          map.set(row.item, start + index);
+        });
+        return map;
+      }
+
+      function categoryMap() {
+        const map = new Map();
+        getEffectiveRows(sourceRows).forEach((row) => {
+          const item = String(row.requested_item || '').trim();
+          if (!item || map.has(item)) return;
+          map.set(item, getRowCategory(row));
+        });
+        return map;
+      }
+
+      function updateCategoryOptions() {
+        const categories = categoryMap();
+        const leftCategories = Array.from(new Set(unassignedItems.map((item) => categories.get(item) || 'Uncategorized'))).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        const rightCategories = Array.from(new Set(assignedItems.map((item) => categories.get(item.item) || 'Uncategorized'))).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+        const applyOptions = (select, values, current) => {
+          select.innerHTML = '';
+          const allOption = document.createElement('option');
+          allOption.value = 'all';
+          allOption.textContent = 'All Categories';
+          select.appendChild(allOption);
+          values.forEach((value) => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value;
+            select.appendChild(option);
+          });
+          select.value = values.includes(current) ? current : 'all';
+          return select.value;
+        };
+
+        unassignedCategoryFilter = applyOptions(leftCategory, leftCategories, unassignedCategoryFilter);
+        assignedCategoryFilter = applyOptions(rightCategory, rightCategories, assignedCategoryFilter);
+      }
+
+      function filteredUnassignedItems() {
+        const categories = categoryMap();
+        const q = unassignedSearch.trim().toLowerCase();
+        return unassignedItems.filter((item) => {
+          const category = categories.get(item) || 'Uncategorized';
+          const matchesCategory = unassignedCategoryFilter === 'all' || category === unassignedCategoryFilter;
+          const matchesSearch = !q || item.toLowerCase().includes(q);
+          return matchesCategory && matchesSearch;
+        });
+      }
+
+      function filteredAssignedItems() {
+        const categories = categoryMap();
+        const filtered = assignedItems.filter((row) => {
+          const category = categories.get(row.item) || 'Uncategorized';
+          return assignedCategoryFilter === 'all' || category === assignedCategoryFilter;
+        });
+        if (!assignedSortEnabled) return filtered;
+        return filtered.slice().sort((a, b) => a.item.localeCompare(b.item, undefined, { sensitivity: 'base' }));
+      }
+
+      function renderUnassigned() {
+        const items = filteredUnassignedItems();
+        leftList.innerHTML = '';
+        if (!items.length) {
+          leftList.innerHTML = '<div class="sequence-empty">No unassigned items.</div>';
+          updateSelectionToggles();
+          return;
+        }
+        items.forEach((item) => {
+          const row = document.createElement('label');
+          row.className = 'sequence-item-row';
+          row.innerHTML = `
+            <input type="checkbox" ${selectedLeft.has(item) ? 'checked' : ''}>
+            <span class="sequence-item-label"></span>
+          `;
+          row.querySelector('.sequence-item-label').textContent = item;
+          row.querySelector('input').addEventListener('change', function(event) {
+            if (event.target.checked) selectedLeft.add(item);
+            else selectedLeft.delete(item);
+            updateSelectionToggles();
+          });
+          leftList.appendChild(row);
+        });
+        updateSelectionToggles();
+      }
+
+      function renderAssigned() {
+        const items = filteredAssignedItems();
+        const indexMap = sequenceByItem();
+        rightList.innerHTML = '';
+        if (!items.length) {
+          rightList.innerHTML = '<div class="sequence-empty">No sequenced items yet.</div>';
+          updateSelectionToggles();
+          return;
+        }
+        items.forEach((row) => {
+          const wrapper = document.createElement('div');
+          wrapper.className = assignedSortEnabled ? 'sequence-item-row' : 'sequence-item-row is-draggable';
+          wrapper.draggable = !assignedSortEnabled;
+          wrapper.innerHTML = `
+            <input type="checkbox" ${selectedRight.has(row.item) ? 'checked' : ''}>
+            <span class="sequence-item-index">
+              <input class="sequence-item-order-input" type="number" min="${sequenceStart}" step="1" ${assignedSortEnabled ? 'disabled' : ''}>
+            </span>
+            <span class="sequence-item-label"></span>
+          `;
+          const orderInput = wrapper.querySelector('.sequence-item-order-input');
+          orderInput.value = String(indexMap.get(row.item) || '');
+          wrapper.querySelector('.sequence-item-label').textContent = row.item;
+          wrapper.querySelector('input').addEventListener('change', function(event) {
+            if (event.target.checked) selectedRight.add(row.item);
+            else selectedRight.delete(row.item);
+            updateSelectionToggles();
+          });
+          const applyManualOrder = function() {
+            moveAssignedItemToSequence(row.item, orderInput.value);
+          };
+          orderInput.addEventListener('change', applyManualOrder);
+          orderInput.addEventListener('blur', applyManualOrder);
+          orderInput.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              applyManualOrder();
+            }
+          });
+          if (!assignedSortEnabled) {
+            wrapper.addEventListener('dragstart', function() {
+              draggingItem = row.item;
+            });
+            wrapper.addEventListener('dragover', function(event) {
+              event.preventDefault();
+            });
+            wrapper.addEventListener('drop', function() {
+              if (!draggingItem || draggingItem === row.item) return;
+              const sourceIndex = assignedItems.findIndex((item) => item.item === draggingItem);
+              const targetIndex = assignedItems.findIndex((item) => item.item === row.item);
+              if (sourceIndex < 0 || targetIndex < 0) return;
+              pushUndoState();
+              const next = assignedItems.slice();
+              const moved = next.splice(sourceIndex, 1)[0];
+              next.splice(targetIndex, 0, moved);
+              assignedItems = next;
+              draggingItem = null;
+              renderAll();
+            });
+            wrapper.addEventListener('dragend', function() {
+              draggingItem = null;
+            });
+          }
+          rightList.appendChild(wrapper);
+        });
+        updateSelectionToggles();
+      }
+
+      function moveAssignedItemToSequence(itemName, rawSequence) {
+        if (assignedSortEnabled) return;
+        const itemCount = assignedItems.length;
+        if (!itemCount) return;
+        const parsed = Number(rawSequence);
+        const start = Number.isFinite(sequenceStart) && sequenceStart > 0 ? Math.floor(sequenceStart) : 1;
+        const normalizedSequence = Number.isFinite(parsed) ? Math.floor(parsed) : start;
+        const targetSequence = Math.max(start, Math.min(start + itemCount - 1, normalizedSequence));
+        const targetIndex = targetSequence - start;
+        const currentIndex = assignedItems.findIndex((row) => row.item === itemName);
+        if (currentIndex < 0) return;
+        if (currentIndex === targetIndex) {
+          renderAssigned();
+          return;
+        }
+        pushUndoState();
+        const next = assignedItems.slice();
+        const moved = next.splice(currentIndex, 1)[0];
+        next.splice(targetIndex, 0, moved);
+        assignedItems = next;
+        renderAll();
+      }
+
+      function syncToggleState(toggle, allItems, selectedItems) {
+        if (!toggle) return;
+        const total = allItems.length;
+        const selectedCount = allItems.filter((item) => selectedItems.has(item)).length;
+        toggle.indeterminate = selectedCount > 0 && selectedCount < total;
+        toggle.checked = total > 0 && selectedCount === total;
+        toggle.disabled = total === 0;
+      }
+
+      function updateSelectionToggles() {
+        syncToggleState(leftToggle, filteredUnassignedItems(), selectedLeft);
+        syncToggleState(rightToggle, filteredAssignedItems().map((row) => row.item), selectedRight);
+      }
+
+      function renderAll() {
+        updateCategoryOptions();
+        renderUnassigned();
+        renderAssigned();
+        refreshMeta();
+      }
+
+      function moveSelectedRight() {
+        if (!selectedLeft.size) return;
+        const moving = unassignedItems.filter((item) => selectedLeft.has(item));
+        if (!moving.length) return;
+        pushUndoState();
+        assignedItems = assignedItems.concat(moving.map((item) => ({ item })));
+        unassignedItems = unassignedItems.filter((item) => !selectedLeft.has(item));
+        selectedLeft = new Set();
+        renderAll();
+      }
+
+      function moveSelectedLeft() {
+        if (!selectedRight.size) return;
+        const returning = assignedItems.filter((row) => selectedRight.has(row.item)).map((row) => row.item);
+        if (!returning.length) return;
+        pushUndoState();
+        assignedItems = assignedItems.filter((row) => !selectedRight.has(row.item));
+        unassignedItems = sortItemsByDefault(Array.from(new Set(unassignedItems.concat(returning))));
+        selectedRight = new Set();
+        renderAll();
+      }
+
+      function downloadRecords(headers, records, filename) {
+        const escapeCell = (value) => {
+          const text = String(value ?? '');
+          return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+        };
+        const lines = [headers.map(escapeCell).join(',')];
+        records.forEach((record) => {
+          lines.push(headers.map((header) => escapeCell(record[header] ?? '')).join(','));
+        });
+        const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function exportTimestamp() {
+        const now = new Date();
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const pad = (value) => String(value).padStart(2, '0');
+        return [
+          pad(now.getDate()),
+          months[now.getMonth()],
+          String(now.getFullYear()).slice(-2),
+          pad(now.getHours()),
+          pad(now.getMinutes()),
+        ].join('_');
+      }
+
+      function sequenceExportHeaders(baseHeaders) {
+        const headers = [...(baseHeaders || []), 'Sequence No'];
+        return Array.from(new Set(headers));
+      }
+
+      function buildSequenceExportRecord(baseRecord, sequenceNo) {
+        const data = Object.assign({}, baseRecord || {});
+        data['Sequence No'] = sequenceNo || '';
+        return data;
+      }
+
+      function exportMasterDataWithSequence() {
+        if (!sourceRows.length) {
+          setFeedback('warn', 'Sync data or upload a CSV first.');
+          return;
+        }
+        const summary = reconciliationSummary();
+        if (sourceMode === 'db' && (summary.missingInSeatAllocation.length || summary.extraInSeatAllocation.length)) {
+          const parts = [];
+          if (summary.missingInSeatAllocation.length) {
+            const preview = summary.missingInSeatAllocation.slice(0, 5).join(', ');
+            const more = summary.missingInSeatAllocation.length - 5;
+            parts.push(`missing in Seat Allocation: ${preview}${more > 0 ? ` and ${more} more` : ''}`);
+          }
+          if (summary.extraInSeatAllocation.length) {
+            const preview = summary.extraInSeatAllocation.slice(0, 5).join(', ');
+            const more = summary.extraInSeatAllocation.length - 5;
+            parts.push(`removed from Master Data: ${preview}${more > 0 ? ` and ${more} more` : ''}`);
+          }
+          setFeedback('error', `Master Data with Sequence export is blocked until Seat Allocation is in sync with Master Data. ${parts.join(' | ')}`);
+          return;
+        }
+        if (unassignedItems.length) {
+          setFeedback('warn', `Still ${unassignedItems.length} unassigned item(s). Move them into the sequenced list before exporting.`);
+          return;
+        }
+        const indexMap = sequenceByItem();
+        const headers = sequenceExportHeaders(sourceRows[0]?.headers || []);
+        const records = sourceRows.map((row) => {
+          return buildSequenceExportRecord(row.row_map || {}, indexMap.get(row.requested_item) || '');
+        });
+        downloadRecords(headers, records, `3_Master_Data_Seq_${exportTimestamp()}.csv`);
+        setFeedback('info', 'Master data with sequence exported.');
+      }
+
+      function exportSequenceListOnly() {
+        if (!assignedItems.length) {
+          setFeedback('warn', 'No sequenced items found to export.');
+          return;
+        }
+        const indexMap = sequenceByItem();
+        const records = assignedItems.map((row) => ({
+          'Sequence No': indexMap.get(row.item) || '',
+          'Item': row.item,
+        }));
+        downloadRecords(['Sequence No', 'Item'], records, `Sequence_List_${exportTimestamp()}.csv`);
+        setFeedback('info', 'Sequence list exported.');
+      }
+
+      function saveToDb() {
+        if (!saveForm || !saveFields) return;
+        if (!masterItems.length) {
+          setFeedback('warn', 'No Master Data items found to save.');
+          return;
+        }
+        if (sourceMode !== 'db') {
+          setFeedback('warn', 'Save Now works only for Seat Allocation database mode.');
+          return;
+        }
+        const summary = reconciliationSummary();
+        if (summary.missingInSeatAllocation.length || summary.extraInSeatAllocation.length) {
+          const parts = [];
+          if (summary.missingInSeatAllocation.length) {
+            const preview = summary.missingInSeatAllocation.slice(0, 5).join(', ');
+            const more = summary.missingInSeatAllocation.length - 5;
+            parts.push(`missing in Seat Allocation: ${preview}${more > 0 ? ` and ${more} more` : ''}`);
+          }
+          if (summary.extraInSeatAllocation.length) {
+            const preview = summary.extraInSeatAllocation.slice(0, 5).join(', ');
+            const more = summary.extraInSeatAllocation.length - 5;
+            parts.push(`removed from Master Data: ${preview}${more > 0 ? ` and ${more} more` : ''}`);
+          }
+          setFeedback('error', `Seat Allocation is not in sync with Master Data. Sync and save Seat Allocation first, then return here. ${parts.join(' | ')}`);
+          return;
+        }
+        const indexMap = sequenceByItem();
+        saveFields.innerHTML = '';
+        assignedItems.forEach((row) => {
+          const item = row.item;
+          const itemField = document.createElement('input');
+          itemField.type = 'hidden';
+          itemField.name = 'item_name';
+          itemField.value = item;
+          saveFields.appendChild(itemField);
+
+          const sequenceField = document.createElement('input');
+          sequenceField.type = 'hidden';
+          sequenceField.name = 'sequence_no';
+          sequenceField.value = indexMap.get(item) || '';
+          saveFields.appendChild(sequenceField);
+        });
+        if (!assignedItems.length) {
+          setFeedback('warn', 'No sequenced items to save yet.');
+          return;
+        }
+        const unassignedMasterItems = masterItems
+          .map((row) => String(row.item || '').trim())
+          .filter((item) => item && !assignedItems.some((assigned) => assigned.item === item));
+        if (unassignedMasterItems.length) {
+          const preview = unassignedMasterItems.slice(0, 5).join(', ');
+          const moreCount = Math.max(unassignedMasterItems.length - 5, 0);
+          setFeedback('error', `Sequence reconciliation failed. ${unassignedMasterItems.length} master item(s) are still unassigned: ${preview}${moreCount ? ` and ${moreCount} more` : ''}. Complete the list, then save again.`);
+          return;
+        }
+        saveForm.submit();
+      }
+
+      loadDbButton?.addEventListener('click', function() {
+        const originalText = loadDbButton.textContent;
+        loadDbButton.disabled = true;
+        loadDbButton.textContent = 'Syncing...';
+        window.requestAnimationFrame(function() {
+          window.setTimeout(function() {
+            try {
+              loadFromDb();
+            } finally {
+              loadDbButton.disabled = false;
+              loadDbButton.textContent = originalText;
+            }
+          }, 60);
+        });
+      });
+
+      uploadButton?.addEventListener('click', function() {
+        fileInput?.click();
+      });
+
+      fileInput?.addEventListener('change', function() {
+        const file = fileInput.files && fileInput.files[0];
+        if (file) {
+          handleUpload(file);
+        }
+        fileInput.value = '';
+      });
+
+      resetButton?.addEventListener('click', function() {
+        if (!sourceRows.length) {
+          setFeedback('warn', 'Load data first.');
+          return;
+        }
+        pushUndoState();
+        assignedItems = [];
+        unassignedItems = sortItemsByDefault(Array.from(new Set(getEffectiveRows(sourceRows).map((row) => String(row.requested_item || '').trim()).filter(Boolean))));
+        selectedLeft = new Set();
+        selectedRight = new Set();
+        renderAll();
+        setFeedback('info', 'Assigned list cleared. All items moved back to Unassigned.');
+      });
+
+      undoButton?.addEventListener('click', function() {
+        undoLastChange();
+      });
+
+      exportSequenceButton?.addEventListener('click', function() {
+        exportSequenceListOnly();
+      });
+      exportMasterButton?.addEventListener('click', function() {
+        exportMasterDataWithSequence();
+      });
+
+      saveButton?.addEventListener('click', function() {
+        saveToDb();
+      });
+
+      document.getElementById('sequence-move-right')?.addEventListener('click', moveSelectedRight);
+      document.getElementById('sequence-move-left')?.addEventListener('click', moveSelectedLeft);
+
+      leftToggle?.addEventListener('change', function() {
+        if (leftToggle.checked) {
+          selectedLeft = new Set(filteredUnassignedItems());
+        } else {
+          filteredUnassignedItems().forEach((item) => selectedLeft.delete(item));
+        }
+        renderUnassigned();
+      });
+      rightToggle?.addEventListener('change', function() {
+        const visibleItems = filteredAssignedItems().map((row) => row.item);
+        if (rightToggle.checked) {
+          visibleItems.forEach((item) => selectedRight.add(item));
+        } else {
+          visibleItems.forEach((item) => selectedRight.delete(item));
+        }
+        renderAssigned();
+      });
+      sortToggle?.addEventListener('change', function() {
+        assignedSortEnabled = sortToggle.checked;
+        renderAssigned();
+      });
+
+      startInput?.addEventListener('input', function() {
+        const parsed = Number(startInput.value);
+        sequenceStart = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
+        renderAssigned();
+      });
+      tokenOnlyCheckbox?.addEventListener('change', function() {
+        includeOnlyTokenRows = tokenOnlyCheckbox.checked;
+        rebuildLists(sourceRows, { preserveCurrent: true, forceUnassignedAll: false });
+      });
+      leftSearch?.addEventListener('input', function() {
+        unassignedSearch = leftSearch.value || '';
+        renderUnassigned();
+      });
+      leftCategory?.addEventListener('change', function() {
+        unassignedCategoryFilter = leftCategory.value;
+        renderUnassigned();
+      });
+      rightCategory?.addEventListener('change', function() {
+        assignedCategoryFilter = rightCategory.value;
+        renderAssigned();
+      });
+
+      function updateSaveState() {
+        if (!saveButton) return;
+        saveButton.disabled = !masterItems.length || sourceMode !== 'db';
+        saveButton.title = sourceMode === 'db' ? '' : 'Save works only for database-backed sequence data.';
+      }
+
+      loadFromDb();
+      updateUndoState();
+    })();
+  </script>
+{% endblock %}

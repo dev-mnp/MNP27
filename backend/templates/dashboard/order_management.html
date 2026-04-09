@@ -192,6 +192,53 @@
       color: #94a3b8;
       font-size: 0.82rem;
     }
+    .order-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-left: auto;
+    }
+    .order-export-menu {
+      position: relative;
+    }
+    .order-export-menu summary {
+      list-style: none;
+    }
+    .order-export-menu summary::-webkit-details-marker {
+      display: none;
+    }
+    .order-export-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .order-export-panel {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 180px;
+      padding: 8px;
+      border: 1px solid #dbe3ef;
+      border-radius: 14px;
+      background: #ffffff;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+      display: grid;
+      gap: 6px;
+      z-index: 20;
+    }
+    .order-export-link {
+      display: block;
+      padding: 10px 12px;
+      border-radius: 10px;
+      color: #0f172a;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .order-export-link:hover {
+      background: #f8fafc;
+      text-decoration: none;
+    }
   </style>
   <section class="card order-page-card">
     <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 18px;">
@@ -200,6 +247,18 @@
           <svg viewBox="0 0 24 24"><path d="M3 7h18"/><path d="M6 7V5"/><path d="M18 7V5"/><path d="M5 11h14"/><path d="M7 15h10"/><path d="M9 19h6"/></svg>
           <span>Inventory Planning</span>
         </h2>
+      </div>
+      <div class="order-header-actions">
+        <details class="order-export-menu">
+          <summary class="btn order-export-trigger">
+            <span>Export</span>
+            <span aria-hidden="true">▾</span>
+          </summary>
+          <div class="order-export-panel">
+            <a class="order-export-link" href="{% url 'ui:order-management' %}?{{ query_string_without_page }}&export=csv&export_mode=complete">All Rows</a>
+            <a class="order-export-link" href="{% url 'ui:order-management' %}?{{ query_string_without_page }}&export=csv&export_mode=overview">Overview</a>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -279,10 +338,6 @@
               <option value="{{ value }}" {% if filters.balance == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
-        </div>
-        <div style="display: inline-flex; align-items: flex-end; gap: 8px; flex-wrap: wrap;">
-          <a class="btn" href="{% url 'ui:order-management' %}?{{ query_string_without_page }}&export=csv&export_mode=overview">Export Overview</a>
-          <a class="btn" href="{% url 'ui:order-management' %}?{{ query_string_without_page }}&export=csv&export_mode=complete">Export Complete</a>
         </div>
       </div>
 

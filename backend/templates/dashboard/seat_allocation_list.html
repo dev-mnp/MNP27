@@ -1,0 +1,1113 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="card">
+    <div class="toolbar seat-header-bar" style="justify-content: space-between; align-items: flex-start;">
+      <div>
+        <h1 style="margin: 0;">Seat Allocation</h1>
+      </div>
+      <div class="seat-header-actions">
+        <div class="toolbar seat-top-actions" style="margin: 0; justify-content: flex-end;">
+          {% if can_upload_replace %}
+            <a class="btn" href="{{ preview_sync_url }}">Sync Data</a>
+            <form method="post" enctype="multipart/form-data" class="seat-upload-form" style="margin: 0;">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="upload_csv">
+              {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+              <div class="seat-upload-stack">
+                <input class="seat-upload-input" id="seat-upload-input" type="file" name="file" accept=".csv,text/csv" required>
+                <button class="btn seat-upload-trigger" id="seat-upload-trigger" type="button" title="Upload CSV" aria-label="Upload CSV">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 16V4"></path>
+                    <path d="m7 9 5-5 5 5"></path>
+                    <path d="M20 16.5a3.5 3.5 0 0 1-3.5 3.5h-9A3.5 3.5 0 0 1 4 16.5"></path>
+                  </svg>
+                  <span>Upload CSV</span>
+                </button>
+              </div>
+            </form>
+          {% endif %}
+          {% if can_export and selected_session %}
+            <a class="btn seat-secondary-action seat-export-button" href="?session={{ selected_session.pk }}&export=1">
+              <span>Export</span>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 5v14"></path>
+                <path d="m17 10-5-5-5 5"></path>
+                <path d="M5 19h14"></path>
+              </svg>
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="seat-source-summary">
+      <span class="seat-source-summary-label">
+        {% if reconciliation.source_name %}
+          {% if reconciliation.source_name == "master-entry-db" %}
+            Loaded from Master Database
+          {% else %}
+            Loaded Uploaded File: {{ reconciliation.source_name }}
+          {% endif %}
+        {% else %}
+          No source loaded
+        {% endif %}
+      </span>
+      <span>Rows: <strong>{{ all_rows_count }}</strong></span>
+      <span>Unique Items: <strong>{{ seat_unique_item_count }}</strong></span>
+      {% if reconciliation.last_checked_at %}
+        <span>Synced: <strong>{{ reconciliation.last_checked_at|date:"d/m/Y h:i A" }}</strong></span>
+      {% endif %}
+    </div>
+
+    {% if reconciliation.source_name %}
+      {% if master_change_state and master_change_state.has_changes %}
+        <div class="seat-source-warning">
+          Master Data has changed since the last sync.
+          {% if master_change_state.new_count %} New: {{ master_change_state.new_count }}.{% endif %}
+          {% if master_change_state.updated_count %} Updated: {{ master_change_state.updated_count }}.{% endif %}
+          {% if master_change_state.removed_count %} Removed: {{ master_change_state.removed_count }}.{% endif %}
+          Sync Master Data again to refresh this working copy.
+        </div>
+        {% if master_change_state.updated_rows %}
+          <div class="seat-source-warning-list">
+            <div class="seat-source-warning-list-title">Updated rows</div>
+            <ul>
+              {% for row in master_change_state.updated_rows %}
+                <li>
+                  <strong>{{ row.beneficiary_type|default:"-" }}</strong>
+                  · {{ row.application_number|default:"-" }}
+                  · {{ row.beneficiary_name|default:"-" }}
+                  · {{ row.requested_item|default:"-" }}
+                  {% if row.changes %}
+                    : {{ row.changes|join:", " }}
+                  {% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+      {% endif %}
+    {% endif %}
+
+    {% if sync_preview %}
+      <div class="seat-sync-preview">
+        <div class="seat-sync-preview-header">
+          <strong>Master sync preview</strong>
+          <span class="seat-sync-preview-meta">Working rows: {{ sync_preview.grouped_row_count }} from {{ sync_preview.source_row_count }} master row(s)</span>
+        </div>
+        <div class="seat-sync-preview-list">
+          <span class="seat-sync-pill is-ok">Preserve {{ sync_preview.preserved_count }}</span>
+          <span class="seat-sync-pill">Add {{ sync_preview.new_count }}</span>
+          <span class="seat-sync-pill {% if sync_preview.removed_count %}is-warn{% endif %}">Remove {{ sync_preview.removed_count }}</span>
+        </div>
+        {% if sync_preview.added_rows %}
+          <div class="seat-sync-preview-changes">
+            <div class="seat-sync-preview-label">Added</div>
+            <ul class="seat-sync-preview-rows">
+              {% for row in sync_preview.added_rows %}
+                <li>
+                  <strong>{{ row.beneficiary_type|default:"-" }}</strong>
+                  · {{ row.application_number|default:"-" }}
+                  · {{ row.beneficiary_name|default:"-" }}
+                  · {{ row.requested_item|default:"-" }}
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+        {% if sync_preview.removed_rows %}
+          <div class="seat-sync-preview-changes">
+            <div class="seat-sync-preview-label is-warn">Removed</div>
+            <ul class="seat-sync-preview-rows">
+              {% for row in sync_preview.removed_rows %}
+                <li>
+                  <strong>{{ row.beneficiary_type|default:"-" }}</strong>
+                  · {{ row.application_number|default:"-" }}
+                  · {{ row.beneficiary_name|default:"-" }}
+                  · {{ row.requested_item|default:"-" }}
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+        {% if sync_preview.removed_count %}
+          <div class="seat-sync-preview-note">Rows marked for removal no longer exist in master data. Review this carefully before applying the sync.</div>
+        {% endif %}
+        <div class="seat-sync-preview-actions">
+          <form method="post" style="margin: 0;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="use_existing">
+            {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+            <button class="btn" type="submit">Apply Master Sync</button>
+          </form>
+          <a class="btn btn-subtle" href="{{ clear_preview_url }}">Cancel</a>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if selected_session and reconciliation.source_name %}
+      {% if reconciliation.all_matched %}
+        <details class="seat-reconciliation-box seat-reconciliation-summary">
+          <summary class="seat-reconciliation-summary-line">
+            <span class="seat-reconciliation-status is-ok">Master Copy Reconciliation Matched</span>
+            <span class="seat-reconciliation-source">Source: {{ reconciliation.source_name }}</span>
+            {% if reconciliation.last_checked_at %}
+              <span class="seat-reconciliation-source">Last reconciled: {{ reconciliation.last_checked_at|date:"d/m/Y h:i A" }}</span>
+            {% endif %}
+          </summary>
+          <ul class="seat-reconciliation-list" style="margin-top: 8px;">
+            {% for check in reconciliation.checks %}
+              <li class="seat-reconciliation-item is-ok">
+                <span class="seat-reconciliation-icon" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m4.5 10 3.2 3.2 7.8-7.8"></path>
+                  </svg>
+                </span>
+                <span class="seat-reconciliation-text">{{ check.label }} matched</span>
+              </li>
+            {% endfor %}
+          </ul>
+        </details>
+      {% else %}
+        <div class="seat-reconciliation-box">
+          <div class="seat-reconciliation-header">
+            <div>
+              <span class="seat-reconciliation-title">Master Copy Reconciliation</span>
+              <span class="seat-reconciliation-source">Source: {{ reconciliation.source_name }}</span>
+              {% if reconciliation.last_checked_at %}
+                <span class="seat-reconciliation-source">Last reconciled: {{ reconciliation.last_checked_at|date:"d/m/Y h:i A" }}</span>
+              {% endif %}
+            </div>
+            <span class="seat-reconciliation-status is-issue">Check discrepancies</span>
+          </div>
+          <ul class="seat-reconciliation-list">
+            {% for check in reconciliation.checks %}
+              <li class="seat-reconciliation-item {% if check.matched %}is-ok{% else %}is-issue{% endif %}">
+                <span class="seat-reconciliation-icon" aria-hidden="true">
+                  {% if check.matched %}
+                    <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="m4.5 10 3.2 3.2 7.8-7.8"></path>
+                    </svg>
+                  {% else %}
+                    <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                      <path d="M10 5.5v5"></path>
+                      <path d="M10 14.2h.01"></path>
+                      <circle cx="10" cy="10" r="8"></circle>
+                    </svg>
+                  {% endif %}
+                </span>
+                <span class="seat-reconciliation-text">
+                  {% if check.matched %}
+                    {{ check.label }} matched
+                  {% else %}
+                    {{ check.label }} mismatch: master {{ check.source }}, working copy {{ check.grouped }}
+                  {% endif %}
+                </span>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    {% endif %}
+
+    {% if submit_result %}
+      <details class="seat-reconciliation-box {% if submit_result.all_matched %}seat-reconciliation-summary{% endif %}" open style="margin-bottom: 12px;">
+        <summary class="seat-reconciliation-summary-line">
+          <span class="seat-reconciliation-status {% if submit_result.all_matched %}is-ok{% else %}is-issue{% endif %}">
+            {% if submit_result.all_matched %}Save Reconciliation Matched{% else %}Save Reconciliation Has Issues{% endif %}
+          </span>
+          <span class="seat-reconciliation-source">Checked against master copy and saved split values</span>
+          {% if submit_result.checked_at_display %}
+            <span class="seat-reconciliation-source">Checked at: {{ submit_result.checked_at_display }}</span>
+          {% endif %}
+        </summary>
+        <ul class="seat-reconciliation-list" style="margin-top: 8px;">
+          {% for check in submit_result.checks %}
+            <li class="seat-reconciliation-item {% if check.matched %}is-ok{% else %}is-issue{% endif %}">
+              <span class="seat-reconciliation-icon" aria-hidden="true">
+                {% if check.matched %}
+                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m4.5 10 3.2 3.2 7.8-7.8"></path>
+                  </svg>
+                {% else %}
+                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                    <path d="M10 5.5v5"></path>
+                    <path d="M10 14.2h.01"></path>
+                    <circle cx="10" cy="10" r="8"></circle>
+                  </svg>
+                {% endif %}
+              </span>
+              <span class="seat-reconciliation-text">
+                {{ check.label }}
+                {% if check.details %}
+                  : {{ check.details }}
+                {% endif %}
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
+      </details>
+    {% endif %}
+
+    <div class="card" style="margin: 16px 0 14px; padding: 12px;">
+      <div style="font-size: 0.78rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 10px;">Filters</div>
+      <form method="get" id="seat-filter-form" class="row" style="grid-template-columns: 1.3fr 0.85fr 0.85fr 0.9fr auto; margin: 0;">
+        {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+        <div>
+          <label for="seat-q">Search</label>
+          <input id="seat-q" type="text" name="q" value="{{ filters.q }}" placeholder="Search app no, district, beneficiary, item, comments...">
+        </div>
+        <div>
+          <label for="seat-type">Beneficiary Type</label>
+          <select id="seat-type" name="beneficiary_type">
+            <option value="District" {% if filters.beneficiary_type == 'District' %}selected{% endif %}>District</option>
+            <option value="Public" {% if filters.beneficiary_type == 'Public' %}selected{% endif %}>Public</option>
+            <option value="Institutions" {% if filters.beneficiary_type == 'Institutions' %}selected{% endif %}>Institutions</option>
+            <option value="Others" {% if filters.beneficiary_type == 'Others' %}selected{% endif %}>Others</option>
+            <option value="all" {% if filters.beneficiary_type == 'all' %}selected{% endif %}>All Types</option>
+          </select>
+        </div>
+        <div>
+          <label for="seat-district-filter">{% if is_district_type %}District{% elif is_institution_like_type %}Institution{% else %}Filter{% endif %}</label>
+          <select id="seat-district-filter" name="district_filter" {% if not is_district_type and not is_institution_like_type %}disabled{% endif %}>
+            <option value="all">
+              {% if is_district_type %}All Districts{% elif is_institution_like_type %}All Institutions{% else %}N/A{% endif %}
+            </option>
+            {% for option in district_options %}
+              <option value="{{ option }}" {% if filters.district_filter == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="seat-item-filter">Item</label>
+          <select id="seat-item-filter" name="item_filter">
+            <option value="all">All Items</option>
+            {% for option in article_options %}
+              <option value="{{ option }}" {% if filters.item_filter == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="display: flex; align-items: end; gap: 8px;">
+          {% if selected_session %}
+            <a class="btn btn-subtle" href="?session={{ selected_session.pk }}">Clear</a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+
+    <div class="row" style="grid-template-columns: repeat(5, minmax(0, 1fr));">
+      <div class="card" style="margin: 0; padding: 12px;">
+        <div style="font-size: 0.82rem; color: var(--text-secondary);">Quantity</div>
+        <div id="seat-total-quantity" style="font-size: 1.2rem; font-weight: 700;">{{ totals.quantity }}</div>
+      </div>
+      <div class="card" style="margin: 0; padding: 12px;">
+        <div style="font-size: 0.82rem; color: var(--text-secondary);">Waiting Hall Quantity</div>
+        <div id="seat-filtered-waiting-total" style="font-size: 1.2rem; font-weight: 700; color: #d97706;">{{ totals.waiting_hall_quantity }}</div>
+        <div id="seat-filtered-waiting-percent" style="font-size: 0.85rem; color: #d97706; margin-top: 4px;">{{ percentages.waiting_hall }}%</div>
+      </div>
+      <div class="card" style="margin: 0; padding: 12px;">
+        <div style="font-size: 0.82rem; color: var(--text-secondary);">Token Quantity</div>
+        <div id="seat-filtered-token-total" style="font-size: 1.2rem; font-weight: 700; color: #15803d;">{{ totals.token_quantity }}</div>
+        <div id="seat-filtered-token-percent" style="font-size: 0.85rem; color: #15803d; margin-top: 4px;">{{ percentages.token }}%</div>
+      </div>
+      <div class="card" style="margin: 0; padding: 12px; background: #eff6ff;">
+        <div style="font-size: 0.82rem; color: #1d4ed8;">All Beneficiaries Waiting Hall</div>
+        <div id="seat-overall-waiting-total" style="font-size: 1.2rem; font-weight: 700; color: #1d4ed8;">{{ overall_totals.waiting_hall_quantity }}</div>
+      </div>
+      <div class="card" style="margin: 0; padding: 12px; background: #ecfdf3;">
+        <div style="font-size: 0.82rem; color: #15803d;">All Beneficiaries Token</div>
+        <div id="seat-overall-token-total" style="font-size: 1.2rem; font-weight: 700; color: #15803d;">{{ overall_totals.token_quantity }}</div>
+      </div>
+    </div>
+
+    {% if can_create_edit and seat_rows %}
+      <div class="seat-bulk-actions">
+        <span class="seat-bulk-actions-label">Bulk Actions</span>
+        <div class="toolbar" style="justify-content: flex-end; margin: 0;">
+          <form method="post" style="margin: 0;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="reset_filtered_splits">
+            {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+            {% for row in seat_rows %}<input type="hidden" name="visible_row_id" value="{{ row.id }}">{% endfor %}
+            <button class="btn seat-secondary-action" type="submit" onclick="return confirm('Reset split values for the currently filtered rows? Unsaved working values for those rows will be lost.')">Reset Filtered Splits</button>
+          </form>
+          <form method="post" style="margin: 0;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="reset_splits">
+            {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+            <button class="btn seat-secondary-action" type="submit" onclick="return confirm('Reset all waiting hall and token split values for the current seat allocation? Unsaved working values will be lost.')">Reset All Splits</button>
+          </form>
+          <form method="post" style="margin: 0;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="bulk_waiting_full">
+            {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+            {% for row in seat_rows %}<input type="hidden" name="visible_row_id" value="{{ row.id }}">{% endfor %}
+            <button class="btn seat-secondary-action" type="submit">Filtered: Waiting Hall Full</button>
+          </form>
+          <form method="post" style="margin: 0;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="bulk_waiting_zero">
+            {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+            {% for row in seat_rows %}<input type="hidden" name="visible_row_id" value="{{ row.id }}">{% endfor %}
+            <button class="btn seat-secondary-action" type="submit">Filtered: Waiting Hall Empty</button>
+          </form>
+        </div>
+      </div>
+    {% endif %}
+
+    <form method="post" id="seat-splits-form">
+      {% csrf_token %}
+      <input type="hidden" id="seat-form-action" name="action" value="save_splits">
+      {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+      <div class="card" style="padding: 0; overflow: hidden;">
+        <div class="toolbar" style="justify-content: space-between; padding: 14px 16px; margin: 0; border-bottom: 1px solid var(--border-color);">
+          <div style="font-weight: 600;">Seat Rows</div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span id="seat-save-state" class="seat-save-state is-saved">All changes saved</span>
+            <span id="seat-changed-count" class="seat-changed-count" hidden>Changed rows: 0</span>
+            {% if last_saved_at %}
+              <span class="seat-last-saved">Last saved: {{ last_saved_at|date:"d/m/Y h:i A" }}</span>
+            {% endif %}
+            {% if can_create_edit %}
+              <button class="btn btn-subtle" id="seat-revert-button" type="button" hidden aria-hidden="true">Revert Unsaved Changes</button>
+              <button class="btn" id="seat-save-button" type="submit">Save and Reconcile</button>
+            {% endif %}
+          </div>
+        </div>
+        <div style="overflow: auto; max-height: 75vh;">
+          <table>
+            <thead>
+              <tr>
+                <th><a href="?{{ sort_querystrings.district }}">District {% if current_sort == 'district' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+                <th><a href="?{{ sort_querystrings.application_number }}">App No {% if current_sort == 'application_number' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+                <th><a href="?{{ sort_querystrings.beneficiary_name }}">Beneficiary {% if current_sort == 'beneficiary_name' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+                <th><a href="?{{ sort_querystrings.requested_item }}">Item {% if current_sort == 'requested_item' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+                <th style="text-align: center;"><a href="?{{ sort_querystrings.quantity }}">Quantity {% if current_sort == 'quantity' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+                <th style="text-align: right;"><a href="?{{ sort_querystrings.waiting_hall_quantity }}">Waiting Hall {% if current_sort == 'waiting_hall_quantity' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+                <th style="text-align: center;"><a href="?{{ sort_querystrings.token_quantity }}">Token {% if current_sort == 'token_quantity' %}{% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in seat_rows %}
+                <tr class="seat-data-row">
+                  <td>{{ row.district|default:"-" }}</td>
+                  <td>{{ row.application_number|default:"-" }}</td>
+                  <td>{{ row.beneficiary_name|default:"-" }}</td>
+                  <td>{{ row.requested_item }}</td>
+                  <td style="text-align: center;">{{ row.quantity }}</td>
+                  <td style="min-width: 150px;">
+                    <input type="hidden" name="row_id" value="{{ row.id }}">
+                    <div class="seat-stepper" data-quantity="{{ row.quantity }}">
+                      <button type="button" class="seat-stepper-btn" data-step="-1">-</button>
+                      <input type="number" name="waiting_hall_quantity" min="0" max="{{ row.quantity }}" step="1" value="{{ row.waiting_hall_quantity }}" data-initial-waiting="{{ row.waiting_hall_quantity }}" class="seat-waiting-input">
+                      <button type="button" class="seat-stepper-btn" data-step="1">+</button>
+                    </div>
+                  </td>
+                  <td style="text-align: center;">
+                    <span class="seat-token-value" data-quantity="{{ row.quantity }}">{{ row.token_quantity }}</span>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="7" style="text-align: center; color: var(--text-secondary);">Use current master data or upload a master CSV to start seat allocation.</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </form>
+
+    {% if can_create_edit and seat_rows %}
+      <div class="seat-sticky-savebar" id="seat-sticky-savebar" hidden>
+        <div class="seat-sticky-savebar-text">
+          <strong>Unsaved split changes</strong>
+          <span>Save your waiting hall and token edits before you continue.</span>
+        </div>
+        <div class="seat-sticky-savebar-actions">
+          <button class="btn btn-subtle" id="seat-sticky-dismiss" type="button">Dismiss</button>
+          <button class="btn btn-subtle" id="seat-sticky-revert" type="button">Revert</button>
+          <button class="btn" type="submit" form="seat-splits-form">Save</button>
+        </div>
+      </div>
+    {% endif %}
+
+  </div>
+
+  <style>
+    .seat-stepper {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      justify-content: flex-end;
+      width: 100%;
+    }
+    .seat-stepper-btn {
+      width: 28px;
+      min-width: 28px;
+      height: 28px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .seat-stepper-btn:hover {
+      background: var(--bg-tertiary);
+    }
+    .seat-waiting-input {
+      width: 56px;
+      text-align: center;
+      margin: 0;
+    }
+    .seat-token-value {
+      display: inline-block;
+      min-width: 32px;
+      font-weight: 600;
+      color: #15803d;
+    }
+    .seat-top-actions {
+      gap: 10px;
+      align-items: center;
+      flex-wrap: nowrap;
+    }
+    .seat-header-bar {
+      gap: 16px;
+    }
+    .seat-header-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 10px;
+      flex: 0 0 auto;
+    }
+    .seat-upload-form {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: nowrap;
+    }
+    .seat-upload-stack {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: nowrap;
+    }
+    .seat-upload-input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .seat-upload-trigger {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 36px;
+    }
+    .seat-upload-name {
+      min-width: 140px;
+      max-width: 220px;
+      color: var(--text-secondary);
+      font-size: 0.92rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .seat-upload-name.is-loaded {
+      color: #b91c1c;
+      font-weight: 600;
+    }
+    .seat-source-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
+      color: var(--text-secondary);
+      font-size: 0.86rem;
+      margin-top: 12px;
+    }
+    .seat-source-summary strong {
+      color: var(--text-primary);
+    }
+    .seat-source-summary-label {
+      color: #b91c1c;
+      font-weight: 700;
+    }
+    .seat-source-warning {
+      margin: 6px 0 0;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #b91c1c;
+    }
+    .seat-source-warning-list {
+      margin: 6px 0 0;
+      font-size: 0.86rem;
+      color: #7f1d1d;
+    }
+    .seat-source-warning-list-title {
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .seat-source-warning-list ul {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 2px;
+    }
+    .seat-sync-preview {
+      margin: 12px 0;
+      padding: 12px 14px;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: #f8fafc;
+    }
+    .seat-sync-preview-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .seat-sync-preview-meta {
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+    }
+    .seat-sync-preview-list {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .seat-sync-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      color: #334155;
+      font-size: 0.86rem;
+      font-weight: 700;
+    }
+    .seat-sync-pill.is-ok {
+      background: #dcfce7;
+      color: #166534;
+    }
+    .seat-sync-pill.is-warn {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+    .seat-sync-preview-note {
+      font-size: 0.88rem;
+      color: #b91c1c;
+      margin-bottom: 8px;
+    }
+    .seat-sync-preview-changes {
+      margin-bottom: 8px;
+    }
+    .seat-sync-preview-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #1d4ed8;
+      margin-bottom: 4px;
+    }
+    .seat-sync-preview-label.is-warn {
+      color: #b91c1c;
+    }
+    .seat-sync-preview-rows {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 0.87rem;
+      color: var(--text-secondary);
+      display: grid;
+      gap: 2px;
+    }
+    .seat-sync-preview-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .seat-secondary-action {
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #bfdbfe;
+    }
+    .seat-export-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .seat-secondary-action:hover {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+    .seat-reconciliation-box {
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: #fcfdff;
+    }
+    .seat-reconciliation-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .seat-reconciliation-title {
+      font-size: 0.88rem;
+      font-weight: 700;
+      margin-right: 10px;
+    }
+    .seat-reconciliation-source {
+      font-size: 0.86rem;
+      color: var(--text-secondary);
+    }
+    .seat-reconciliation-status {
+      font-size: 0.84rem;
+      font-weight: 700;
+    }
+    .seat-reconciliation-status.is-ok {
+      color: #15803d;
+    }
+    .seat-reconciliation-status.is-issue {
+      color: #b91c1c;
+    }
+    .seat-reconciliation-summary {
+      background: #f0fdf4;
+      border-color: #bbf7d0;
+    }
+    .seat-reconciliation-summary summary {
+      list-style: none;
+      cursor: pointer;
+    }
+    .seat-reconciliation-summary summary::-webkit-details-marker {
+      display: none;
+    }
+    .seat-reconciliation-summary-line {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .seat-reconciliation-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 6px 14px;
+    }
+    .seat-reconciliation-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 0.88rem;
+      line-height: 1.35;
+    }
+    .seat-reconciliation-item.is-ok {
+      color: #166534;
+    }
+    .seat-reconciliation-item.is-issue {
+      color: #b91c1c;
+    }
+    .seat-reconciliation-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+      flex: 0 0 auto;
+    }
+    .seat-reconciliation-text {
+      display: inline-block;
+    }
+    .seat-bulk-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin: 14px 0;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: #f8fafc;
+    }
+    .seat-bulk-actions-label {
+      font-size: 0.84rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .seat-last-saved {
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+    .seat-save-state {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #b91c1c;
+      white-space: nowrap;
+    }
+    .seat-save-state.is-saved {
+      color: #15803d;
+      font-weight: 600;
+    }
+    .seat-changed-count {
+      font-size: 0.88rem;
+      color: #92400e;
+      white-space: nowrap;
+    }
+    #seat-revert-button[hidden] {
+      display: none !important;
+    }
+    .seat-sticky-savebar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .seat-data-row.is-modified {
+      background: #fff7ed;
+    }
+    .seat-data-row.is-modified td {
+      background: transparent;
+    }
+    .seat-sticky-savebar {
+      position: sticky;
+      bottom: 12px;
+      z-index: 20;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-top: 14px;
+      padding: 12px 14px;
+      border: 1px solid #bfdbfe;
+      border-radius: 14px;
+      background: rgba(239, 246, 255, 0.98);
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+    .seat-sticky-savebar[hidden] {
+      display: none !important;
+    }
+    .seat-sticky-savebar-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 0.9rem;
+      color: #1e3a8a;
+    }
+    @media (max-width: 1200px) {
+      .seat-header-bar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .seat-header-actions {
+        align-items: stretch;
+      }
+      .seat-top-actions {
+        flex-wrap: wrap;
+        justify-content: flex-start !important;
+      }
+      .seat-bulk-actions,
+      .seat-sticky-savebar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .seat-upload-form,
+      .seat-upload-stack {
+        flex-wrap: wrap;
+      }
+    }
+    @media (max-width: 1100px) {
+      .seat-upload-name {
+        min-width: 120px;
+        max-width: 180px;
+      }
+    }
+  </style>
+
+  <script>
+    (function() {
+      const uploadInput = document.getElementById('seat-upload-input');
+      const uploadName = document.getElementById('seat-upload-name');
+      const uploadTrigger = document.getElementById('seat-upload-trigger');
+      const uploadForm = uploadInput ? uploadInput.closest('form') : null;
+      if (uploadTrigger && uploadInput) {
+        uploadTrigger.addEventListener('click', function() {
+          uploadInput.click();
+        });
+      }
+      if (uploadInput && uploadName) {
+        uploadInput.addEventListener('change', function() {
+          const file = uploadInput.files && uploadInput.files[0];
+          uploadName.textContent = file ? file.name : 'No file chosen';
+          if (file && uploadForm) {
+            uploadForm.submit();
+          }
+        });
+      }
+
+      const splitForm = document.getElementById('seat-splits-form');
+      const formActionInput = document.getElementById('seat-form-action');
+      const saveState = document.getElementById('seat-save-state');
+      const saveButton = document.getElementById('seat-save-button');
+      const revertButton = document.getElementById('seat-revert-button');
+      const stickySavebar = document.getElementById('seat-sticky-savebar');
+      const stickyDismissButton = document.getElementById('seat-sticky-dismiss');
+      const stickyRevertButton = document.getElementById('seat-sticky-revert');
+      const changedCount = document.getElementById('seat-changed-count');
+      const filteredWaitingTotal = document.getElementById('seat-filtered-waiting-total');
+      const filteredTokenTotal = document.getElementById('seat-filtered-token-total');
+      const filteredWaitingPercent = document.getElementById('seat-filtered-waiting-percent');
+      const filteredTokenPercent = document.getElementById('seat-filtered-token-percent');
+      const overallWaitingTotal = document.getElementById('seat-overall-waiting-total');
+      const overallTokenTotal = document.getElementById('seat-overall-token-total');
+      const totalQuantity = Number(document.getElementById('seat-total-quantity')?.textContent || 0);
+      const baseOverallWaiting = Number(overallWaitingTotal?.textContent || 0);
+      const baseOverallToken = Number(overallTokenTotal?.textContent || 0);
+      const filterForm = document.getElementById('seat-filter-form');
+      const filterSearch = document.getElementById('seat-q');
+      let hasUnsavedSeatChanges = false;
+      let isSavingSeatChanges = false;
+      let filterSearchTimer = null;
+      let stickySaveTimer = null;
+      let unsavedChangeCount = 0;
+      let stickyDismissed = false;
+
+      function clearStickyReminder() {
+        if (stickySaveTimer) {
+          window.clearTimeout(stickySaveTimer);
+          stickySaveTimer = null;
+        }
+        if (stickySavebar) {
+          stickySavebar.hidden = true;
+        }
+      }
+
+      function showStickyReminder() {
+        if (!hasUnsavedSeatChanges || isSavingSeatChanges || !stickySavebar || stickyDismissed) return;
+        stickySavebar.hidden = false;
+      }
+
+      function scheduleStickyReminder() {
+        clearStickyReminder();
+        if (!hasUnsavedSeatChanges) return;
+        stickySaveTimer = window.setTimeout(function() {
+          showStickyReminder();
+        }, 45000);
+      }
+
+      function registerUnsavedChange() {
+        stickyDismissed = false;
+        unsavedChangeCount += 1;
+        setUnsavedState(true);
+        if (unsavedChangeCount >= 5) {
+          showStickyReminder();
+        } else {
+          scheduleStickyReminder();
+        }
+      }
+
+      function setUnsavedState(isDirty) {
+        if (isSavingSeatChanges && !isDirty) {
+          isSavingSeatChanges = false;
+        }
+        hasUnsavedSeatChanges = isDirty;
+        if (saveState) {
+          saveState.hidden = false;
+          saveState.textContent = isDirty ? 'Unsaved changes' : 'All changes saved';
+          saveState.classList.toggle('is-saved', !isDirty);
+        }
+        if (changedCount && !isDirty) {
+          changedCount.hidden = true;
+        }
+        if (revertButton) {
+          revertButton.hidden = !isDirty;
+          revertButton.setAttribute('aria-hidden', !isDirty ? 'true' : 'false');
+        }
+        if (saveButton) {
+          saveButton.classList.toggle('seat-secondary-action', isDirty);
+        }
+        if (!isDirty) {
+          stickyDismissed = false;
+          unsavedChangeCount = 0;
+          clearStickyReminder();
+        }
+      }
+
+      function formatPercent(value) {
+        return (Math.round(value * 10) / 10).toFixed(1) + '%';
+      }
+
+      function refreshSeatSummaries() {
+        const inputs = Array.from(document.querySelectorAll('.seat-waiting-input'));
+        let changedRows = 0;
+        const filteredWaiting = inputs.reduce(function(sum, input) {
+          const row = input.closest('.seat-data-row');
+          const changed = Number(input.value || 0) !== Number(input.dataset.initialWaiting || 0);
+          if (row) {
+            row.classList.toggle('is-modified', changed);
+          }
+          if (changed) {
+            changedRows += 1;
+          }
+          return sum + Number(input.value || 0);
+        }, 0);
+        const filteredToken = inputs.reduce(function(sum, input) {
+          const quantity = Number(input.closest('.seat-stepper')?.dataset.quantity || 0);
+          return sum + Math.max(quantity - Number(input.value || 0), 0);
+        }, 0);
+        const deltaWaiting = inputs.reduce(function(sum, input) {
+          return sum + (Number(input.value || 0) - Number(input.dataset.initialWaiting || 0));
+        }, 0);
+        const overallWaiting = baseOverallWaiting + deltaWaiting;
+        const overallToken = baseOverallToken - deltaWaiting;
+
+        if (filteredWaitingTotal) filteredWaitingTotal.textContent = String(filteredWaiting);
+        if (filteredTokenTotal) filteredTokenTotal.textContent = String(filteredToken);
+        if (filteredWaitingPercent) filteredWaitingPercent.textContent = formatPercent(totalQuantity ? (filteredWaiting / totalQuantity) * 100 : 0);
+        if (filteredTokenPercent) filteredTokenPercent.textContent = formatPercent(totalQuantity ? (filteredToken / totalQuantity) * 100 : 0);
+        if (overallWaitingTotal) overallWaitingTotal.textContent = String(overallWaiting);
+        if (overallTokenTotal) overallTokenTotal.textContent = String(overallToken);
+        if (changedCount) {
+          changedCount.hidden = changedRows === 0;
+          changedCount.textContent = `Changed rows: ${changedRows}`;
+        }
+      }
+
+      function revertUnsavedChanges() {
+        document.querySelectorAll('.seat-waiting-input').forEach(function(input) {
+          input.value = input.dataset.initialWaiting || '0';
+          updateTokenForInput(input);
+        });
+        refreshSeatSummaries();
+        setUnsavedState(false);
+      }
+
+      function updateTokenForInput(input) {
+        const stepper = input.closest('.seat-stepper');
+        if (!stepper) return;
+        const quantity = Number(stepper.dataset.quantity || 0);
+        let waiting = Number(input.value || 0);
+        if (!Number.isFinite(waiting)) waiting = 0;
+        waiting = Math.max(0, Math.min(quantity, waiting));
+        input.value = waiting;
+        const tokenCell = stepper.closest('tr')?.querySelector('.seat-token-value');
+        if (tokenCell) tokenCell.textContent = String(Math.max(quantity - waiting, 0));
+      }
+
+      document.querySelectorAll('.seat-waiting-input').forEach(function(input) {
+        input.addEventListener('input', function() {
+          updateTokenForInput(input);
+          refreshSeatSummaries();
+          registerUnsavedChange();
+        });
+        updateTokenForInput(input);
+      });
+
+      document.querySelectorAll('.seat-stepper-btn').forEach(function(button) {
+        button.addEventListener('click', function() {
+          const stepper = button.closest('.seat-stepper');
+          const input = stepper?.querySelector('.seat-waiting-input');
+          if (!input) return;
+          const delta = Number(button.dataset.step || 0);
+          const next = Number(input.value || 0) + delta;
+          input.value = String(next);
+          updateTokenForInput(input);
+          refreshSeatSummaries();
+          registerUnsavedChange();
+        });
+      });
+
+      if (revertButton) {
+        revertButton.addEventListener('click', function() {
+          revertUnsavedChanges();
+        });
+      }
+
+      if (stickyDismissButton) {
+        stickyDismissButton.addEventListener('click', function() {
+          stickyDismissed = true;
+          clearStickyReminder();
+        });
+      }
+
+      if (stickyRevertButton) {
+        stickyRevertButton.addEventListener('click', function() {
+          revertUnsavedChanges();
+        });
+      }
+
+      if (saveButton && formActionInput) {
+        saveButton.addEventListener('click', function() {
+          formActionInput.value = 'save_splits';
+        });
+      }
+
+      if (splitForm) {
+        splitForm.addEventListener('submit', function() {
+          if (formActionInput) {
+            formActionInput.value = 'submit_splits';
+          }
+          isSavingSeatChanges = false;
+          setUnsavedState(false);
+        });
+      }
+
+      if (filterForm) {
+        ['seat-type', 'seat-district-filter', 'seat-item-filter'].forEach(function(id) {
+          const field = document.getElementById(id);
+          if (!field || field.disabled) return;
+          field.addEventListener('change', function() {
+            filterForm.submit();
+          });
+        });
+      }
+
+      if (filterForm && filterSearch) {
+        filterSearch.addEventListener('input', function() {
+          if (filterSearchTimer) {
+            window.clearTimeout(filterSearchTimer);
+          }
+          filterSearchTimer = window.setTimeout(function() {
+            filterForm.submit();
+          }, 350);
+        });
+      }
+
+      refreshSeatSummaries();
+      setUnsavedState(false);
+
+      document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+          showStickyReminder();
+        }
+      });
+
+      window.addEventListener('blur', function() {
+        showStickyReminder();
+      });
+
+      window.addEventListener('beforeunload', function(event) {
+        if (!hasUnsavedSeatChanges || isSavingSeatChanges) return;
+        event.preventDefault();
+        event.returnValue = '';
+      });
+    })();
+  </script>
+{% endblock %}

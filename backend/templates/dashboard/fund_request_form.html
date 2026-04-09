@@ -23,6 +23,143 @@
       border: 1px solid #fdba74;
       color: #9a3412;
     }
+    input[aria-invalid="true"],
+    select[aria-invalid="true"],
+    textarea[aria-invalid="true"] {
+      border-color: #dc2626 !important;
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+      background: #fffafa;
+    }
+    .field-error input,
+    .field-error select,
+    .field-error textarea {
+      border-color: #dc2626 !important;
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+      background: #fffafa;
+    }
+    .field-group-error {
+      border-color: #fca5a5 !important;
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.08);
+    }
+    .vendor-compact-card {
+      padding: 0 !important;
+      overflow: hidden;
+    }
+    .vendor-compact-summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      cursor: pointer;
+      background: #f8fbff;
+    }
+    .vendor-compact-summary::-webkit-details-marker { display: none; }
+    .vendor-compact-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .vendor-compact-index {
+      min-width: 22px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: #e0ecff;
+      color: #1d4ed8;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .vendor-compact-name {
+      font-weight: 700;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 220px;
+    }
+    .vendor-compact-meta {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+    .vendor-compact-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: nowrap;
+    }
+    .vendor-compact-body {
+      padding: 10px 12px 12px;
+      border-top: 1px solid #dbe7f4;
+      display: grid;
+      gap: 10px;
+      background: #fff;
+    }
+    .vendor-compact-grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 6px 8px;
+      align-items: start;
+    }
+    .vendor-compact-grid label,
+    .vendor-items-panel label {
+      font-size: 0.78rem;
+      margin-bottom: 4px;
+      color: var(--text-secondary);
+    }
+    .vendor-compact-grid .input,
+    .vendor-items-panel .input,
+    .vendor-compact-grid .textarea,
+    .vendor-items-panel .textarea {
+      min-height: 38px;
+      font-size: 0.9rem;
+      padding: 8px 10px;
+    }
+    .vendor-compact-grid .textarea,
+    .vendor-items-panel .textarea {
+      min-height: 82px;
+    }
+    .vendor-items-panel {
+      display: grid;
+      gap: 8px;
+    }
+    .vendor-items-panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .vendor-items-list {
+      display: grid;
+      gap: 8px;
+    }
+    .article-vendor-source {
+      display: none;
+    }
+    .vendor-empty-note {
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: #f8fafc;
+      border: 1px dashed #dbe7f4;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+    .article-row-compact {
+      padding: 9px 10px !important;
+      background: #fbfdff !important;
+    }
+    .article-row-compact .js-article-index {
+      font-size: 0.95rem !important;
+      min-width: 1.15rem !important;
+    }
+    .article-row-compact .item-caption {
+      font-size: 0.82rem;
+    }
     .excess-modal-backdrop {
       position: fixed;
       inset: 0;
@@ -98,7 +235,7 @@
         {% if purchase_order_mode %}
           <input type="hidden" name="fund_request_type" value="Article" />
         {% else %}
-          <div>
+          <div{% if form.fund_request_type.errors %} class="field-error"{% endif %}>
             <label>Request Type <span style="color:#dc2626;">*</span></label>
             <div class="request-type-radios" style="display:flex; gap:18px; flex-wrap:wrap; margin-top:8px;">
               {% for radio in form.fund_request_type %}
@@ -110,17 +247,23 @@
             </div>
           </div>
         {% endif %}
-        <div id="aid-type-wrap" hidden>
+        <div id="aid-type-wrap" hidden{% if form.aid_type.errors %} class="field-error"{% endif %}>
           <label>Aid <span style="color:#dc2626;">*</span></label>
-          <select class="input" name="aid_type" id="id_aid_type">
-            <option value="">Select aid</option>
-            {% for label in aid_type_choices %}
-              <option value="{{ label }}" {% if form.instance.aid_type == label or form.data.aid_type == label %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
+          <div style="display:grid; gap:8px;">
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <select class="input" name="aid_type" id="id_aid_type" style="flex:1 1 280px;">
+                <option value="">Select aid</option>
+                {% for label in aid_type_choices %}
+                  <option value="{{ label }}" {% if form.instance.aid_type == label or form.data.aid_type == label %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              <input type="hidden" name="aid_type" id="id_aid_type_hidden" value="{% if form.data.aid_type %}{{ form.data.aid_type }}{% else %}{{ form.instance.aid_type|default:'' }}{% endif %}" />
+              <button class="btn btn-subtle" type="button" id="change-aid-type" hidden>Change Aid Type</button>
+            </div>
+          </div>
         </div>
         {% if object and object.fund_request_number %}
-          <div>
+          <div{% if form.supplier_name.errors %} class="field-error"{% endif %}>
             <label>{% if purchase_order_mode %}Fund Request Number{% else %}Fund Request Number{% endif %}</label>
             <div class="input" style="display:flex; align-items:center; min-height:44px; background:#f8fafc;">{{ object.formatted_fund_request_number }}</div>
           </div>
@@ -212,7 +355,7 @@
       {{ recipient_formset.management_form }}
       <div id="recipient-rows" style="display:grid; gap: 12px;">
         {% for row in recipient_formset.forms %}
-          <div class="card js-recipient-row" style="padding: 14px; background:#fff; border:1px solid #dbe7f4;">
+          <div class="card js-recipient-row{% if row.errors %} field-group-error{% endif %}" style="padding: 14px; background:#fff; border:1px solid #dbe7f4;"{% if row.DELETE.value %} hidden{% endif %}>
             {{ row.id }}<span hidden>{{ row.DELETE }}</span>{{ row.source_entry_id }}{{ row.recipient_name }}{{ row.notes }}{{ row.district_name }}{{ row.address }}{{ row.cheque_no }}
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:10px;">
               <button type="button" class="js-recipient-toggle" style="display:flex; flex:1; justify-content:flex-start; align-items:center; gap:10px; padding:0; border:none; background:none; text-align:left; cursor:pointer;">
@@ -225,36 +368,36 @@
               </button>
             </div>
             <div class="js-recipient-body" style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items:start;">
-              <div>
+              <div{% if row.beneficiary_type.errors %} class="field-error"{% endif %}>
                 <label>Beneficiary Type <span style="color:#dc2626;">*</span></label>
                 {{ row.beneficiary_type }}
               </div>
-              <div style="grid-column: span 3;">
+              <div style="grid-column: span 3;"{% if row.beneficiary.errors %} class="field-error"{% endif %}>
                 <label>Beneficiary <span style="color:#dc2626;">*</span></label>
                 {{ row.beneficiary }}
                 <div class="small js-beneficiary-help" style="margin-top:4px; color: var(--text-secondary);"></div>
               </div>
-              <div>
+              <div{% if row.fund_requested.errors %} class="field-error"{% endif %}>
                 <label>Fund Requested <span style="color:#dc2626;">*</span></label>
                 {{ row.fund_requested }}
               </div>
-              <div>
+              <div{% if row.name_of_beneficiary.errors %} class="field-error"{% endif %}>
                 <label>Name of Beneficiary <span style="color:#dc2626;">*</span></label>
                 {{ row.name_of_beneficiary }}
               </div>
-              <div>
+              <div{% if row.name_of_institution.errors %} class="field-error"{% endif %}>
                 <label>Name of Institution <span style="color:#dc2626;">*</span></label>
                 {{ row.name_of_institution }}
               </div>
-              <div>
+              <div{% if row.aadhar_number.errors %} class="field-error"{% endif %}>
                 <label class="js-aadhaar-label">Aadhaar Number</label>
                 {{ row.aadhar_number }}
               </div>
-              <div style="grid-column: span 2;">
+              <div style="grid-column: span 2;"{% if row.details.errors %} class="field-error"{% endif %}>
                 <label>Details <span style="color:#dc2626;">*</span></label>
                 {{ row.details }}
               </div>
-              <div style="grid-column: span 2;">
+              <div style="grid-column: span 2;"{% if row.cheque_in_favour.errors %} class="field-error"{% endif %}>
                 <label>Cheque / RTGS in Favour <span style="color:#dc2626;">*</span></label>
                 {{ row.cheque_in_favour }}
               </div>
@@ -276,7 +419,7 @@
             </button>
           </div>
           <div class="js-recipient-body" style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items:start;">
-            <div>
+            <div{% if form.gst_number.errors %} class="field-error"{% endif %}>
               <label>Beneficiary Type <span style="color:#dc2626;">*</span></label>
               {{ recipient_formset.empty_form.beneficiary_type }}
             </div>
@@ -315,66 +458,155 @@
     </div>
 
     <div id="article-items-section" class="card" style="padding: 16px; background: var(--panel-bg-muted); margin-top: 16px;">
-      <div class="card" style="padding: 16px; background:#fff; border:1px solid #dbe7f4; margin-bottom: 14px;">
-        <div style="display:grid; gap:14px;">
-          <div>
-            <label>{% if purchase_order_mode %}Vendor Name{% else %}Supplier Name{% endif %} <span style="color:#dc2626;">*</span></label>
-            {{ form.supplier_name }}
-          </div>
-          {% if not purchase_order_mode %}
-            <div>
-              <label>GST Number <span style="color:#dc2626;">*</span></label>
-              {{ form.gst_number }}
-            </div>
-          {% endif %}
-          <div>
-            <label>{% if purchase_order_mode %}Vendor Address{% else %}Address{% endif %} <span style="color:#dc2626;">*</span></label>
-            {{ form.supplier_address }}
-          </div>
-          <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px;">
-            <div>
-              <label>City <span style="color:#dc2626;">*</span></label>
-              {{ form.supplier_city }}
+      {% if purchase_order_mode %}
+        <div class="card" style="padding: 16px; background:#fff; border:1px solid #dbe7f4; margin-bottom: 14px;">
+          <div style="display:grid; gap:14px;">
+            <div{% if form.supplier_address.errors %} class="field-error"{% endif %}>
+              <label>Vendor Name <span style="color:#dc2626;">*</span></label>
+              {{ form.supplier_name }}
             </div>
             <div>
-              <label>State <span style="color:#dc2626;">*</span></label>
-              {{ form.supplier_state }}
+              <label>Vendor Address <span style="color:#dc2626;">*</span></label>
+              {{ form.supplier_address }}
             </div>
-            <div>
-              <label>Pincode <span style="color:#dc2626;">*</span></label>
-              {{ form.supplier_pincode }}
+            <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px;">
+              <div{% if form.supplier_state.errors %} class="field-error"{% endif %}>
+                <label>City <span style="color:#dc2626;">*</span></label>
+                {{ form.supplier_city }}
+              </div>
+              <div{% if form.supplier_pincode.errors %} class="field-error"{% endif %}>
+                <label>State <span style="color:#dc2626;">*</span></label>
+                {{ form.supplier_state }}
+              </div>
+              <div>
+                <label>Pincode <span style="color:#dc2626;">*</span></label>
+                {{ form.supplier_pincode }}
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">
-        <div>
-          <h3 style="margin: 0 0 4px 0;">Items</h3>
-          <div class="small" style="color: var(--text-secondary);">Select the planning items to order. Duplicate rows are allowed for multiple vendors.</div>
+      {% else %}
+        <input type="hidden" name="supplier_name" value="{{ form.data.supplier_name|default:form.instance.supplier_name|default:'' }}">
+        <input type="hidden" name="gst_number" value="{{ form.data.gst_number|default:form.instance.gst_number|default:'' }}">
+        <input type="hidden" name="supplier_address" value="{{ form.data.supplier_address|default:form.instance.supplier_address|default:'' }}">
+        <input type="hidden" name="supplier_city" value="{{ form.data.supplier_city|default:form.instance.supplier_city|default:'' }}">
+        <input type="hidden" name="supplier_state" value="{{ form.data.supplier_state|default:form.instance.supplier_state|default:'' }}">
+        <input type="hidden" name="supplier_pincode" value="{{ form.data.supplier_pincode|default:form.instance.supplier_pincode|default:'' }}">
+        <div class="card" style="padding: 16px; background:#fff; border:1px solid #dbe7f4; margin-bottom: 14px;">
+          <div class="toolbar" style="justify-content: space-between; align-items:flex-start; margin-bottom: 10px;">
+            <div>
+              <h3 style="margin: 0 0 4px 0;">Vendors</h3>
+            </div>
+            <button class="btn" type="button" id="add-vendor-group">Add Vendor</button>
+          </div>
+          <input type="hidden" name="vendor_groups_json" id="vendor-groups-json-input" value="">
+          <div id="vendor-groups" style="display:grid; gap: 12px;"></div>
+          <template id="vendor-group-template">
+            <details class="card js-vendor-group vendor-compact-card" open>
+              <summary class="vendor-compact-summary">
+                <div class="vendor-compact-title">
+                  <span class="js-vendor-group-index vendor-compact-index"></span>
+                  <div style="min-width:0;">
+                    <div class="js-vendor-group-title vendor-compact-name">Vendor</div>
+                    <div class="js-vendor-group-meta vendor-compact-meta">0 item(s)</div>
+                  </div>
+                </div>
+                <div class="vendor-compact-actions">
+                  <button type="button" class="btn icon-btn js-remove-vendor-group" title="Remove vendor" aria-label="Remove vendor">
+                    <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                  </button>
+                </div>
+              </summary>
+              <div class="vendor-compact-body">
+                <div class="vendor-compact-grid">
+                <div style="grid-column: span 7;">
+                  <label>Vendor Name <span style="color:#dc2626;">*</span></label>
+                  <input type="text" class="input js-vendor-name" placeholder="Vendor name">
+                </div>
+                <div style="grid-column: span 5;">
+                  <label>GST Number <span style="color:#dc2626;">*</span></label>
+                  <input type="text" class="input js-vendor-gst" placeholder="GST number">
+                </div>
+                <div style="grid-column: span 12;">
+                  <label>Address <span style="color:#dc2626;">*</span></label>
+                  <textarea class="textarea js-vendor-address" rows="2" placeholder="Vendor address"></textarea>
+                </div>
+                <div style="grid-column: span 4;">
+                  <label>City <span style="color:#dc2626;">*</span></label>
+                  <input type="text" class="input js-vendor-city" placeholder="City">
+                </div>
+                <div style="grid-column: span 4;">
+                  <label>State <span style="color:#dc2626;">*</span></label>
+                  <input type="text" class="input js-vendor-state" placeholder="State">
+                </div>
+                <div style="grid-column: span 4;">
+                  <label>Pincode <span style="color:#dc2626;">*</span></label>
+                  <input type="text" class="input js-vendor-pincode" placeholder="Pincode">
+                </div>
+                <div style="grid-column: span 12;">
+                  <label>Cheque / RTGS in Favour <span style="color:#dc2626;">*</span></label>
+                  <textarea class="textarea js-vendor-cheque" rows="2" placeholder="Cheque / RTGS in Favour"></textarea>
+                </div>
+                </div>
+                <div class="vendor-items-panel">
+                  <div class="vendor-items-panel-head">
+                    <div class="small" style="color: var(--text-secondary);">Items for this vendor</div>
+                    <button type="button" class="btn btn-subtle js-add-vendor-item">Add Item</button>
+                  </div>
+                  <div class="js-vendor-items vendor-items-list"></div>
+                  <div class="js-vendor-empty vendor-empty-note">No items added for this vendor yet.</div>
+                </div>
+              </div>
+            </details>
+          </template>
         </div>
-        <button class="btn" type="button" id="add-article-row">Add Item</button>
-      </div>
+      {% endif %}
+      {% if purchase_order_mode %}
+        <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">
+          <div>
+            <h3 style="margin: 0 0 4px 0;">Items</h3>
+            <div class="small" style="color: var(--text-secondary);">Select the planning items to order.</div>
+          </div>
+          <button class="btn" type="button" id="add-article-row">Add Item</button>
+        </div>
+      {% endif %}
       {{ article_formset.management_form }}
-      <div id="article-rows" style="display:grid; gap: 12px;">
+      <div id="article-rows" class="{% if not purchase_order_mode %}article-vendor-source{% endif %}" style="display:grid; gap: 12px;">
         {% for row in article_formset.forms %}
-          <div class="card js-article-row" style="padding: 10px 12px; background:#fff; border:1px solid #dbe7f4;">
+          <div class="card js-article-row article-row-compact{% if row.errors %} field-group-error{% endif %}" style="padding: 10px 12px; background:#fff; border:1px solid #dbe7f4;"{% if row.DELETE.value %} hidden{% endif %}>
             {{ row.id }}<span hidden>{{ row.DELETE }}</span>{{ row.article }}{{ row.beneficiary }}{{ row.cumulative }}{{ row.price_including_gst }}{{ row.cheque_no }}
+            {% if not purchase_order_mode %}
+              <input type="hidden" class="js-vendor-group-key" name="{{ row.prefix }}-vendor_group_key" value="">
+              <input type="hidden" class="js-article-vendor-name" value="{{ row.instance.vendor_name|default:'' }}">
+              <input type="hidden" class="js-article-vendor-gst" value="{{ row.instance.gst_no|default:'' }}">
+              <input type="hidden" class="js-article-vendor-address" value="{{ row.instance.vendor_address|default:'' }}">
+              <input type="hidden" class="js-article-vendor-city" value="{{ row.instance.vendor_city|default:'' }}">
+              <input type="hidden" class="js-article-vendor-state" value="{{ row.instance.vendor_state|default:'' }}">
+              <input type="hidden" class="js-article-vendor-pincode" value="{{ row.instance.vendor_pincode|default:'' }}">
+              <input type="hidden" class="js-article-vendor-cheque" value="{{ row.instance.cheque_in_favour|default:'' }}">
+            {% endif %}
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
               <div style="display:flex; align-items:center; gap:10px;">
                 <span class="js-article-index" style="font-size:1.25rem; font-weight:700; color:var(--text-primary); min-width:1.5rem; display:inline-block;">1</span>
-                <span style="font-weight:600; color:var(--text-secondary);">Item</span>
+                <span class="item-caption" style="font-weight:600; color:var(--text-secondary);">Item</span>
               </div>
             </div>
-            <div style="display:grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 10px; align-items:start;">
-              <div style="grid-column: span 6;">
+            <div style="display:grid; grid-template-columns: repeat({% if purchase_order_mode %}12{% else %}14{% endif %}, minmax(0, 1fr)); gap: 10px; align-items:start;">
+              <div style="grid-column: span {% if purchase_order_mode %}6{% else %}4{% endif %};"{% if row.article_name.errors %} class="field-error"{% endif %}>
                 <label>Article <span style="color:#dc2626;">*</span></label>
                 {{ row.article_name }}
               </div>
-              <div style="grid-column: span 2;">
+              {% if not purchase_order_mode %}
+                <div style="grid-column: span 4;"{% if row.supplier_article_name.errors %} class="field-error"{% endif %}>
+                  <label>Supplier Article Name</label>
+                  {{ row.supplier_article_name }}
+                </div>
+              {% endif %}
+              <div style="grid-column: span 2;"{% if row.quantity.errors %} class="field-error"{% endif %}>
                 <label>Quantity <span style="color:#dc2626;">*</span></label>
                 {{ row.quantity }}
               </div>
-              <div style="grid-column: span 2;">
+              <div style="grid-column: span 2;"{% if row.unit_price.errors %} class="field-error"{% endif %}>
                 <label>Unit Price <span style="color:#dc2626;">*</span></label>
                 {{ row.unit_price }}
               </div>
@@ -382,23 +614,20 @@
                 <label>Line Total</label>
                 {{ row.value }}
               </div>
-              {% if not purchase_order_mode %}
-                <div style="grid-column: span 4;">
-                  <label>GST Number <span style="color:#dc2626;">*</span></label>
-                  {{ row.gst_no }}
+              {% if purchase_order_mode %}
+                <div style="grid-column: span 6;"{% if row.supplier_article_name.errors %} class="field-error"{% endif %}>
+                  <label>Supplier Article Name <span style="color:#dc2626;">*</span></label>
+                  {{ row.supplier_article_name }}
                 </div>
-                <div style="grid-column: span 8;">
-                  <label>Cheque / RTGS in Favour <span style="color:#dc2626;">*</span></label>
-                  {{ row.cheque_in_favour }}
+                <div style="grid-column: span 6;"{% if row.description.errors %} class="field-error"{% endif %}>
+                  <label>Description <span style="color:#dc2626;">*</span></label>
+                  {{ row.description }}
                 </div>
+              {% else %}
+                <span hidden>{{ row.description }}</span>
               {% endif %}
-              <div style="grid-column: span 6;">
-                <label>Supplier Article Name <span style="color:#dc2626;">*</span></label>
-                {{ row.supplier_article_name }}
-              </div>
-              <div style="grid-column: span 6;">
-                <label>Description <span style="color:#dc2626;">*</span></label>
-                {{ row.description }}
+              <div style="grid-column: span 12;" hidden>
+                <div class="small js-article-balance" style="color: var(--text-secondary);"></div>
               </div>
             </div>
             <div style="display:flex; justify-content:flex-end; margin-top:6px;">
@@ -410,19 +639,35 @@
         {% endfor %}
       </div>
       <template id="article-empty-form">
-        <div class="card js-article-row" style="padding: 10px 12px; background:#fff; border:1px solid #dbe7f4;">
+        <div class="card js-article-row article-row-compact" style="padding: 10px 12px; background:#fff; border:1px solid #dbe7f4;">
           {{ article_formset.empty_form.id }}<span hidden>{{ article_formset.empty_form.DELETE }}</span>{{ article_formset.empty_form.article }}{{ article_formset.empty_form.beneficiary }}{{ article_formset.empty_form.cumulative }}{{ article_formset.empty_form.price_including_gst }}{{ article_formset.empty_form.cheque_no }}
+          {% if not purchase_order_mode %}
+            <input type="hidden" class="js-vendor-group-key" name="{{ article_formset.empty_form.prefix }}-vendor_group_key" value="">
+            <input type="hidden" class="js-article-vendor-name" value="">
+            <input type="hidden" class="js-article-vendor-gst" value="">
+            <input type="hidden" class="js-article-vendor-address" value="">
+            <input type="hidden" class="js-article-vendor-city" value="">
+            <input type="hidden" class="js-article-vendor-state" value="">
+            <input type="hidden" class="js-article-vendor-pincode" value="">
+            <input type="hidden" class="js-article-vendor-cheque" value="">
+          {% endif %}
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
             <div style="display:flex; align-items:center; gap:10px;">
               <span class="js-article-index" style="font-size:1.25rem; font-weight:700; color:var(--text-primary); min-width:1.5rem; display:inline-block;">1</span>
-              <span style="font-weight:600; color:var(--text-secondary);">Item</span>
+              <span class="item-caption" style="font-weight:600; color:var(--text-secondary);">Item</span>
             </div>
           </div>
-          <div style="display:grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 10px; align-items:start;">
-            <div style="grid-column: span 6;">
+          <div style="display:grid; grid-template-columns: repeat({% if purchase_order_mode %}12{% else %}14{% endif %}, minmax(0, 1fr)); gap: 10px; align-items:start;">
+            <div style="grid-column: span {% if purchase_order_mode %}6{% else %}4{% endif %};">
               <label>Article <span style="color:#dc2626;">*</span></label>
               {{ article_formset.empty_form.article_name }}
             </div>
+            {% if not purchase_order_mode %}
+              <div style="grid-column: span 4;">
+                <label>Supplier Article Name</label>
+                {{ article_formset.empty_form.supplier_article_name }}
+              </div>
+            {% endif %}
             <div style="grid-column: span 2;">
               <label>Quantity <span style="color:#dc2626;">*</span></label>
               {{ article_formset.empty_form.quantity }}
@@ -435,23 +680,20 @@
               <label>Line Total</label>
               {{ article_formset.empty_form.value }}
             </div>
-            {% if not purchase_order_mode %}
-              <div style="grid-column: span 4;">
-                <label>GST Number <span style="color:#dc2626;">*</span></label>
-                {{ article_formset.empty_form.gst_no }}
+            {% if purchase_order_mode %}
+              <div style="grid-column: span 6;">
+                <label>Supplier Article Name <span style="color:#dc2626;">*</span></label>
+                {{ article_formset.empty_form.supplier_article_name }}
               </div>
-              <div style="grid-column: span 8;">
-                <label>Cheque / RTGS in Favour <span style="color:#dc2626;">*</span></label>
-                {{ article_formset.empty_form.cheque_in_favour }}
+              <div style="grid-column: span 6;">
+                <label>Description <span style="color:#dc2626;">*</span></label>
+                {{ article_formset.empty_form.description }}
               </div>
+            {% else %}
+              <span hidden>{{ article_formset.empty_form.description }}</span>
             {% endif %}
-            <div style="grid-column: span 6;">
-              <label>Supplier Article Name <span style="color:#dc2626;">*</span></label>
-              {{ article_formset.empty_form.supplier_article_name }}
-            </div>
-            <div style="grid-column: span 6;">
-              <label>Description <span style="color:#dc2626;">*</span></label>
-              {{ article_formset.empty_form.description }}
+            <div style="grid-column: span 12;" hidden>
+              <div class="small js-article-balance" style="color: var(--text-secondary);"></div>
             </div>
           </div>
           <div style="display:flex; justify-content:flex-end; margin-top:6px;">
@@ -486,6 +728,8 @@
 </div>
 
 <script id="article-request-choices-json" type="application/json">{{ article_request_choices_json|safe }}</script>
+<script id="article-vendor-groups-json" type="application/json">{{ vendor_groups_json|safe }}</script>
+<script id="article-vendor-group-keys-json" type="application/json">{{ article_vendor_group_keys_json|safe }}</script>
 <script>
 (function() {
   const requestTypeRadios = Array.from(document.querySelectorAll('input[name="fund_request_type"]'));
@@ -495,9 +739,16 @@
   const articleSection = document.getElementById('article-items-section');
   const aidTypeWrap = document.getElementById('aid-type-wrap');
   const articleChoices = JSON.parse(document.getElementById('article-request-choices-json').textContent || '[]');
+  const initialVendorGroups = JSON.parse((document.getElementById('article-vendor-groups-json') || {}).textContent || '[]');
+  const initialArticleVendorGroupKeys = JSON.parse((document.getElementById('article-vendor-group-keys-json') || {}).textContent || '{}');
   const aidOptionsUrl = "{% url 'ui:fund-request-aid-options' %}";
   const currentFundRequestId = "{{ current_fund_request_id }}";
   const formEl = document.querySelector('section.card form');
+  const aidTypeHiddenInput = document.getElementById('id_aid_type_hidden');
+  const vendorGroupsInput = document.getElementById('vendor-groups-json-input');
+  const vendorGroupsContainer = document.getElementById('vendor-groups');
+  const vendorGroupTemplate = document.getElementById('vendor-group-template');
+  const addVendorGroupButton = document.getElementById('add-vendor-group');
   const uploadAidCsvFeedback = document.getElementById('upload-aid-csv-feedback');
   const excessWarningModal = document.getElementById('excess-warning-modal');
   const excessWarningList = document.getElementById('excess-warning-list');
@@ -508,6 +759,8 @@
   const recipientTotalInput = document.getElementById('id_recipients-TOTAL_FORMS');
   const articleTotalInput = document.getElementById('id_articles-TOTAL_FORMS');
   const addRecipientButton = document.getElementById('add-recipient-row');
+  const changeAidTypeButton = document.getElementById('change-aid-type');
+  const aidTypeLockNote = document.getElementById('aid-type-lock-note');
   const collapseAllRecipientsButton = document.getElementById('collapse-all-recipients');
   const expandAllRecipientsButton = document.getElementById('expand-all-recipients');
   const quickTools = document.getElementById('aid-quick-tools');
@@ -528,6 +781,392 @@
   let blockedByType = {};
   let bypassExcessWarning = false;
   let aidAvailabilityPromise = null;
+  let vendorGroups = Array.isArray(initialVendorGroups) ? initialVendorGroups.slice() : [];
+  let nextVendorGroupNumber = vendorGroups.length + 1;
+  let formDirty = false;
+  let formSubmitting = false;
+
+  function markFormDirty() {
+    formDirty = true;
+  }
+
+  function clearFormDirty() {
+    formDirty = false;
+  }
+
+  function syncAidTypeHiddenInput() {
+    if (!aidTypeHiddenInput || !aidTypeSelect) return;
+    aidTypeHiddenInput.value = aidTypeSelect.value || '';
+  }
+
+  function markFieldInvalid(field) {
+    if (!field) return;
+    field.setAttribute('aria-invalid', 'true');
+    const row = field.closest('.js-recipient-row, .js-article-row, .js-vendor-group');
+    if (row) row.classList.add('field-group-error');
+  }
+
+  function clearFieldInvalid(field) {
+    if (!field) return;
+    field.removeAttribute('aria-invalid');
+    const row = field.closest('.js-recipient-row, .js-article-row, .js-vendor-group');
+    if (!row) return;
+    const stillInvalid = row.querySelector('[aria-invalid="true"]');
+    if (!stillInvalid) {
+      row.classList.remove('field-group-error');
+    }
+  }
+
+  function getFirstVisibleInvalidElement() {
+    return formEl ? formEl.querySelector('[aria-invalid="true"]') : null;
+  }
+
+  function validateAidSubmit() {
+    let isValid = true;
+    if (aidTypeWrap && !aidTypeWrap.hidden && aidTypeSelect && !aidTypeSelect.value) {
+      markFieldInvalid(aidTypeSelect);
+      isValid = false;
+    }
+    recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
+      if (row.hidden) return;
+      const deleteField = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+      if (deleteField && deleteField.checked) return;
+      const beneficiaryTypeField = row.querySelector('select[name$="-beneficiary_type"]');
+      const beneficiaryField = row.querySelector('select[name$="-beneficiary"]');
+      const sourceEntryField = row.querySelector('input[name$="-source_entry_id"]');
+      const fundRequestedField = row.querySelector('input[name$="-fund_requested"]');
+      const beneficiaryNameField = row.querySelector('input[name$="-name_of_beneficiary"]');
+      const institutionField = row.querySelector('input[name$="-name_of_institution"]');
+      const aadharField = row.querySelector('input[name$="-aadhar_number"]');
+      const detailsField = row.querySelector('textarea[name$="-details"]');
+      const chequeField = row.querySelector('textarea[name$="-cheque_in_favour"]');
+      const requiredFields = [
+        beneficiaryTypeField,
+        beneficiaryField,
+        fundRequestedField,
+        beneficiaryNameField,
+        institutionField,
+        detailsField,
+        chequeField,
+      ];
+      requiredFields.forEach(function(field) {
+        if (!field || String(field.value || '').trim() !== '') return;
+        markFieldInvalid(field);
+        isValid = false;
+      });
+      if (beneficiaryTypeField && String(beneficiaryTypeField.value || '').trim() !== 'District' && aadharField && String(aadharField.value || '').trim() === '') {
+        markFieldInvalid(aadharField);
+        isValid = false;
+      }
+      if (beneficiaryField && String(beneficiaryField.value || '').trim() !== '' && sourceEntryField && String(sourceEntryField.value || '').trim() === '') {
+        markFieldInvalid(beneficiaryField);
+        isValid = false;
+      }
+    });
+    return isValid;
+  }
+
+  function validateArticleSubmit() {
+    let isValid = true;
+    getVisibleArticleRows().forEach(function(row) {
+      const fields = [
+        row.querySelector('select[name$="-article_name"]'),
+        row.querySelector('input[name$="-quantity"]'),
+        row.querySelector('input[name$="-unit_price"]'),
+      ];
+      fields.forEach(function(field) {
+        if (!field || String(field.value || '').trim() !== '') return;
+        markFieldInvalid(field);
+        isValid = false;
+      });
+      if (!purchaseOrderMode) {
+        const vendorKeyField = row.querySelector('.js-vendor-group-key');
+        const selectedVendor = vendorKeyField ? getVendorGroupByKey(vendorKeyField.value) : null;
+        if (!selectedVendor) {
+          markFieldInvalid(row.querySelector('select[name$="-article_name"]'));
+          isValid = false;
+          return;
+        }
+        const vendorCard = getVendorGroupCard(selectedVendor.key);
+        ['.js-vendor-name', '.js-vendor-gst', '.js-vendor-address', '.js-vendor-city', '.js-vendor-state', '.js-vendor-pincode', '.js-vendor-cheque'].forEach(function(selector) {
+          const field = vendorCard ? vendorCard.querySelector(selector) : null;
+          if (!field || String(field.value || '').trim() !== '') return;
+          markFieldInvalid(field);
+          isValid = false;
+        });
+      }
+    });
+    return isValid;
+  }
+
+  function validateVisibleSubmitFields() {
+    if (!formEl) return true;
+    formEl.querySelectorAll('[aria-invalid="true"]').forEach(function(field) {
+      field.removeAttribute('aria-invalid');
+    });
+    formEl.querySelectorAll('.js-recipient-row, .js-article-row').forEach(function(row) {
+      row.classList.remove('field-group-error');
+    });
+    const selectedType = getSelectedRequestType();
+    const isValid = selectedType === 'Aid' ? validateAidSubmit() : validateArticleSubmit();
+    const firstInvalid = getFirstVisibleInvalidElement();
+    if (!isValid && firstInvalid) {
+      firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      window.setTimeout(function() {
+        if (typeof firstInvalid.focus === 'function') {
+          firstInvalid.focus({ preventScroll: true });
+        }
+      }, 80);
+    }
+    return isValid;
+  }
+
+  function syncVendorGroupsInput() {
+    if (!vendorGroupsInput) return;
+    vendorGroupsInput.value = JSON.stringify(vendorGroups.map(function(group) {
+      return {
+        key: group.key,
+        vendor_name: group.vendor_name || '',
+        gst_no: group.gst_no || '',
+        vendor_address: group.vendor_address || '',
+        vendor_city: group.vendor_city || '',
+        vendor_state: group.vendor_state || '',
+        vendor_pincode: group.vendor_pincode || '',
+        cheque_in_favour: group.cheque_in_favour || '',
+      };
+    }));
+  }
+
+  function getVendorGroupByKey(key) {
+    return vendorGroups.find(function(group) { return String(group.key) === String(key || ''); }) || null;
+  }
+
+  function getVendorGroupCard(key) {
+    return Array.from(vendorGroupsContainer ? vendorGroupsContainer.querySelectorAll('.js-vendor-group') : []).find(function(card) {
+      return String(card.dataset.groupKey || '') === String(key || '');
+    }) || null;
+  }
+
+  function getVendorItemsContainer(key) {
+    const card = getVendorGroupCard(key);
+    return card ? card.querySelector('.js-vendor-items') : null;
+  }
+
+  function getVisibleArticleRows() {
+    return Array.from(articleSection ? articleSection.querySelectorAll('.js-article-row') : []).filter(function(row) {
+      if (row.hidden) return false;
+      const deleteField = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+      return !(deleteField && deleteField.checked);
+    });
+  }
+
+  function visibleVendorRows(key) {
+    return getVisibleArticleRows().filter(function(row) {
+      const hiddenKey = row.querySelector('.js-vendor-group-key');
+      return hiddenKey && String(hiddenKey.value || '') === String(key || '');
+    });
+  }
+
+  function refreshVendorGroupLabels() {
+    if (!vendorGroupsContainer) return;
+    Array.from(vendorGroupsContainer.querySelectorAll('.js-vendor-group')).forEach(function(card, index) {
+      const title = card.querySelector('.js-vendor-group-title');
+      const badge = card.querySelector('.js-vendor-group-index');
+      const meta = card.querySelector('.js-vendor-group-meta');
+      const empty = card.querySelector('.js-vendor-empty');
+      const group = getVendorGroupByKey(card.dataset.groupKey);
+      const itemCount = visibleVendorRows(card.dataset.groupKey).length;
+      if (badge) badge.textContent = index + 1;
+      if (title) title.textContent = (group && group.vendor_name) ? group.vendor_name : 'Vendor ' + (index + 1);
+      if (meta) meta.textContent = itemCount + ' item(s)';
+      if (empty) empty.hidden = itemCount > 0;
+    });
+  }
+
+  function syncVendorGroupsFromDom() {
+    if (!vendorGroupsContainer) return;
+    Array.from(vendorGroupsContainer.querySelectorAll('.js-vendor-group')).forEach(function(card) {
+      const group = getVendorGroupByKey(card.dataset.groupKey);
+      if (!group) return;
+      group.vendor_name = ((card.querySelector('.js-vendor-name') || {}).value || '').trim();
+      group.gst_no = ((card.querySelector('.js-vendor-gst') || {}).value || '').trim();
+      group.vendor_address = ((card.querySelector('.js-vendor-address') || {}).value || '').trim();
+      group.vendor_city = ((card.querySelector('.js-vendor-city') || {}).value || '').trim();
+      group.vendor_state = ((card.querySelector('.js-vendor-state') || {}).value || '').trim();
+      group.vendor_pincode = ((card.querySelector('.js-vendor-pincode') || {}).value || '').trim();
+      group.cheque_in_favour = ((card.querySelector('.js-vendor-cheque') || {}).value || '').trim();
+    });
+  }
+
+  function renderArticleVendorSelect(row) {
+    const hiddenKey = row.querySelector('.js-vendor-group-key');
+    if (!hiddenKey) return;
+    if (!hiddenKey.value) {
+      const prefix = String(hiddenKey.name || '').replace(/-vendor_group_key$/, '');
+      hiddenKey.value = initialArticleVendorGroupKeys[prefix] || '';
+    }
+  }
+
+  function refreshAllArticleVendorSelects() {
+    if (purchaseOrderMode || !vendorGroupsContainer) return;
+    getVisibleArticleRows().forEach(function(row) {
+      renderArticleVendorSelect(row);
+      const hiddenKey = row.querySelector('.js-vendor-group-key');
+      const target = hiddenKey ? getVendorItemsContainer(hiddenKey.value) : null;
+      if (target) {
+        target.appendChild(row);
+      }
+    });
+    refreshVendorGroupLabels();
+  }
+
+  function addArticleRowForVendor(groupKey) {
+    const row = addRow(articleContainer, articleTotalInput, 'article-empty-form');
+    const hiddenKey = row.querySelector('.js-vendor-group-key');
+    if (hiddenKey) hiddenKey.value = groupKey || '';
+    initArticleRow(row);
+    markFormDirty();
+    const target = getVendorItemsContainer(groupKey);
+    if (target) target.appendChild(row);
+    refreshArticleLabels();
+    refreshAllArticleSelects();
+    refreshAllArticleVendorSelects();
+  }
+
+  function attachVendorGroupEvents(card, group) {
+    if (!card || !group) return;
+    card.dataset.groupKey = group.key;
+    card.querySelectorAll('.js-add-vendor-item').forEach(function(button) {
+      button.addEventListener('click', function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        addArticleRowForVendor(group.key);
+      });
+    });
+    [
+      ['.js-vendor-name', 'vendor_name'],
+      ['.js-vendor-gst', 'gst_no'],
+      ['.js-vendor-address', 'vendor_address'],
+      ['.js-vendor-city', 'vendor_city'],
+      ['.js-vendor-state', 'vendor_state'],
+      ['.js-vendor-pincode', 'vendor_pincode'],
+      ['.js-vendor-cheque', 'cheque_in_favour'],
+    ].forEach(function(binding) {
+      const field = card.querySelector(binding[0]);
+      if (!field) return;
+      field.value = group[binding[1]] || '';
+      ['input', 'change'].forEach(function(eventName) {
+        field.addEventListener(eventName, function() {
+          group[binding[1]] = field.value || '';
+          clearFieldInvalid(field);
+          markFormDirty();
+          syncVendorGroupsInput();
+          refreshVendorGroupLabels();
+        });
+      });
+    });
+    const removeButton = card.querySelector('.js-remove-vendor-group');
+    if (removeButton) {
+      removeButton.addEventListener('click', function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (visibleVendorRows(group.key).length) {
+          window.alert('Remove the items under this vendor first.');
+          return;
+        }
+        syncVendorGroupsFromDom();
+        vendorGroups = vendorGroups.filter(function(item) { return item.key !== group.key; });
+        card.remove();
+        markFormDirty();
+        syncVendorGroupsInput();
+        refreshVendorGroupLabels();
+      });
+    }
+  }
+
+  function createVendorGroupCard(group) {
+    if (!vendorGroupTemplate) return null;
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = vendorGroupTemplate.innerHTML.trim();
+    const card = wrapper.firstElementChild;
+    attachVendorGroupEvents(card, group);
+    return card;
+  }
+
+  function renderVendorGroups() {
+    if (!vendorGroupsContainer || !vendorGroupTemplate) return;
+    Array.from(articleSection ? articleSection.querySelectorAll('.js-article-row') : []).forEach(function(row) {
+      articleContainer.appendChild(row);
+    });
+    vendorGroupsContainer.innerHTML = '';
+    vendorGroups.forEach(function(group) {
+      const card = createVendorGroupCard(group);
+      if (card) vendorGroupsContainer.appendChild(card);
+    });
+    syncVendorGroupsInput();
+    refreshVendorGroupLabels();
+  }
+
+  function addVendorGroup(initialGroup) {
+    syncVendorGroupsFromDom();
+    const group = initialGroup || {
+      key: 'vendor-' + nextVendorGroupNumber,
+      vendor_name: '',
+      gst_no: '',
+      vendor_address: '',
+      vendor_city: '',
+      vendor_state: '',
+      vendor_pincode: '',
+      cheque_in_favour: '',
+    };
+    nextVendorGroupNumber += 1;
+    vendorGroups.push(group);
+    markFormDirty();
+    const card = createVendorGroupCard(group);
+    if (card && vendorGroupsContainer) {
+      vendorGroupsContainer.appendChild(card);
+    }
+    syncVendorGroupsInput();
+    refreshVendorGroupLabels();
+  }
+
+  function recipientRowHasContent(row) {
+    if (!row || row.hidden) return false;
+    const deleteField = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+    if (deleteField && deleteField.checked) return false;
+    const selectors = [
+      'input[name$="-source_entry_id"]',
+      'select[name$="-beneficiary_type"]',
+      'select[name$="-beneficiary"]',
+      'input[name$="-recipient_name"]',
+      'input[name$="-district_name"]',
+      'input[name$="-name_of_beneficiary"]',
+      'input[name$="-name_of_institution"]',
+      'input[name$="-aadhar_number"]',
+      'input[name$="-fund_requested"]',
+      'input[name$="-notes"]',
+      'textarea[name$="-notes"]',
+      'textarea[name$="-details"]',
+      'textarea[name$="-cheque_in_favour"]',
+    ];
+    return selectors.some(function(selector) {
+      const field = row.querySelector(selector);
+      return field && String(field.value || '').trim() !== '';
+    });
+  }
+
+  function hasLockedAidRecipients() {
+    return Array.from(recipientContainer.querySelectorAll('.js-recipient-row')).some(recipientRowHasContent);
+  }
+
+  function updateAidTypeLockState() {
+    if (!aidTypeSelect) return;
+    const shouldLock = hasLockedAidRecipients();
+    aidTypeSelect.disabled = shouldLock;
+    syncAidTypeHiddenInput();
+    if (changeAidTypeButton) changeAidTypeButton.hidden = !shouldLock;
+    if (aidTypeLockNote) aidTypeLockNote.hidden = !shouldLock;
+  }
 
   function showAidCsvFeedback(message, tone) {
     if (!uploadAidCsvFeedback) return;
@@ -555,7 +1194,7 @@
       name.textContent = 'Item ' + item.serial + ' - ' + item.name;
       const qty = document.createElement('div');
       qty.className = 'excess-modal-item-qty';
-      qty.textContent = 'Excess: ' + item.excess;
+      qty.textContent = 'Needed: ' + item.needed + ' | Excess: ' + item.excess;
       row.appendChild(name);
       row.appendChild(qty);
       excessWarningList.appendChild(row);
@@ -583,6 +1222,8 @@
       hiddenAction.setAttribute('data-excess-submit', '1');
       formEl.appendChild(hiddenAction);
       bypassExcessWarning = true;
+      formSubmitting = true;
+      clearFormDirty();
       formEl.submit();
     };
     excessWarningCancel.addEventListener('click', cancelHandler);
@@ -637,16 +1278,26 @@
     return Number.isFinite(value) ? String(Math.max(0, Math.round(value))) : '0';
   }
 
+  function getSelectedArticleOption(select) {
+    if (!select || !select.options || select.selectedIndex < 0) return null;
+    return select.options[select.selectedIndex] || null;
+  }
+
   function getSelectedArticleQuantities() {
     const totals = {};
-    articleContainer.querySelectorAll('.js-article-row').forEach(function(row) {
-      if (row.hidden) return;
+    getVisibleArticleRows().forEach(function(row) {
       const select = row.querySelector('select[name$="-article_name"]');
+      const hiddenArticle = row.querySelector('input[name$="-article"]');
       const qtyInput = row.querySelector('input[name$="-quantity"]');
-      const name = (select && select.value ? String(select.value).trim() : '');
-      if (!name) return;
+      const selectedOption = getSelectedArticleOption(select);
+      const articleId = String(
+        (selectedOption && selectedOption.getAttribute('data-article-id')) ||
+        (hiddenArticle && hiddenArticle.value) ||
+        ''
+      ).trim();
+      if (!articleId) return;
       const qty = parseFloat((qtyInput && qtyInput.value) || '0') || 0;
-      totals[name] = (totals[name] || 0) + qty;
+      totals[articleId] = (totals[articleId] || 0) + qty;
     });
     return totals;
   }
@@ -659,15 +1310,17 @@
   }
 
   function fillArticleSelect(select, currentRow) {
-    const currentOption = select.selectedOptions && select.selectedOptions[0] ? select.selectedOptions[0] : null;
+    const currentOption = getSelectedArticleOption(select);
     const hiddenArticle = currentRow ? currentRow.querySelector('input[name$="-article"]') : null;
     let currentValue = select.value;
+    let currentArticleId = String((currentOption && currentOption.getAttribute('data-article-id')) || (hiddenArticle && hiddenArticle.value) || '').trim();
     if (!currentValue && hiddenArticle && hiddenArticle.value) {
       const matchedChoice = articleChoices.find(function(choice) {
         return String(choice.article_id || '') === String(hiddenArticle.value || '');
       });
       if (matchedChoice) {
         currentValue = matchedChoice.name;
+        currentArticleId = String(matchedChoice.article_id || '');
       }
     }
     const currentLabel = currentOption && currentOption.value ? currentOption.textContent : currentValue;
@@ -678,10 +1331,11 @@
     placeholder.textContent = 'Select article';
     select.appendChild(placeholder);
     articleChoices.forEach(function(choice) {
-      const currentRowQty = currentRow && currentValue === choice.name
+      const choiceArticleId = String(choice.article_id || '').trim();
+      const currentRowQty = currentRow && currentArticleId === choiceArticleId
         ? (parseFloat((currentRow.querySelector('input[name$="-quantity"]') || {}).value || '0') || 0)
         : 0;
-      const remainingQty = (parseFloat(choice.pending_qty || '0') || 0) - ((selectedTotals[choice.name] || 0) - currentRowQty);
+      const remainingQty = (parseFloat(choice.pending_qty || '0') || 0) - ((selectedTotals[choiceArticleId] || 0) - currentRowQty);
       const option = document.createElement('option');
       option.value = choice.name;
       option.textContent = articleChoiceLabel(choice, remainingQty);
@@ -707,24 +1361,16 @@
     const select = row.querySelector('select[name$="-article_name"]');
     const helper = row.querySelector('.js-article-balance');
     if (!select || !helper) return;
-    const option = select.options[select.selectedIndex];
+    const option = getSelectedArticleOption(select);
     if (!option || !option.value) {
       helper.textContent = '';
       return;
     }
-    const remainingQty = parseFloat(option.getAttribute('data-remaining-qty') || '0') || 0;
-    if (remainingQty < 0) {
-      helper.textContent = 'You are ordering excess by ' + formatQuantityLabel(Math.abs(remainingQty)) + '.';
-      helper.style.color = '#15803d';
-    } else {
-      helper.textContent = 'Remaining pending: ' + formatQuantityLabel(remainingQty);
-      helper.style.color = 'var(--text-secondary)';
-    }
+    helper.textContent = '';
   }
 
   function refreshAllArticleSelects() {
-    articleContainer.querySelectorAll('.js-article-row').forEach(function(row) {
-      if (row.hidden) return;
+    getVisibleArticleRows().forEach(function(row) {
       const select = row.querySelector('select[name$="-article_name"]');
       if (select) {
         fillArticleSelect(select, row);
@@ -740,7 +1386,7 @@
     const unitInput = row.querySelector('input[name$="-unit_price"]');
     const totalInput = row.querySelector('input[name$="-value"]');
     if (!select || !hiddenArticle || !qtyInput || !unitInput || !totalInput) return;
-    const option = select.options[select.selectedIndex];
+    const option = getSelectedArticleOption(select);
     hiddenArticle.value = option ? (option.getAttribute('data-article-id') || '') : '';
     const qty = parseFloat(qtyInput.value || '0') || 0;
     if (option && option.value && unitInput && (!unitInput.value || unitInput.value === '0' || unitInput.value === '0.00')) {
@@ -756,9 +1402,18 @@
 
   function initArticleRow(row) {
     const select = row.querySelector('select[name$="-article_name"]');
+    const vendorSelect = row.querySelector('.js-article-vendor-select');
+    const vendorKeyField = row.querySelector('.js-vendor-group-key');
     if (select) {
       fillArticleSelect(select, row);
       select.addEventListener('change', function() { updateArticleRow(row); });
+    }
+    if (vendorSelect && vendorKeyField) {
+      renderArticleVendorSelect(row);
+      vendorSelect.addEventListener('change', function() {
+        vendorKeyField.value = vendorSelect.value || '';
+        clearFieldInvalid(vendorSelect);
+      });
     }
     row.querySelectorAll('input[name$="-quantity"], input[name$="-unit_price"]').forEach(function(input) {
       input.addEventListener('input', function() { updateArticleRow(row); });
@@ -793,6 +1448,21 @@
     row.querySelector('textarea[name$="-details"]').value = '';
     row.querySelector('input[name$="-fund_requested"]').value = '';
     row.querySelector('textarea[name$="-cheque_in_favour"]').value = '';
+  }
+
+  function clearAllRecipientRows() {
+    recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
+      const deleteField = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+      if (deleteField) {
+        deleteField.checked = true;
+      }
+      clearRecipientPayload(row, false);
+      row.hidden = true;
+    });
+    refreshRecipientLabels();
+    refreshQuickPopulateSelectors();
+    syncAidTypeHiddenInput();
+    updateAidTypeLockState();
   }
 
   function applyAidPayload(row, payload) {
@@ -948,6 +1618,7 @@
       currentSourceId && (
         ((row.querySelector('input[name$="-name_of_beneficiary"]') || {}).value || '') ||
         ((row.querySelector('input[name$="-name_of_institution"]') || {}).value || '') ||
+        ((row.querySelector('input[name$="-aadhar_number"]') || {}).value || '') ||
         ((row.querySelector('textarea[name$="-details"]') || {}).value || '') ||
         ((row.querySelector('textarea[name$="-cheque_in_favour"]') || {}).value || '') ||
         ((row.querySelector('input[name$="-fund_requested"]') || {}).value || '')
@@ -985,13 +1656,16 @@
     }
     if (typeSelect) {
       typeSelect.addEventListener('change', function() {
+        clearFieldInvalid(typeSelect);
         clearRecipientPayload(row, false);
-        loadAidOptions(row, false);
+        loadAidOptions(row, true);
         updateRecipientSummary(row);
+        updateAidTypeLockState();
       });
     }
     if (beneficiarySelect) {
       beneficiarySelect.addEventListener('change', function() {
+        clearFieldInvalid(beneficiarySelect);
         const payload = row._aidOptions ? row._aidOptions[beneficiarySelect.value] : null;
         if (payload) {
           applyAidPayload(row, payload);
@@ -1000,11 +1674,19 @@
         }
         updateRecipientFieldRules(row);
         updateRecipientSummary(row);
+        updateAidTypeLockState();
       });
     }
-    row.querySelectorAll('input[name$="-fund_requested"], input[name$="-name_of_beneficiary"], input[name$="-name_of_institution"], textarea[name$="-details"], textarea[name$="-cheque_in_favour"]').forEach(function(field) {
+    row.querySelectorAll('input[name$="-fund_requested"], input[name$="-name_of_beneficiary"], input[name$="-name_of_institution"], input[name$="-aadhar_number"], textarea[name$="-details"], textarea[name$="-cheque_in_favour"]').forEach(function(field) {
       field.addEventListener('input', function() {
+        clearFieldInvalid(field);
         updateRecipientSummary(row);
+        updateAidTypeLockState();
+        markFormDirty();
+      });
+      field.addEventListener('change', function() {
+        clearFieldInvalid(field);
+        markFormDirty();
       });
     });
   }
@@ -1044,8 +1726,7 @@
 
   function refreshArticleLabels() {
     let serial = 1;
-    articleContainer.querySelectorAll('.js-article-row').forEach(function(row) {
-      if (row.hidden) return;
+    getVisibleArticleRows().forEach(function(row) {
       const indexNode = row.querySelector('.js-article-index');
       if (indexNode) {
         indexNode.textContent = serial;
@@ -1221,6 +1902,7 @@
     });
     refreshRecipientLabels();
     refreshQuickPopulateSelectors();
+    updateAidTypeLockState();
   }
 
   function populateAidRecipientsForLabels(typeValue, labels, labelGetter) {
@@ -1236,6 +1918,7 @@
     });
     refreshRecipientLabels();
     refreshQuickPopulateSelectors();
+    updateAidTypeLockState();
   }
 
   function populateAidRecipientsBySourceIds(typeValue, sourceIds) {
@@ -1249,6 +1932,7 @@
     });
     refreshRecipientLabels();
     refreshQuickPopulateSelectors();
+    updateAidTypeLockState();
   }
 
   function normalizeCsvHeader(value) {
@@ -1411,16 +2095,18 @@
     const aadhaarLabel = row.querySelector('.js-aadhaar-label');
     if (!typeSelect || !aadhaarInput || !aadhaarLabel) return;
     const isDistrict = typeSelect.value === 'District';
-    aadhaarInput.required = !isDistrict;
+    aadhaarInput.required = false;
     aadhaarLabel.innerHTML = isDistrict ? 'Aadhaar Number' : 'Aadhaar Number <span style="color:#dc2626;">*</span>';
   }
 
   addRecipientButton.addEventListener('click', function() {
     const row = addRow(recipientContainer, recipientTotalInput, 'recipient-empty-form');
     initRecipientRow(row);
+    markFormDirty();
     setRecipientRowExpanded(row, true);
     refreshRecipientLabels();
     refreshQuickPopulateSelectors();
+    updateAidTypeLockState();
   });
 
   collapseAllRecipientsButton.addEventListener('click', function() {
@@ -1451,26 +2137,39 @@
   });
 
   populateDistrictsButton.addEventListener('click', function() {
+    markFormDirty();
     populateAidRecipientsForLabels('District', getSelectedValues(populateDistrictSelect), getDistrictGroupLabel);
   });
   populateInstitutionsButton.addEventListener('click', function() {
+    markFormDirty();
     populateAidRecipientsForLabels('Institutions', getSelectedValues(populateInstitutionsSelect), getInstitutionGroupLabel);
   });
   populatePublicsButton.addEventListener('click', function() {
+    markFormDirty();
     populateAidRecipientsBySourceIds('Public', getSelectedValues(populatePublicSelect));
   });
   resetRecipientsButton.addEventListener('click', function() {
-    recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
-      if (row.hidden) return;
-      const deleteField = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
-      if (deleteField) {
-        deleteField.checked = true;
-      }
-      row.hidden = true;
-    });
-    refreshRecipientLabels();
-    refreshQuickPopulateSelectors();
+    markFormDirty();
+    clearAllRecipientRows();
   });
+  if (addVendorGroupButton) {
+    addVendorGroupButton.addEventListener('click', function() {
+      addVendorGroup();
+    });
+  }
+  if (changeAidTypeButton) {
+    changeAidTypeButton.addEventListener('click', function() {
+      if (!hasLockedAidRecipients()) return;
+      const confirmed = window.confirm('Changing the aid type will clear the current recipient rows for this request. Do you want to continue?');
+      if (!confirmed) return;
+      markFormDirty();
+      clearAllRecipientRows();
+      if (aidTypeSelect) {
+        aidTypeSelect.disabled = false;
+        aidTypeSelect.focus();
+      }
+    });
+  }
   uploadAidCsvTriggerButton.addEventListener('click', function() {
     if (!aidTypeSelect.value) {
       showAidCsvFeedback('Select an aid first before uploading a CSV.', 'warning');
@@ -1514,6 +2213,8 @@
       uploadAidCsvInput.value = '';
       refreshRecipientLabels();
       refreshQuickPopulateSelectors();
+      updateAidTypeLockState();
+      if (importedCount) markFormDirty();
       if (importedCount && skippedCount) {
         showAidCsvFeedback('Imported ' + importedCount + ' row(s). Skipped ' + skippedCount + ' row(s) that could not be matched to the selected aid.', 'warning');
       } else if (importedCount) {
@@ -1525,12 +2226,17 @@
     reader.readAsText(file);
   });
 
-  document.getElementById('add-article-row').addEventListener('click', function() {
-    const row = addRow(articleContainer, articleTotalInput, 'article-empty-form');
-    initArticleRow(row);
-    refreshArticleLabels();
-    refreshAllArticleSelects();
-  });
+  const addArticleButton = document.getElementById('add-article-row');
+  if (addArticleButton) {
+    addArticleButton.addEventListener('click', function() {
+      const row = addRow(articleContainer, articleTotalInput, 'article-empty-form');
+      initArticleRow(row);
+      markFormDirty();
+      refreshArticleLabels();
+      refreshAllArticleSelects();
+      refreshAllArticleVendorSelects();
+    });
+  }
 
   document.addEventListener('click', function(event) {
     const button = event.target.closest('.js-remove-row');
@@ -1540,35 +2246,75 @@
     const deleteField = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
     if (deleteField) deleteField.checked = true;
     row.hidden = true;
+    markFormDirty();
     if (row.classList.contains('js-recipient-row')) {
       refreshRecipientLabels();
       refreshQuickPopulateSelectors();
+      updateAidTypeLockState();
     } else {
       refreshArticleLabels();
       refreshAllArticleSelects();
+      refreshAllArticleVendorSelects();
     }
   });
 
   requestTypeRadios.forEach(function(radio) { radio.addEventListener('change', function() { setRequestType(radio.value); }); });
   if (aidTypeSelect) {
     aidTypeSelect.addEventListener('change', async function() {
+      clearFieldInvalid(aidTypeSelect);
+      markFormDirty();
+      syncAidTypeHiddenInput();
       await ensureAidAvailabilityLoaded();
       recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
         if (!row.hidden) loadAidOptions(row, false);
       });
+      updateAidTypeLockState();
     });
   }
 
   recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
+    const deleteField = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+    if (deleteField && deleteField.checked) {
+      row.hidden = true;
+    }
     initRecipientRow(row);
     setRecipientRowExpanded(row, true);
   });
   refreshRecipientLabels();
-  articleContainer.querySelectorAll('.js-article-row').forEach(initArticleRow);
+  updateAidTypeLockState();
+  renderVendorGroups();
+  Array.from(articleSection ? articleSection.querySelectorAll('.js-article-row') : []).forEach(function(row) {
+    const deleteField = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
+    if (deleteField && deleteField.checked) {
+      row.hidden = true;
+    }
+    initArticleRow(row);
+  });
   refreshArticleLabels();
   refreshAllArticleSelects();
+  refreshAllArticleVendorSelects();
   setQuickPopulateExpanded(true);
   toggleSections();
+  syncAidTypeHiddenInput();
+  syncVendorGroupsInput();
+  if (formEl) {
+    ['input', 'change'].forEach(function(eventName) {
+      formEl.addEventListener(eventName, function(event) {
+        const target = event.target;
+        if (target && target.matches('input, select, textarea')) {
+          clearFieldInvalid(target);
+          if (target.type !== 'hidden') {
+            markFormDirty();
+          }
+        }
+      });
+    });
+  }
+  window.addEventListener('beforeunload', function(event) {
+    if (!formDirty || formSubmitting) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
   ensureAidAvailabilityLoaded().then(function() {
     recipientContainer.querySelectorAll('.js-recipient-row').forEach(function(row) {
       const typeField = row.querySelector('select[name$="-beneficiary_type"]');
@@ -1579,40 +2325,55 @@
   });
 
   if (formEl) formEl.addEventListener('submit', function(event) {
+    syncVendorGroupsFromDom();
+    syncVendorGroupsInput();
+    formSubmitting = false;
+    const submitter = event.submitter;
+    if (submitter && submitter.value === 'submit' && !validateVisibleSubmitFields()) {
+      event.preventDefault();
+      return;
+    }
     if (bypassExcessWarning) {
       bypassExcessWarning = false;
       return;
     }
-    const submitter = event.submitter;
     if (!submitter || submitter.value !== 'submit' || !articleSection || articleSection.hidden) {
+      if (submitter) {
+        formSubmitting = true;
+        clearFormDirty();
+      }
       return;
     }
     const articleRunningTotals = {};
     const excessItems = [];
-    articleContainer.querySelectorAll('.js-article-row').forEach(function(row) {
-      if (row.hidden) return;
+    getVisibleArticleRows().forEach(function(row) {
       const select = row.querySelector('select[name$="-article_name"]');
       const qtyInput = row.querySelector('input[name$="-quantity"]');
       const name = (select && select.value ? String(select.value).trim() : '');
       if (!name) return;
+      const selectedOption = getSelectedArticleOption(select);
+      const articleId = String((selectedOption && selectedOption.getAttribute('data-article-id')) || '').trim();
       const qty = parseFloat((qtyInput && qtyInput.value) || '0') || 0;
-      const choice = articleChoices.find(function(item) { return item.name === name; });
+      const choice = articleChoices.find(function(item) { return String(item.article_id || '') === articleId; });
       if (!choice) return;
       const pendingQty = parseFloat(choice.pending_qty || '0') || 0;
-      const usedQty = articleRunningTotals[name] || 0;
+      const usedQty = articleRunningTotals[articleId] || 0;
       const remainingBeforeThisRow = pendingQty - usedQty;
       const excessQty = qty - Math.max(remainingBeforeThisRow, 0);
-      articleRunningTotals[name] = usedQty + qty;
+      articleRunningTotals[articleId] = usedQty + qty;
       if (excessQty <= 0) return;
       const serialNode = row.querySelector('.js-article-index');
       const serial = serialNode ? serialNode.textContent.trim() : '';
       excessItems.push({
         serial: serial || '?',
         name: name,
+        needed: formatQuantityLabel(Math.max(remainingBeforeThisRow, 0)),
         excess: formatQuantityLabel(excessQty),
       });
     });
     if (!excessItems.length) {
+      formSubmitting = true;
+      clearFormDirty();
       return;
     }
     event.preventDefault();

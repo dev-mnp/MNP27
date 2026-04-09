@@ -2,10 +2,16 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from pathlib import Path
+import tempfile
+
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from core import models
+from core.web_views import _build_district_entry_summaries, _district_export_rows, _sync_district_entries, _sync_institution_entries
 
 
 class SearchBarSmokeTests(TestCase):
@@ -54,6 +60,7 @@ class SearchBarSmokeTests(TestCase):
             article_cost_per_unit=Decimal("6000.00"),
             quantity=1,
             total_amount=Decimal("6000.00"),
+            aadhar_number="111122223333",
             name_of_institution="District Hospital",
             cheque_rtgs_in_favour="District Payee",
             notes="District scholarship",
@@ -173,3 +180,269 @@ class SearchBarSmokeTests(TestCase):
         logs = list(response.context["page_obj"].object_list)
         self.assertEqual(len(logs), 1)
         self.assertEqual(logs[0].user_id, self.user.id)
+
+    def test_district_expanded_items_keep_per_item_added_timestamp(self):
+        older_article = models.Article.objects.create(
+            article_name="Digital Normal Banners and Foam Board",
+            cost_per_unit=Decimal("29370.00"),
+            item_type=models.ItemTypeChoices.ARTICLE,
+            category="Event",
+            master_category="Additional",
+            combo=False,
+            is_active=True,
+        )
+        newer_article = models.Article.objects.create(
+            article_name="Agri Battery Sprayer",
+            cost_per_unit=Decimal("4250.00"),
+            item_type=models.ItemTypeChoices.ARTICLE,
+            category="Equipment",
+            master_category="Additional",
+            combo=False,
+            is_active=True,
+        )
+        older_entry = models.DistrictBeneficiaryEntry.objects.create(
+            district=self.district,
+            application_number="D001",
+            article=older_article,
+            article_cost_per_unit=Decimal("29370.00"),
+            quantity=1,
+            total_amount=Decimal("29370.00"),
+            status=models.BeneficiaryStatusChoices.DRAFT,
+            created_by=self.user,
+        )
+        newer_entry = models.DistrictBeneficiaryEntry.objects.create(
+            district=self.district,
+            application_number="D001",
+            article=newer_article,
+            article_cost_per_unit=Decimal("4250.00"),
+            quantity=1,
+            total_amount=Decimal("4250.00"),
+            status=models.BeneficiaryStatusChoices.DRAFT,
+            created_by=self.user,
+        )
+
+        older_timestamp = timezone.make_aware(timezone.datetime(2026, 3, 26, 10, 0))
+        newer_timestamp = timezone.make_aware(timezone.datetime(2026, 4, 1, 12, 51))
+        models.DistrictBeneficiaryEntry.objects.filter(pk=older_entry.pk).update(
+            created_at=older_timestamp,
+            updated_at=older_timestamp,
+        )
+        models.DistrictBeneficiaryEntry.objects.filter(pk=newer_entry.pk).update(
+            created_at=newer_timestamp,
+            updated_at=newer_timestamp,
+        )
+
+        summaries = _build_district_entry_summaries()
+        district_summary = next(row for row in summaries if row["district_id"] == self.district.id)
+        detail_items = {item["article_name"]: item for item in district_summary["detail_items"]}
+
+        self.assertEqual(detail_items["Digital Normal Banners and Foam Board"]["changed_at"], older_timestamp)
+        self.assertEqual(detail_items["Agri Battery Sprayer"]["changed_at"], newer_timestamp)
+
+    def test_district_master_export_keeps_aadhaar_number(self):
+        summaries = _build_district_entry_summaries()
+
+        rows = _district_export_rows(summaries)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["Aadhar Number"], "111122223333")
+        self.assertEqual(rows[0]["Name of Institution"], "District Hospital")
+        self.assertEqual(rows[0]["Cheque / RTGS in Favour"], "District Payee")
+
+    def test_import_master_entry_export_restores_district_aid_fields(self):
+        csv_content = """Application Number,Beneficiary Name,Requested Item,Quantity,Cost Per Unit,Total Value,Address,Mobile,Aadhar Number,Name of Beneficiary,Name of Institution,Cheque / RTGS in Favour,Handicapped Status,Gender,Gender Category,Beneficiary Type,Item Type,Article Category,Super Category Article,Token Name,Internal Notes,Comments
+D001,Chengalpattu,Education Aid,1,6000,6000,Chengalpattu,9876543210,999988887777,Student A,District College,District Payee,,, ,District,Aid,Aid,Support,,,District note
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, encoding="utf-8") as handle:
+            handle.write(csv_content)
+            temp_path = handle.name
+
+        try:
+            models.DistrictBeneficiaryEntry.objects.all().delete()
+            call_command("import_master_entry_export", file=temp_path, replace=True)
+        finally:
+            Path(temp_path).unlink(missing_ok=True)
+
+        entry = models.DistrictBeneficiaryEntry.objects.get()
+        self.assertEqual(entry.aadhar_number, "999988887777")
+        self.assertEqual(entry.name_of_beneficiary, "Student A")
+        self.assertEqual(entry.name_of_institution, "District College")
+        self.assertEqual(entry.cheque_rtgs_in_favour, "District Payee")
+
+    def test_fund_request_aid_options_keep_district_aadhaar_number(self):
+        response = self.client.get(
+            reverse("ui:fund-request-aid-options"),
+            {
+                "aid_type": "Education Aid",
+                "beneficiary_type": models.RecipientTypeChoices.DISTRICT,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["options"]), 1)
+        self.assertEqual(payload["options"][0]["aadhar_number"], "111122223333")
+
+    def test_sync_district_entries_matches_by_entry_id_for_duplicate_aid_articles(self):
+        duplicate_one = models.DistrictBeneficiaryEntry.objects.create(
+            district=self.district,
+            application_number="D001",
+            article=self.aid_article,
+            article_cost_per_unit=Decimal("6000.00"),
+            quantity=1,
+            total_amount=Decimal("6000.00"),
+            aadhar_number="999900001111",
+            notes="First aid row",
+            status=models.BeneficiaryStatusChoices.DRAFT,
+            created_by=self.user,
+        )
+        duplicate_two = models.DistrictBeneficiaryEntry.objects.create(
+            district=self.district,
+            application_number="D001",
+            article=self.aid_article,
+            article_cost_per_unit=Decimal("6000.00"),
+            quantity=1,
+            total_amount=Decimal("6000.00"),
+            aadhar_number="999900002222",
+            notes="Second aid row",
+            status=models.BeneficiaryStatusChoices.DRAFT,
+            created_by=self.user,
+        )
+
+        existing_entries = list(
+            models.DistrictBeneficiaryEntry.objects.filter(pk__in=[duplicate_one.pk, duplicate_two.pk]).order_by("id")
+        )
+        built_rows = [
+            {
+                "entry_id": duplicate_one.id,
+                "district": self.district,
+                "application_number": "D001",
+                "article": self.aid_article,
+                "article_cost_per_unit": Decimal("6000.00"),
+                "quantity": 1,
+                "total_amount": Decimal("6000.00"),
+                "name_of_beneficiary": None,
+                "name_of_institution": None,
+                "aadhar_number": "999900001111",
+                "cheque_rtgs_in_favour": None,
+                "notes": "First aid row",
+                "internal_notes": None,
+                "status": models.BeneficiaryStatusChoices.DRAFT,
+            },
+            {
+                "entry_id": duplicate_two.id,
+                "district": self.district,
+                "application_number": "D001",
+                "article": self.aid_article,
+                "article_cost_per_unit": Decimal("6000.00"),
+                "quantity": 1,
+                "total_amount": Decimal("6000.00"),
+                "name_of_beneficiary": None,
+                "name_of_institution": None,
+                "aadhar_number": "123123123123",
+                "cheque_rtgs_in_favour": None,
+                "notes": "Second aid row updated",
+                "internal_notes": None,
+                "status": models.BeneficiaryStatusChoices.DRAFT,
+            },
+        ]
+
+        _sync_district_entries(existing_entries, built_rows, self.user)
+
+        duplicate_one.refresh_from_db()
+        duplicate_two.refresh_from_db()
+        self.assertEqual(duplicate_one.aadhar_number, "999900001111")
+        self.assertEqual(duplicate_two.aadhar_number, "123123123123")
+        self.assertEqual(duplicate_two.notes, "Second aid row updated")
+
+    def test_sync_institution_entries_matches_by_entry_id_for_duplicate_aid_articles(self):
+        duplicate_one = models.InstitutionsBeneficiaryEntry.objects.create(
+            institution_name="SRV School",
+            institution_type=models.InstitutionTypeChoices.OTHERS,
+            application_number="I001",
+            address="Institution Address",
+            mobile="8888888888",
+            article=self.aid_article,
+            article_cost_per_unit=Decimal("6000.00"),
+            quantity=1,
+            total_amount=Decimal("6000.00"),
+            aadhar_number="555566667777",
+            notes="First institution aid row",
+            status=models.BeneficiaryStatusChoices.DRAFT,
+            created_by=self.user,
+        )
+        duplicate_two = models.InstitutionsBeneficiaryEntry.objects.create(
+            institution_name="SRV School",
+            institution_type=models.InstitutionTypeChoices.OTHERS,
+            application_number="I001",
+            address="Institution Address",
+            mobile="8888888888",
+            article=self.aid_article,
+            article_cost_per_unit=Decimal("6000.00"),
+            quantity=1,
+            total_amount=Decimal("6000.00"),
+            aadhar_number="555566668888",
+            notes="Second institution aid row",
+            status=models.BeneficiaryStatusChoices.DRAFT,
+            created_by=self.user,
+        )
+
+        existing_entries = list(
+            models.InstitutionsBeneficiaryEntry.objects.filter(pk__in=[duplicate_one.pk, duplicate_two.pk]).order_by("id")
+        )
+        built_rows = [
+            {
+                "entry_id": duplicate_one.id,
+                "article": self.aid_article,
+                "article_cost_per_unit": Decimal("6000.00"),
+                "quantity": 1,
+                "total_amount": Decimal("6000.00"),
+                "name_of_beneficiary": None,
+                "name_of_institution": None,
+                "aadhar_number": "555566667777",
+                "cheque_rtgs_in_favour": None,
+                "notes": "First institution aid row",
+                "internal_notes": None,
+                "status": models.BeneficiaryStatusChoices.DRAFT,
+            },
+            {
+                "entry_id": duplicate_two.id,
+                "article": self.aid_article,
+                "article_cost_per_unit": Decimal("6000.00"),
+                "quantity": 1,
+                "total_amount": Decimal("6000.00"),
+                "name_of_beneficiary": None,
+                "name_of_institution": None,
+                "aadhar_number": "777788889999",
+                "cheque_rtgs_in_favour": None,
+                "notes": "Second institution aid row updated",
+                "internal_notes": None,
+                "status": models.BeneficiaryStatusChoices.DRAFT,
+            },
+        ]
+
+        _sync_institution_entries(
+            existing_entries,
+            built_rows,
+            self.user,
+            application_number="I001",
+            form_data={
+                "institution_name": "SRV School",
+                "institution_type": models.InstitutionTypeChoices.OTHERS,
+                "address": "Institution Address",
+                "mobile": "8888888888",
+            },
+        )
+
+        duplicate_one.refresh_from_db()
+        duplicate_two.refresh_from_db()
+        self.assertEqual(duplicate_one.aadhar_number, "555566667777")
+        self.assertEqual(duplicate_two.aadhar_number, "777788889999")
+        self.assertEqual(duplicate_two.notes, "Second institution aid row updated")
+
+    def test_master_entry_import_preserves_handicapped_status_from_source(self):
+        fixture_path = Path(__file__).resolve().parent / "fixtures" / "master_entry_import_yes.csv"
+        call_command("import_master_entry_export", file=str(fixture_path), replace=True)
+
+        imported = models.PublicBeneficiaryEntry.objects.get(application_number="P100")
+        self.assertEqual(imported.is_handicapped, "Yes")

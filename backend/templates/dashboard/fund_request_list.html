@@ -4,61 +4,43 @@
 {% block content %}
   <section class="card">
     <style>
-      .fund-request-actions {
+      .actions-inline {
+        display: inline-flex;
         flex-wrap: nowrap;
-        gap: 3px !important;
+        gap: 4px;
         align-items: center;
-        justify-content: flex-end;
       }
-      .fund-request-actions form {
+      .actions-inline form {
         display: inline-flex;
         margin: 0;
       }
-      .fund-request-actions .icon-btn {
-        width: 26px;
-        min-width: 26px;
-        height: 26px;
-      }
-      .fund-request-actions .icon-btn {
-        border: none;
-        background: transparent;
-        box-shadow: none;
+      .actions-inline .icon-btn {
+        width: 30px;
+        min-width: 30px;
+        height: 30px;
         padding: 0;
+        border-radius: 9px;
       }
-      .fund-request-actions .icon-btn svg {
-        width: 13px;
-        height: 13px;
+      .actions-inline .icon-btn svg {
+        width: 15px;
+        height: 15px;
       }
-      .fund-request-actions .icon-btn svg { stroke: currentColor; }
-      .fund-request-actions .fund-request-neutral-action.icon-btn {
+      .view-icon-btn {
+        width: 26px !important;
+        min-width: 26px !important;
+        height: 26px !important;
+        border: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
         color: #2563eb;
       }
-      .fund-request-actions .icon-btn:hover {
-        background: transparent;
-        transform: none;
-        box-shadow: none;
-      }
-      .fund-request-actions .fund-request-neutral-action.icon-btn:hover {
+      .view-icon-btn:hover {
+        background: transparent !important;
         color: #1d4ed8;
       }
-      .fund-request-actions .btn-reopen.icon-btn {
-        color: #2563eb;
-      }
-      .fund-request-actions .btn-reopen.icon-btn:hover {
-        color: #1d4ed8;
-      }
-      .fund-request-actions .fund-request-delete-btn.icon-btn {
-        width: 26px;
-        min-width: 26px;
-        height: 26px;
-        padding: 0;
-        background: transparent;
-        border: none;
-        color: #dc2626;
-      }
-      .fund-request-actions .fund-request-delete-btn.icon-btn:hover {
-        background: transparent;
-        color: #b91c1c;
+      .view-icon-btn svg {
+        width: 16px !important;
+        height: 16px !important;
       }
       .list-view-controls {
         display: inline-flex;
@@ -254,9 +236,11 @@
         width: 98px;
         min-width: 98px;
         white-space: nowrap;
+        text-align: center;
       }
-      .fund-request-table td:last-child {
-        text-align: right;
+      .fund-request-table td:last-child .actions-inline {
+        justify-content: center;
+        width: 100%;
       }
       @media (max-width: 900px) {
         .summary-meta-grid {
@@ -297,7 +281,6 @@
     <form method="get" class="card" id="fund-request-filter-form" style="margin-bottom: 16px; padding: 16px; background: var(--panel-bg-muted);">
       <div class="toolbar" style="gap: 10px; flex-wrap: wrap; margin-bottom: 0;">
       <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Search everything: request #, PO, supplier, notes, recipient, article..." style="min-width: 320px; flex: 1 1 320px;" />
-      <input class="input" type="text" name="supplier" value="{{ filters.supplier }}" placeholder="Filter supplier" style="width: 220px;" />
       <select class="input" name="request_type" style="width: 180px;">
         <option value="">All Types</option>
         {% for value, label in request_type_choices %}
@@ -357,8 +340,11 @@
             <td class="{% if fr.status == 'submitted' %}status-submitted{% else %}status-draft{% endif %}">{{ fr.get_status_display }}</td>
             <td>{{ fr.created_at|date:"d/m/Y H:i" }}</td>
             <td>
-              <div class="actions-inline fund-request-actions">
-              <a class="btn icon-btn fund-request-neutral-action" title="Download PDF" aria-label="Download PDF" href="{% url 'ui:fund-request-pdf' fr.id %}" target="_blank" rel="noopener">
+              <div class="actions-inline">
+              <a class="btn icon-btn view-icon-btn" title="View" aria-label="View" href="{% url 'ui:fund-request-detail' fr.id %}">
+                <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="3"/></svg>
+              </a>
+              <a class="btn icon-btn view-icon-btn" title="Download PDF" aria-label="Download PDF" href="{% url 'ui:fund-request-pdf' fr.id %}" target="_blank" rel="noopener">
                 <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
               </a>
               {% if fr.status == "draft" and request.user.role == "admin" or fr.status == "draft" and request.user.role == "editor" %}
@@ -375,7 +361,7 @@
                 </form>
               {% endif %}
               {% if request.user.role == "admin" and module_perms.order_fund_request.can_delete %}
-                <a class="btn icon-btn fund-request-delete-btn" title="Delete" aria-label="Delete" href="{% url 'ui:fund-request-delete' fr.id %}">
+                <a class="btn btn-danger icon-btn" title="Delete" aria-label="Delete" href="{% url 'ui:fund-request-delete' fr.id %}">
                   <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
                 </a>
               {% endif %}
@@ -424,17 +410,17 @@
                   {% if fr.recipients.all %}
                     <table class="summary-detail-table summary-detail-table--aid">
                       <colgroup>
+                        <col style="width: 10%;">
                         <col style="width: 12%;">
-                        <col style="width: 12%;">
-                        <col style="width: 16%;">
-                        <col style="width: 16%;">
+                        <col style="width: 18%;">
                         <col style="width: 14%;">
                         <col style="width: 15%;">
                         <col style="width: 15%;">
+                        <col style="width: 10%;">
                       </colgroup>
                       <thead>
                         <tr>
-                          <th>Beneficiary Type</th>
+                          <th>Beneficiary</th>
                           <th class="summary-col-tight">Fund Requested</th>
                           <th>Name of Beneficiary</th>
                           <th>Name of Institution</th>
@@ -446,7 +432,7 @@
                       <tbody>
                         {% for recipient in fr.recipients.all %}
                           <tr>
-                            <td>{{ recipient.beneficiary_type|default:"-" }}</td>
+                            <td>{{ recipient.beneficiary_display|default:"-" }}</td>
                             <td class="summary-col-tight">Rs.{{ recipient.fund_requested|rupees }}</td>
                             <td>{{ recipient.name_of_beneficiary|default:"-" }}</td>
                             <td>{{ recipient.name_of_institution|default:"-" }}</td>
@@ -514,7 +500,7 @@
         }, 550);
       });
 
-      ['select[name="request_type"]', 'select[name="status"]', 'input[name="supplier"]'].forEach(function(selector) {
+      ['select[name="request_type"]', 'select[name="status"]'].forEach(function(selector) {
         var field = filterForm.querySelector(selector);
         if (!field) return;
         var eventName = field.tagName === "INPUT" ? "input" : "change";

@@ -36,7 +36,8 @@
         </p>
       </div>
       <div class="small master-count-pill">
-        District: {{ district_count }} | Public: {{ public_count }} | Institutions: {{ institution_count }}
+        <div>District: {{ district_count }} | Public: {{ public_count }} | Institutions: {{ institution_count }}</div>
+        <div class="master-total-rows">Total rows: <strong>{{ total_material_rows }}</strong></div>
       </div>
     </div>
 
@@ -185,14 +186,12 @@
                   <div style="margin-bottom: 12px;"><strong>Internal Notes:</strong> {{ row.internal_notes|default:"-" }}</div>
                   <table class="summary-detail-table summary-detail-table-entries">
                     <colgroup>
-                      <col style="width: 20%;">
-                      <col style="width: 6%;">
-                      <col style="width: 12%;">
+                      <col style="width: 28%;">
+                      <col style="width: 8%;">
                       <col style="width: 13%;">
-                      <col style="width: 13%;">
-                      <col style="width: 12%;">
+                      <col style="width: 15%;">
+                      <col style="width: 22%;">
                       <col style="width: 14%;">
-                      <col style="width: 12%;">
                     </colgroup>
                     <thead>
                       <tr>
@@ -200,8 +199,7 @@
                         <th>Qty</th>
                         <th>Unit Cost</th>
                         <th>Total</th>
-                        <th>Details</th>
-                        <th>Cheque / RTGS in Favour</th>
+                        <th>Details / Comments</th>
                         <th>Added / Modified On</th>
                       </tr>
                     </thead>
@@ -213,7 +211,6 @@
                           <td>Rs.{{ item.unit_cost|rupees }}</td>
                           <td>Rs.{{ item.total_amount|rupees }}</td>
                           <td>{{ item.notes|default:"-" }}</td>
-                          <td>{{ item.cheque_rtgs_in_favour|default:"-" }}</td>
                           <td>{{ item.changed_at|date:"d/m/Y H:i" }}</td>
                         </tr>
                       {% endfor %}
@@ -325,6 +322,8 @@
                     {% if entry.female_status %}<div><strong>Female Status:</strong> {{ entry.get_female_status_display }}</div>{% endif %}
                     <div><strong>Handicapped Status:</strong> {% if entry.is_handicapped and entry.is_handicapped != "No" %}{{ entry.get_is_handicapped_display }}{% else %}No{% endif %}</div>
                     <div><strong>Address:</strong> {{ entry.address|default:"-" }}</div>
+                    <div><strong>Aadhaar Number:</strong> {{ entry.aadhar_number|default:"-" }}</div>
+                    {% if entry.article.item_type == "Aid" or entry.name_of_institution %}<div><strong>Name of Institution:</strong> {{ entry.name_of_institution|default:"-" }}</div>{% endif %}
                     <div><strong>Added On:</strong> {{ entry.created_at|date:"d/m/Y H:i" }}</div>
                     <div><strong>Modified On:</strong> {{ entry.updated_at|date:"d/m/Y H:i" }}</div>
                   </div>
@@ -440,14 +439,12 @@
                   <div style="margin-bottom: 12px;"><strong>Internal Notes:</strong> {{ row.internal_notes|default:"-" }}</div>
                   <table class="summary-detail-table summary-detail-table-entries">
                     <colgroup>
-                      <col style="width: 20%;">
-                      <col style="width: 6%;">
-                      <col style="width: 12%;">
+                      <col style="width: 28%;">
+                      <col style="width: 8%;">
                       <col style="width: 13%;">
-                      <col style="width: 13%;">
-                      <col style="width: 12%;">
+                      <col style="width: 15%;">
+                      <col style="width: 22%;">
                       <col style="width: 14%;">
-                      <col style="width: 12%;">
                     </colgroup>
                     <thead>
                       <tr>
@@ -455,8 +452,7 @@
                         <th>Qty</th>
                         <th>Unit Cost</th>
                         <th>Total</th>
-                        <th>Details</th>
-                        <th>Cheque / RTGS in Favour</th>
+                        <th>Details / Comments</th>
                         <th>Added / Modified On</th>
                       </tr>
                     </thead>
@@ -468,7 +464,6 @@
                           <td>Rs.{{ item.unit_cost|rupees }}</td>
                           <td>Rs.{{ item.total_amount|rupees }}</td>
                           <td>{{ item.notes|default:"-" }}</td>
-                          <td>{{ item.cheque_rtgs_in_favour|default:"-" }}</td>
                           <td>{{ item.changed_at|date:"d/m/Y H:i" }}</td>
                         </tr>
                       {% endfor %}
@@ -549,6 +544,15 @@
       gap: 12px;
       margin-bottom: 10px;
       flex-wrap: wrap;
+    }
+    .master-total-rows {
+      margin-top: 6px;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      text-align: right;
+    }
+    .master-total-rows strong {
+      color: var(--text-primary);
     }
     .beneficiary-switch-capsule {
       display: grid;

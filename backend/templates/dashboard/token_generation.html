@@ -1,0 +1,678 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <style>
+    .token-page-card {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+    }
+    .token-header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-end;
+      align-items: center;
+      margin-left: auto;
+    }
+    .token-upload-form {
+      display: inline-flex;
+    }
+    .token-status-inline {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 18px;
+      align-items: center;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      padding: 10px 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      background: #ffffff;
+    }
+    .token-status-inline strong {
+      color: var(--text-primary);
+    }
+    .token-status-inline .token-status-pass,
+    .token-status-inline .token-status-warn {
+      font-size: 0.9rem;
+    }
+    .token-step,
+    .token-edit-card,
+    .token-preview-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      background: #ffffff;
+      padding: 14px 16px;
+    }
+    .token-step h2,
+    .token-edit-card h3,
+    .token-preview-card h3 {
+      margin: 0 0 8px;
+      font-size: 0.96rem;
+    }
+    .token-step p,
+    .token-edit-card p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+    .token-status-pass {
+      color: #15803d;
+      font-weight: 700;
+    }
+    .token-status-warn {
+      color: #b45309;
+      font-weight: 700;
+    }
+    .token-divider {
+      margin: 18px 0;
+      border: 0;
+      border-top: 1px solid #e5e7eb;
+    }
+    .token-step-list {
+      margin: 12px 0 0;
+      padding-left: 0;
+      list-style: none;
+      display: grid;
+      gap: 8px;
+    }
+    .token-step-list li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+    }
+    .token-step-check {
+      color: #15803d;
+      font-weight: 700;
+    }
+    .token-step-empty {
+      color: #94a3b8;
+      font-weight: 700;
+    }
+    .token-step-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .token-two-col {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    .token-edit-table-wrap,
+    .token-preview-table-wrap {
+      overflow-x: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      background: #ffffff;
+      margin-top: 10px;
+    }
+    .token-edit-table-wrap table,
+    .token-preview-table-wrap table {
+      width: 100%;
+    }
+    .token-edit-table-wrap th,
+    .token-edit-table-wrap td,
+    .token-preview-table-wrap th,
+    .token-preview-table-wrap td {
+      font-size: 0.84rem;
+      vertical-align: top;
+    }
+    .token-edit-table-wrap input {
+      min-width: 190px;
+    }
+    .token-slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .token-slider-wrap input[type="range"] {
+      width: 220px;
+    }
+    .token-toggle-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+      max-height: 320px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .token-toggle-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: #fcfdff;
+      font-size: 0.86rem;
+    }
+    .token-step-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+    .token-muted {
+      color: var(--text-secondary);
+      font-size: 0.84rem;
+    }
+    .token-collapsible {
+      margin-top: 14px;
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #fcfdff;
+    }
+    .token-collapsible summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 12px 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .token-collapsible summary::-webkit-details-marker {
+      display: none;
+    }
+    .token-collapsible-body {
+      padding: 0 14px 14px;
+    }
+    .token-section-compact {
+      max-height: 420px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .token-rule-box {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      background: #fcfdff;
+    }
+    .token-filter-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px 12px;
+    }
+    .token-filter-results {
+      margin-top: 12px;
+      max-height: 280px;
+      overflow-y: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      background: #ffffff;
+    }
+    .token-filter-row {
+      display: grid;
+      grid-template-columns: auto 110px 1fr 110px 1fr 120px;
+      gap: 10px;
+      align-items: start;
+      padding: 10px 12px;
+      border-bottom: 1px solid #eef2f7;
+      font-size: 0.84rem;
+    }
+    .token-filter-row:last-child {
+      border-bottom: 0;
+    }
+    .token-filter-labels {
+      color: var(--text-secondary);
+      font-size: 0.78rem;
+    }
+    .btn.is-disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    @media (max-width: 960px) {
+      .token-two-col {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+
+  <section class="card token-page-card">
+    <div class="toolbar" style="align-items: flex-start;">
+      <div style="min-width: 0;">
+        <h1 style="margin: 0;">Token Generation</h1>
+      </div>
+      <div class="token-header-actions">
+        {% if can_create_edit %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="sync_data">
+            {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+            <button class="btn" type="submit">Sync Data</button>
+          </form>
+        {% endif %}
+        {% if can_upload_replace %}
+          <form method="post" enctype="multipart/form-data" class="token-upload-form" id="token-upload-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="upload_csv">
+            {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+            <input id="token-upload-input" type="file" name="file" accept=".csv" style="display:none;">
+            <button class="btn btn-subtle" id="token-upload-trigger" type="button">Upload</button>
+          </form>
+        {% endif %}
+        {% if can_export %}
+          <a class="btn btn-subtle {% if not token_is_generated %}is-disabled{% endif %}" href="{% if token_is_generated %}{% url 'ui:token-generation' %}?export=1{% if selected_session %}&session={{ selected_session.pk }}{% endif %}{% else %}#{% endif %}">Export</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="token-status-inline">
+      <span>Total rows: <strong>{{ token_row_count }}</strong></span>
+      <span>Total columns: <strong>{{ token_column_count }}</strong></span>
+      <span>Synced / Uploaded: <strong>{{ token_saved_at_display|default:"Not synced yet" }}</strong></span>
+      <span>Source: <strong>{{ token_source_name|default:"Not available"|cut:" (Event)" }}</strong></span>
+    </div>
+    {% if token_sync_required %}
+      <div class="token-muted" style="margin-top: 10px;">Sequence List has changed since the last token sync. Click <strong>Sync Data</strong> before continuing.</div>
+    {% endif %}
+
+    <hr class="token-divider">
+
+    <details class="token-step" {% if token_open_section == "transformations" %}open{% endif %}>
+      <summary>
+        <div class="token-step-header" style="width:100%;">
+          <div>
+            <h2>Optional Transformations</h2>
+            <p>Use this to exclude token-stage rows like `Additional` without changing source data.</p>
+          </div>
+        </div>
+      </summary>
+      <div class="token-step-body">
+          <div class="token-rule-box">
+            <form method="get">
+              {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+              <input type="hidden" name="open_section" value="transformations">
+              <div class="token-filter-grid">
+                <div>
+                  <label class="token-muted" for="filter_application_number">Application No.</label>
+                  <input class="input" id="filter_application_number" name="filter_application_number" value="{{ token_filter_state.application_number }}">
+                </div>
+                <div>
+                  <label class="token-muted" for="filter_beneficiary_name">Beneficiary Name</label>
+                  <input class="input" id="filter_beneficiary_name" name="filter_beneficiary_name" value="{{ token_filter_state.beneficiary_name }}">
+                </div>
+                <div>
+                  <label class="token-muted" for="filter_beneficiary_type">Beneficiary Type</label>
+                  <select class="input" id="filter_beneficiary_type" name="filter_beneficiary_type">
+                    <option value="">All</option>
+                    <option value="District" {% if token_filter_state.beneficiary_type == "District" %}selected{% endif %}>District</option>
+                    <option value="Public" {% if token_filter_state.beneficiary_type == "Public" %}selected{% endif %}>Public</option>
+                    <option value="Institutions" {% if token_filter_state.beneficiary_type == "Institutions" %}selected{% endif %}>Institutions</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="token-muted" for="filter_requested_item">Requested Item</label>
+                  <input class="input" id="filter_requested_item" name="filter_requested_item" value="{{ token_filter_state.requested_item }}">
+                </div>
+                <div>
+                  <label class="token-muted" for="filter_item_type">Item Type</label>
+                  <select class="input" id="filter_item_type" name="filter_item_type">
+                    <option value="">All</option>
+                    <option value="Article" {% if token_filter_state.item_type == "Article" %}selected{% endif %}>Article</option>
+                    <option value="Aid" {% if token_filter_state.item_type == "Aid" %}selected{% endif %}>Aid</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="token-muted" for="filter_comments">Comments</label>
+                  <input class="input" id="filter_comments" name="filter_comments" value="{{ token_filter_state.comments }}">
+                </div>
+              </div>
+              <div class="token-step-actions">
+                <button class="btn btn-subtle" type="submit">Filter Rows</button>
+              </div>
+            </form>
+
+            <div class="token-muted" style="margin-top: 10px;">
+              Matched rows in current loaded data: <strong>{{ token_filtered_rows|length }}</strong>
+            </div>
+
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="exclude_selected_rows">
+              {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+
+              <div class="token-filter-results">
+                {% if token_filtered_rows %}
+                  <div class="token-filter-row token-filter-labels">
+                    <div>Select</div>
+                    <div>App No.</div>
+                    <div>Beneficiary</div>
+                    <div>Type</div>
+                    <div>Requested Item</div>
+                    <div>Comments</div>
+                  </div>
+                  {% for row in token_filtered_rows %}
+                    <label class="token-filter-row">
+                      <div><input type="checkbox" name="selected_row_index" value="{{ row.row_index }}"></div>
+                      <div>{{ row.application_number|default:"-" }}</div>
+                      <div>{{ row.beneficiary_name|default:"-" }}</div>
+                      <div>{{ row.beneficiary_type|default:"-" }}</div>
+                      <div>{{ row.requested_item|default:"-" }}</div>
+                      <div>{{ row.comments|default:"-" }}</div>
+                    </label>
+                  {% endfor %}
+                {% else %}
+                  <div class="token-muted" style="padding: 12px;">No rows match the current filter.</div>
+                {% endif %}
+              </div>
+
+              <div class="token-step-actions">
+                <button class="btn btn-subtle" type="submit" {% if not token_filtered_rows %}disabled{% endif %}>Exclude Selected</button>
+              </div>
+            </form>
+          </div>
+      </div>
+    </details>
+
+    <hr class="token-divider">
+
+    <details class="token-step" {% if token_open_section == "step1" %}open{% endif %}>
+      <summary>
+        <div class="token-step-header" style="width:100%;">
+          <div>
+            <h2>Step 1: Data Prep</h2>
+            <p>Prepare the loaded data for token generation by improving completeness, checking quality, and organizing it into the correct working order.</p>
+          </div>
+          {% if can_create_edit %}
+            <form method="post" onclick="event.stopPropagation();">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="run_data_prep">
+              {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+              <button class="btn" type="submit" {% if not token_row_count or token_sync_required %}disabled{% endif %}>Run Data Prep</button>
+            </form>
+          {% endif %}
+        </div>
+      </summary>
+      <div class="token-step-body">
+      <ul class="token-step-list">
+        {% for entry in token_prep_checks %}
+          <li>
+            <span class="{% if entry.passed %}token-step-check{% else %}token-step-empty{% endif %}">
+              {% if entry.passed %}✓{% else %}•{% endif %}
+            </span>
+            <span>{{ entry.label }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+      {% if token_is_prepared and token_blank_summary %}
+        <div style="margin-top: 14px;" class="token-muted">
+          Filled during prep:
+          {% for entry in token_blank_summary %}
+            {{ entry.column }} ({{ entry.count }}{% if not forloop.last %}), {% else %}){% endif %}
+          {% endfor %}
+        </div>
+      {% elif token_prep_validation_summary %}
+        <div style="margin-top: 14px;" class="token-muted">
+          After filling empty values, Step 1 found values below 1 in:
+          {% for entry in token_prep_validation_summary %}
+            {{ entry.label }} ({{ entry.count }}{% if not forloop.last %}), {% else %}){% endif %}
+          {% endfor %}
+          . Fix these rows before running Step 1.
+        </div>
+      {% elif token_blank_summary %}
+        <div style="margin-top: 14px;" class="token-muted">
+          Empty values currently present:
+          {% for entry in token_blank_summary %}
+            {{ entry.column }} ({{ entry.count }}{% if not forloop.last %}), {% else %}){% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
+      </div>
+    </details>
+
+    <hr class="token-divider">
+
+    <details class="token-step" {% if token_open_section == "step2" %}open{% endif %}>
+      <summary>
+        <div class="token-step-header" style="width:100%;">
+          <div>
+            <h2>Step 2: Name and Token Name Adjustments</h2>
+            <p>Review only the long unique Names and Token Names here.</p>
+          </div>
+        </div>
+      </summary>
+      <div class="token-step-body">
+      <div class="token-two-col">
+        <div class="token-edit-card">
+          <div class="token-step-header">
+            <div>
+              <h3>Name and Token Name Adjustments</h3>
+              <p>Review only the unique values longer than the chosen character limit.</p>
+            </div>
+          </div>
+          <form method="get" id="token-length-form" class="token-slider-wrap">
+            {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+            <input type="hidden" name="open_section" value="step2">
+            <label class="token-muted" for="name_limit">Show values longer than</label>
+            <input id="name_limit" name="name_limit" type="range" min="10" max="60" value="{{ token_name_length_limit }}">
+            <strong id="name_limit_value">{{ token_name_length_limit }}</strong>
+          </form>
+
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save_adjustments">
+            {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+            <input type="hidden" name="name_limit" value="{{ token_name_length_limit }}">
+
+            <div class="token-section-compact">
+              <div class="token-edit-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Current Name</th>
+                      <th>Replace Name</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% if token_edit_candidates.names %}
+                      {% for entry in token_edit_candidates.names %}
+                        <tr>
+                          <td>{{ entry.value }} <span class="token-muted">({{ entry.length }})</span></td>
+                          <td><input class="input" type="text" name="replace_name__placeholder_{{ forloop.counter }}" value="{{ entry.value }}" data-raw-name="{{ entry.value }}"></td>
+                        </tr>
+                      {% endfor %}
+                    {% else %}
+                      <tr>
+                        <td colspan="2" style="text-align:center; color: var(--text-secondary);">No long beneficiary names above the current limit.</td>
+                      </tr>
+                    {% endif %}
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="token-edit-table-wrap" style="margin-top: 14px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Current Token Name</th>
+                      <th>Replace Token Name</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% if token_edit_candidates.token_names %}
+                      {% for entry in token_edit_candidates.token_names %}
+                        <tr>
+                          <td>{{ entry.value }} <span class="token-muted">({{ entry.length }})</span></td>
+                          <td><input class="input" type="text" name="replace_token_name__placeholder_{{ forloop.counter }}" value="{{ entry.value }}" data-raw-name="{{ entry.value }}"></td>
+                        </tr>
+                      {% endfor %}
+                    {% else %}
+                      <tr>
+                        <td colspan="2" style="text-align:center; color: var(--text-secondary);">No long token names above the current limit.</td>
+                      </tr>
+                    {% endif %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="token-step-actions">
+              <button class="btn" type="submit" {% if not token_is_prepared or token_sync_required %}disabled{% endif %}>Save Adjustments</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      </div>
+    </details>
+
+    <hr class="token-divider">
+
+    <details class="token-step" {% if token_open_section == "step3" %}open{% endif %}>
+      <summary>
+        <div class="token-step-header" style="width:100%;">
+          <div>
+            <h2>Step 3: Token Print for Article</h2>
+            <p>Marked items are currently set to skip label sticking. This comes from the saved token-print choice or the default article logic from Step 1.</p>
+          </div>
+        </div>
+      </summary>
+      <div class="token-step-body">
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="save_token_print">
+        {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+
+        <details class="token-collapsible" {% if token_open_section == "step3" and token_article_toggles %}open{% endif %}>
+          <summary>
+            <span>Article Label Settings</span>
+            {% if token_article_toggles %}
+              <label class="token-muted" style="display:flex; align-items:center; gap:8px; margin:0;" onclick="event.stopPropagation();">
+                <input id="token-toggle-all" type="checkbox">
+                <span>Select All</span>
+              </label>
+            {% endif %}
+          </summary>
+          <div class="token-collapsible-body">
+            <div class="token-toggle-list">
+              {% if token_article_toggles %}
+                {% for entry in token_article_toggles %}
+                  <label class="token-toggle-item">
+                    <span>{{ entry.requested_item }} <span class="token-muted">(Token Qty: {{ entry.token_total }})</span></span>
+                    <span>
+                      <input type="checkbox" name="skip_label_item" value="{{ entry.requested_item }}" {% if entry.skip_label %}checked{% endif %}>
+                      Skip label
+                    </span>
+                  </label>
+                {% endfor %}
+              {% else %}
+                <div class="token-muted">No article rows available yet.</div>
+              {% endif %}
+            </div>
+          </div>
+        </details>
+
+        <div class="token-step-actions">
+          <button class="btn btn-subtle" type="submit" {% if not token_is_prepared or token_sync_required %}disabled{% endif %}>Save Token Print</button>
+        </div>
+      </form>
+      </div>
+    </details>
+
+    <hr class="token-divider">
+
+    <details class="token-step" {% if token_open_section == "step4" %}open{% endif %}>
+      <summary>
+        <div class="token-step-header" style="width:100%;">
+          <div>
+            <h2>Step 4: Generate Token</h2>
+            <p>Generate the final token numbers only after Step 1, Step 2, and Step 3 are complete.</p>
+          </div>
+          <div class="token-step-actions" style="margin-top:0;" onclick="event.stopPropagation();">
+            {% if can_create_edit %}
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="generate_tokens">
+                {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+                <button class="btn" type="submit" {% if not token_is_prepared or not token_is_sorted or not token_step3_saved or token_sync_required %}disabled{% endif %}>Generate Token</button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      </summary>
+      <div class="token-step-body">
+      {% if token_sync_required %}
+        <div class="token-muted" style="margin-top: 10px;">Click <strong>Sync Data</strong> first so Token Generation uses the latest Sequence List data.</div>
+      {% elif not token_is_prepared %}
+        <div class="token-muted" style="margin-top: 10px;">Generate Token becomes available after Step 1 data prep.</div>
+      {% elif not token_is_sorted %}
+        <div class="token-muted" style="margin-top: 10px;">Generate Token becomes available after Step 2 adjustments are saved.</div>
+      {% elif not token_step3_saved %}
+        <div class="token-muted" style="margin-top: 10px;">Generate Token becomes available after Step 3 token print settings are saved.</div>
+      {% elif token_is_generated %}
+        <div class="token-status-pass" style="margin-top: 10px;">Token numbers generated. Starting: {{ token_start_no }}, Ending: {{ token_end_no }}</div>
+      {% endif %}
+      </div>
+    </details>
+  </section>
+  <script>
+    (function () {
+      const slider = document.getElementById('name_limit');
+      const label = document.getElementById('name_limit_value');
+      const form = document.getElementById('token-length-form');
+      const uploadInput = document.getElementById('token-upload-input');
+      const uploadTrigger = document.getElementById('token-upload-trigger');
+      const uploadForm = document.getElementById('token-upload-form');
+      const toggleAllCheckbox = document.getElementById('token-toggle-all');
+      if (uploadInput && uploadTrigger && uploadForm) {
+        uploadTrigger.addEventListener('click', () => uploadInput.click());
+        uploadInput.addEventListener('change', () => {
+          if (uploadInput.files && uploadInput.files.length) {
+            uploadForm.submit();
+          }
+        });
+      }
+      if (toggleAllCheckbox) {
+        const getCheckboxes = () => Array.from(document.querySelectorAll('input[name="skip_label_item"]'));
+        const syncToggleState = () => {
+          const boxes = getCheckboxes();
+          const allChecked = boxes.length > 0 && boxes.every((box) => box.checked);
+          toggleAllCheckbox.checked = allChecked;
+        };
+        toggleAllCheckbox.addEventListener('change', () => {
+          const boxes = getCheckboxes();
+          boxes.forEach((box) => {
+            box.checked = toggleAllCheckbox.checked;
+          });
+          syncToggleState();
+        });
+        getCheckboxes().forEach((box) => box.addEventListener('change', syncToggleState));
+        syncToggleState();
+      }
+      if (!slider || !label || !form) return;
+      let timeout = null;
+      const submitSoon = () => {
+        label.textContent = slider.value;
+        window.clearTimeout(timeout);
+        timeout = window.setTimeout(() => form.submit(), 250);
+      };
+      slider.addEventListener('input', submitSoon);
+      label.textContent = slider.value;
+
+      document.querySelectorAll('input[data-raw-name]').forEach((input) => {
+        const raw = input.getAttribute('data-raw-name') || '';
+        if (input.name.startsWith('replace_name__')) {
+          input.name = 'replace_name__' + raw.split('/').join('__SLASH__');
+        } else if (input.name.startsWith('replace_token_name__')) {
+          input.name = 'replace_token_name__' + raw.split('/').join('__SLASH__');
+        }
+      });
+    })();
+  </script>
+{% endblock %}

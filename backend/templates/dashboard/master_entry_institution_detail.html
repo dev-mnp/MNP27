@@ -57,20 +57,20 @@
       </section>
     {% endif %}
 
-    <table class="summary-detail-table detail-table-wrap">
+    <table class="summary-detail-table detail-table-wrap" id="detail-table">
       <thead>
         <tr>
-          <th>Item</th>
-          <th>Type</th>
-          <th>Quantity</th>
-          <th>Unit Price</th>
-          <th>Total</th>
-          <th>Name of Beneficiary</th>
-          <th>Name of Institution</th>
-          <th>Aadhaar Number</th>
-          <th>Details</th>
-          <th>Cheque / RTGS in Favour</th>
-          <th>Modified On</th>
+          <th><a href="{{ sort_querystrings.article_name }}#detail-table">Item {% if current_sort == "article_name" %}{% if current_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+          <th><a href="{{ sort_querystrings.item_type }}#detail-table">Type {% if current_sort == "item_type" %}{% if current_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+          <th><a href="{{ sort_querystrings.quantity }}#detail-table">Quantity {% if current_sort == "quantity" %}{% if current_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+          <th><a href="{{ sort_querystrings.unit_price }}#detail-table">Unit Price {% if current_sort == "unit_price" %}{% if current_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+          <th><a href="{{ sort_querystrings.total_amount }}#detail-table">Total {% if current_sort == "total_amount" %}{% if current_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+          <th><a href="{{ sort_querystrings.name_of_beneficiary }}#detail-table">Name of Beneficiary {% if current_sort == "name_of_beneficiary" %}{% if current_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+          <th><a href="{{ sort_querystrings.name_of_institution }}#detail-table">Name of Institution {% if current_sort == "name_of_institution" %}{% if current_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+          <th><a href="{{ sort_querystrings.aadhar_number }}#detail-table">Aadhaar Number {% if current_sort == "aadhar_number" %}{% if current_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+          <th><a href="{{ sort_querystrings.notes }}#detail-table">Details / Comments {% if current_sort == "notes" %}{% if current_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+          <th><a href="{{ sort_querystrings.cheque_rtgs_in_favour }}#detail-table">Cheque / RTGS in Favour {% if current_sort == "cheque_rtgs_in_favour" %}{% if current_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
+          <th><a href="{{ sort_querystrings.updated_at }}#detail-table">Modified On {% if current_sort == "updated_at" %}{% if current_dir == "asc" %}↑{% else %}↓{% endif %}{% else %}⇅{% endif %}</a></th>
         </tr>
       </thead>
       <tbody>
@@ -89,7 +89,7 @@
             <td>{{ entry.updated_at|date:"d/m/Y H:i" }}</td>
           </tr>
         {% empty %}
-          <tr><td colspan="12">No items saved yet.</td></tr>
+          <tr><td colspan="11">No items saved yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -101,6 +101,10 @@
       vertical-align: top;
       white-space: normal;
       word-break: break-word;
+    }
+    .detail-table-wrap th:not(:first-child),
+    .detail-table-wrap td:not(:first-child) {
+      text-align: center;
     }
   </style>
 {% endblock %}
