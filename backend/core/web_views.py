@@ -11,6 +11,7 @@ import csv
 import base64
 import json
 import uuid
+import zipfile
 import io
 import os
 import re
@@ -912,678 +913,6 @@ def _reconciliation_parse_decimal(value):
         return Decimal(raw or "0")
     except (InvalidOperation, ValueError):
         return Decimal("0")
-
-
-def _reconciliation_format_decimal(value):
-    amount = Decimal(str(value or 0))
-    return f"{amount:,.2f}"
-
-
-def _reconciliation_master_metrics(rows=None):
-    rows = list(rows if rows is not None else _phase2_master_export_rows())
-    unique_items = set()
-    beneficiaries = {
-        models.RecipientTypeChoices.DISTRICT: set(),
-        models.RecipientTypeChoices.PUBLIC: set(),
-        models.RecipientTypeChoices.INSTITUTIONS: set(),
-        models.RecipientTypeChoices.OTHERS: set(),
-    }
-    quantity_total = 0
-    total_value = Decimal("0")
-
-    for row in rows:
-        beneficiary_type = str(row.get("Beneficiary Type") or "").strip()
-        application_number = str(row.get("Application Number") or "").strip()
-        beneficiary_name = str(row.get("Beneficiary Name") or "").strip()
-        requested_item = str(row.get("Requested Item") or "").strip()
-        quantity_total += _phase2_parse_number(row.get("Quantity"))
-        total_value += _reconciliation_parse_decimal(row.get("Total Value"))
-        if requested_item:
-            unique_items.add(requested_item)
-        if beneficiary_type or application_number or beneficiary_name:
-            beneficiaries.setdefault(beneficiary_type or models.RecipientTypeChoices.OTHERS, set()).add(
-                _phase2_distinct_beneficiary_key(application_number, beneficiary_name, beneficiary_type)
-            )
-
-    return {
-        "rows": len(rows),
-        "quantity_total": quantity_total,
-        "total_value": total_value,
-        "unique_items": len(unique_items),
-        "district_count": len(beneficiaries.get(models.RecipientTypeChoices.DISTRICT, set())),
-        "public_count": len(beneficiaries.get(models.RecipientTypeChoices.PUBLIC, set())),
-        "institution_count": len(beneficiaries.get(models.RecipientTypeChoices.INSTITUTIONS, set())),
-    }
-
-
-def _reconciliation_module_card(*, name, description, checks, metrics):
-    return {
-        "name": name,
-        "description": description,
-        "checks": checks,
-        "metrics": metrics,
-        "healthy": bool(checks) and all(check["matched"] for check in checks),
-        "matched_count": sum(1 for check in checks if check["matched"]),
-        "check_count": len(checks),
-    }
-
-
-class ReconciliationOverviewView(LoginRequiredMixin, AdminRequiredMixin, TemplateView):
-    module_key = models.ModuleKeyChoices.AUDIT_LOGS
-    permission_action = "view"
-    template_name = "dashboard/reconciliation_overview.html"
-    health_suites = [
-        {
-            "key": "django-check",
-            "name": "Django System Check",
-            "description": "Validates project wiring, models, routes, and configuration.",
-            "command": ["manage.py", "check"],
-            "kind": "check",
-        },
-        {
-            "key": "application-entry",
-            "name": "Application Entry",
-            "description": "District, Public, and Institution create/edit/detail/export regression coverage.",
-            "command": ["manage.py", "test", "core.tests.test_application_entry_flows"],
-            "kind": "test",
-        },
-        {
-            "key": "fund-request",
-            "name": "Order & Fund Request",
-            "description": "Aid and article request creation, reopen, autofill, and export-related regressions.",
-            "command": ["manage.py", "test", "core.tests.test_fund_request_list"],
-            "kind": "test",
-        },
-        {
-            "key": "phase2",
-            "name": "Seat Allocation & Sequence List",
-            "description": "Sync, split, save, reconcile, export, and final integrity regressions.",
-            "command": ["manage.py", "test", "core.tests.test_phase2_module"],
-            "kind": "test",
-        },
-        {
-            "key": "purchase-order",
-            "name": "Purchase Order",
-            "description": "Purchase order draft, reopen, export, and PDF regressions.",
-            "command": ["manage.py", "test", "core.tests.test_purchase_order_module"],
-            "kind": "test",
-        },
-        {
-            "key": "search-export",
-            "name": "Search / Export / Autofill",
-            "description": "Export integrity, application detail propagation, and related regression coverage.",
-            "command": ["manage.py", "test", "core.tests.test_search_bars"],
-            "kind": "test",
-        },
-    ]
-    data_module_order = [
-        "dashboard-metrics",
-        "application-entry",
-        "seat-allocation",
-        "sequence-list",
-        "export-consistency",
-    ]
-
-    def _run_health_suite(self, suite):
-        command = [sys.executable, *suite["command"]]
-        result = subprocess.run(
-            command,
-            cwd=settings.BASE_DIR,
-            capture_output=True,
-            text=True,
-        )
-        output = "\n".join(part for part in [result.stdout, result.stderr] if part).strip()
-        output_lines = [line.strip() for line in output.splitlines() if line.strip()]
-        tests_match = re.search(r"Ran (\d+) tests?", output)
-        tests_ran = int(tests_match.group(1)) if tests_match else 0
-
-        if result.returncode == 0:
-            if suite["kind"] == "check":
-                details = "System check identified no issues."
-            else:
-                details = (
-                    f"Passed {tests_ran} test(s)."
-                    if tests_ran
-                    else "Regression suite passed."
-                )
-        else:
-            failure_line = next(
-                (
-                    line
-                    for line in reversed(output_lines)
-                    if "FAILED" in line or "ERROR" in line or "Traceback" in line
-                ),
-                output_lines[-1] if output_lines else "Health check failed.",
-            )
-            details = failure_line
-
-        return {
-            "key": suite["key"],
-            "name": suite["name"],
-            "description": suite["description"],
-            "matched": result.returncode == 0,
-            "details": details,
-            "tests_ran": tests_ran,
-        }
-
-    def _run_app_health_check(self, suite_keys=None):
-        selected = self.health_suites
-        if suite_keys is not None:
-            selected = [suite for suite in self.health_suites if suite["key"] in set(suite_keys)]
-        suites = [self._run_health_suite(suite) for suite in selected]
-        return {
-            "checked_at_display": timezone.localtime().strftime("%d/%m/%Y %I:%M %p"),
-            "all_passed": all(suite["matched"] for suite in suites),
-            "suites": suites,
-            "total_tests": sum(suite["tests_ran"] for suite in suites),
-        }
-
-    def _build_data_modules(self, session):
-        master_rows = _phase2_master_export_rows()
-        master_metrics = _reconciliation_master_metrics(master_rows)
-        return [
-            self._dashboard_module(master_metrics),
-            self._application_entry_module(master_rows, master_metrics),
-            self._seat_allocation_module(session),
-            self._sequence_module(session),
-            self._export_consistency_module(session),
-        ], [
-            {"label": "Master rows", "value": str(master_metrics["rows"])},
-            {"label": "Total quantity", "value": str(master_metrics["quantity_total"])},
-            {"label": "Total value", "value": f"Rs.{_reconciliation_format_decimal(master_metrics['total_value'])}"},
-            {"label": "Unique items", "value": str(master_metrics["unique_items"])},
-        ]
-
-    def _run_data_health(self, session, module_keys=None):
-        data_modules, overall_metrics = self._build_data_modules(session)
-        if module_keys is not None:
-            wanted = set(module_keys)
-            data_modules = [module for module in data_modules if module["key"] in wanted]
-        return {
-            "checked_at_display": timezone.localtime().strftime("%d/%m/%Y %I:%M %p"),
-            "all_passed": bool(data_modules) and all(module["healthy"] for module in data_modules),
-            "all_ran": len(data_modules) == len(self.data_module_order),
-            "modules": data_modules,
-            "overall_metrics": overall_metrics,
-        }
-
-    def _merge_app_health_result(self, existing_result, new_result):
-        suite_name_map = {suite["name"]: suite["key"] for suite in self.health_suites}
-        existing_map = {}
-        for suite in (existing_result or {}).get("suites", []):
-            suite_key = suite.get("key") or suite_name_map.get(suite.get("name") or "")
-            if suite_key:
-                existing_map[suite_key] = {**suite, "key": suite_key}
-        for suite in new_result.get("suites", []):
-            existing_map[suite["key"]] = suite
-        suites = []
-        for suite_def in self.health_suites:
-            suite = existing_map.get(suite_def["key"])
-            if suite:
-                suites.append(suite)
-        return {
-            "checked_at_display": new_result["checked_at_display"],
-            "all_passed": bool(suites) and all(suite["matched"] for suite in suites),
-            "all_ran": len(suites) == len(self.health_suites),
-            "suites": suites,
-            "total_tests": sum(suite["tests_ran"] for suite in suites),
-        }
-
-    def _merge_data_health_result(self, existing_result, new_result):
-        module_name_map = {
-            "Dashboard Metrics": "dashboard-metrics",
-            "Application Entry": "application-entry",
-            "Seat Allocation": "seat-allocation",
-            "Sequence List": "sequence-list",
-            "Export Consistency": "export-consistency",
-        }
-        existing_map = {}
-        for module in (existing_result or {}).get("modules", []):
-            module_key = module.get("key") or module_name_map.get(module.get("name") or "")
-            if module_key:
-                existing_map[module_key] = {**module, "key": module_key}
-        for module in new_result.get("modules", []):
-            existing_map[module["key"]] = module
-        modules = []
-        for module_key in self.data_module_order:
-            module = existing_map.get(module_key)
-            if module:
-                modules.append(module)
-        return {
-            "checked_at_display": new_result["checked_at_display"],
-            "all_passed": bool(modules) and all(module["healthy"] for module in modules),
-            "all_ran": len(modules) == len(self.data_module_order),
-            "modules": modules,
-            "overall_metrics": new_result.get("overall_metrics") or (existing_result or {}).get("overall_metrics") or [],
-        }
-
-    def _dashboard_module(self, master_metrics):
-        dashboard_metrics = DashboardView()._build_metrics()
-        checks = [
-            {
-                "label": "Dashboard total quantity",
-                "matched": dashboard_metrics["overall"]["total_articles_qty"] == master_metrics["quantity_total"],
-                "details": (
-                    f"Dashboard {dashboard_metrics['overall']['total_articles_qty']}, Master {master_metrics['quantity_total']}"
-                ),
-            },
-            {
-                "label": "Dashboard actual total value",
-                "matched": Decimal(str(dashboard_metrics["overall"]["actual_total_value_accrued"] or 0)) == master_metrics["total_value"],
-                "details": (
-                    f"Dashboard {_reconciliation_format_decimal(dashboard_metrics['overall']['actual_total_value_accrued'])}, "
-                    f"Master {_reconciliation_format_decimal(master_metrics['total_value'])}"
-                ),
-            },
-            {
-                "label": "Dashboard unique items",
-                "matched": dashboard_metrics["overall"]["unique_articles"] == master_metrics["unique_items"],
-                "details": (
-                    f"Dashboard {dashboard_metrics['overall']['unique_articles']}, Master {master_metrics['unique_items']}"
-                ),
-            },
-            {
-                "label": "Dashboard beneficiary counts",
-                "matched": (
-                    dashboard_metrics["district"]["districts_received"] == master_metrics["district_count"]
-                    and dashboard_metrics["public"]["total_beneficiaries"] == master_metrics["public_count"]
-                    and dashboard_metrics["institutions"]["application_count"] == master_metrics["institution_count"]
-                ),
-                "details": (
-                    f"District {dashboard_metrics['district']['districts_received']}/{master_metrics['district_count']}, "
-                    f"Public {dashboard_metrics['public']['total_beneficiaries']}/{master_metrics['public_count']}, "
-                    f"Institutions {dashboard_metrics['institutions']['application_count']}/{master_metrics['institution_count']}"
-                ),
-            },
-        ]
-        metrics = [
-            {"label": "Qty", "value": str(dashboard_metrics["overall"]["total_articles_qty"])},
-            {"label": "Value", "value": f"Rs.{_reconciliation_format_decimal(dashboard_metrics['overall']['actual_total_value_accrued'])}"},
-            {"label": "Unique items", "value": str(dashboard_metrics["overall"]["unique_articles"])},
-            {
-                "label": "Applications",
-                "value": (
-                    f"D {dashboard_metrics['district']['districts_received']} | "
-                    f"P {dashboard_metrics['public']['total_beneficiaries']} | "
-                    f"I {dashboard_metrics['institutions']['application_count']}"
-                ),
-            },
-        ]
-        card = _reconciliation_module_card(
-            name="Dashboard Metrics",
-            description="Confirms the live dashboard totals still match the current master data source.",
-            checks=checks,
-            metrics=metrics,
-        )
-        card["key"] = "dashboard-metrics"
-        return card
-
-    def _application_entry_module(self, master_rows, master_metrics):
-        district_entries = list(models.DistrictBeneficiaryEntry.objects.select_related("article").all())
-        public_entries = list(models.PublicBeneficiaryEntry.objects.select_related("article").all())
-        institution_entries = list(models.InstitutionsBeneficiaryEntry.objects.select_related("article").all())
-        live_total_rows = len(district_entries) + len(public_entries) + len(institution_entries)
-        live_quantity_total = (
-            sum(int(entry.quantity or 0) for entry in district_entries)
-            + sum(int(entry.quantity or 0) for entry in public_entries)
-            + sum(int(entry.quantity or 0) for entry in institution_entries)
-        )
-        live_total_value = (
-            sum(Decimal(str(entry.total_amount or 0)) for entry in district_entries)
-            + sum(Decimal(str(entry.total_amount or 0)) for entry in public_entries)
-            + sum(Decimal(str(entry.total_amount or 0)) for entry in institution_entries)
-        )
-        live_unique_items = len(
-            {
-                str(entry.article.article_name or "").strip()
-                for entry in [*district_entries, *public_entries, *institution_entries]
-                if entry.article_id and str(entry.article.article_name or "").strip()
-            }
-        )
-        live_district_count = models.DistrictBeneficiaryEntry.objects.values("district_id").distinct().count()
-        live_public_count = models.PublicBeneficiaryEntry.objects.count()
-        live_institution_count = models.InstitutionsBeneficiaryEntry.objects.values("application_number").distinct().count()
-
-        checks = [
-            {
-                "label": "Master export row count",
-                "matched": master_metrics["rows"] == live_total_rows,
-                "details": f"Export {master_metrics['rows']}, Application Entry {live_total_rows}",
-            },
-            {
-                "label": "Master export quantity",
-                "matched": master_metrics["quantity_total"] == live_quantity_total,
-                "details": f"Export {master_metrics['quantity_total']}, Application Entry {live_quantity_total}",
-            },
-            {
-                "label": "Master export total value",
-                "matched": master_metrics["total_value"] == live_total_value,
-                "details": (
-                    f"Export {_reconciliation_format_decimal(master_metrics['total_value'])}, "
-                    f"Application Entry {_reconciliation_format_decimal(live_total_value)}"
-                ),
-            },
-            {
-                "label": "Master export unique items",
-                "matched": master_metrics["unique_items"] == live_unique_items,
-                "details": f"Export {master_metrics['unique_items']}, Application Entry {live_unique_items}",
-            },
-            {
-                "label": "Application counts",
-                "matched": (
-                    master_metrics["district_count"] == live_district_count
-                    and master_metrics["public_count"] == live_public_count
-                    and master_metrics["institution_count"] == live_institution_count
-                ),
-                "details": (
-                    f"District {master_metrics['district_count']}/{live_district_count}, "
-                    f"Public {master_metrics['public_count']}/{live_public_count}, "
-                    f"Institutions {master_metrics['institution_count']}/{live_institution_count}"
-                ),
-            },
-        ]
-        metrics = [
-            {"label": "Rows", "value": str(master_metrics["rows"])},
-            {"label": "Qty", "value": str(master_metrics["quantity_total"])},
-            {"label": "Value", "value": f"Rs.{_reconciliation_format_decimal(master_metrics['total_value'])}"},
-            {"label": "Unique items", "value": str(master_metrics["unique_items"])},
-        ]
-        card = _reconciliation_module_card(
-            name="Application Entry",
-            description="Checks that the master export is still a faithful row-level copy of District, Public, and Institution data entry.",
-            checks=checks,
-            metrics=metrics,
-        )
-        card["key"] = "application-entry"
-        return card
-
-    def _seat_allocation_module(self, session):
-        if not session:
-            card = _reconciliation_module_card(
-                name="Seat Allocation",
-                description="Checks the working copy against Master Data and validates Waiting Hall / Token splits.",
-                checks=[{"label": "Active session", "matched": False, "details": "No Seat Allocation session is available yet."}],
-                metrics=[],
-            )
-            card["key"] = "seat-allocation"
-            return card
-
-        integrity = _sequence_seat_allocation_integrity(session)
-        snapshot = integrity["snapshot"]
-        split_check = integrity["split_check"]
-        checks = [
-            {
-                "label": "Master Data vs Seat Allocation row count",
-                "matched": snapshot["source_row_count"] == snapshot["grouped_row_count"],
-                "details": f"Master {snapshot['source_row_count']}, Seat Allocation {snapshot['grouped_row_count']}",
-            },
-            *[
-                {
-                    "label": f"Master Data vs Seat Allocation {check['label']}",
-                    "matched": check["matched"],
-                    "details": (
-                        f"Master {check['source']}, Seat Allocation {check['grouped']}"
-                    ),
-                }
-                for check in integrity["checks"]
-            ],
-            {
-                "label": "Seat Allocation row-wise split",
-                "matched": split_check["rowwise_matched"],
-                "details": (
-                    f"All {split_check['row_count']} row(s) matched"
-                    if split_check["rowwise_matched"]
-                    else f"{split_check['row_mismatch_count']} row(s) have Quantity != Waiting Hall + Token"
-                ),
-            },
-            {
-                "label": "Seat Allocation overall split",
-                "matched": split_check["overall_matched"],
-                "details": (
-                    f"Waiting Hall {split_check['total_waiting']}, Token {split_check['total_token']}, Total Quantity {split_check['total_quantity']}"
-                ),
-            },
-        ]
-        metrics = [
-            {"label": "Rows", "value": str(snapshot["grouped_row_count"])},
-            {"label": "Waiting Hall", "value": str(split_check["total_waiting"])},
-            {"label": "Token", "value": str(split_check["total_token"])},
-        ]
-        card = _reconciliation_module_card(
-            name="Seat Allocation",
-            description="Confirms the Seat Allocation working copy still matches Master Data and that the split math is valid.",
-            checks=checks,
-            metrics=metrics,
-        )
-        card["key"] = "seat-allocation"
-        return card
-
-    def _sequence_module(self, session):
-        if not session:
-            card = _reconciliation_module_card(
-                name="Sequence List",
-                description="Checks final sequence integrity against Master Data and Seat Allocation before the next stage.",
-                checks=[{"label": "Active session", "matched": False, "details": "No Sequence / Seat Allocation session is available yet."}],
-                metrics=[],
-            )
-            card["key"] = "sequence-list"
-            return card
-
-        sequence_view = SequenceListView()
-        reconciliation_state = sequence_view._sequence_reconciliation_state(session)
-        saved_items = sequence_view._saved_sequence_items(session)
-        sequence_item_names = {str(row["item_name"] or "").strip() for row in saved_items if str(row["item_name"] or "").strip()}
-        sequence_number_count = len(
-            {
-                int(row["sequence_no"])
-                for row in saved_items
-                if row.get("sequence_no")
-            }
-        )
-        sequence_map = {
-            str(row["item_name"] or "").strip(): int(row["sequence_no"])
-            for row in saved_items
-            if str(row["item_name"] or "").strip() and row.get("sequence_no")
-        }
-        final_export = _sequence_final_export_rows(session, sequence_map)
-        master_rows = _phase2_master_export_rows()
-        seat_integrity = _sequence_seat_allocation_integrity(session)
-        exact_checks = {
-            "master_match": _sequence_exact_compare(
-                left_rows=_sequence_project_rows(final_export["final_rows"], EXPORT_COLUMNS),
-                left_headers=EXPORT_COLUMNS,
-                right_rows=_sequence_project_rows(master_rows, EXPORT_COLUMNS),
-                right_headers=EXPORT_COLUMNS,
-                matched_label=f"Matched {len(master_rows)} row(s) across {len(EXPORT_COLUMNS)} column(s)",
-                mismatch_label="Master Data comparison failed",
-            ),
-            "seat_match": _sequence_exact_compare(
-                left_rows=_sequence_project_rows(final_export["final_rows"], final_export["seat_headers"]),
-                left_headers=final_export["seat_headers"],
-                right_rows=final_export["seat_rows"],
-                right_headers=final_export["seat_headers"],
-                matched_label=f"Matched {len(final_export['seat_rows'])} row(s) across {len(final_export['seat_headers'])} column(s)",
-                mismatch_label="Seat Allocation comparison failed",
-            ),
-        }
-        submit_result = sequence_view._sequence_submit_result(
-            reconciliation_state=reconciliation_state,
-            sequence_item_names=sequence_item_names,
-            sequence_number_count=sequence_number_count,
-            exact_checks=exact_checks,
-            seat_integrity=seat_integrity,
-        )
-        metrics = [
-            {"label": "Saved items", "value": str(len(sequence_item_names))},
-            {"label": "Unique sequences", "value": str(sequence_number_count)},
-            {"label": "Final rows", "value": str(len(final_export["final_rows"]))},
-        ]
-        card = _reconciliation_module_card(
-            name="Sequence List",
-            description="Validates final 25-column sequence output, sequence uniqueness, and carry-forward integrity from earlier stages.",
-            checks=submit_result["checks"],
-            metrics=metrics,
-        )
-        card["key"] = "sequence-list"
-        return card
-
-    def _export_consistency_module(self, session):
-        if not session:
-            card = _reconciliation_module_card(
-                name="Export Consistency",
-                description="Confirms the exported master, seat, and sequence layers are still consistent with one another.",
-                checks=[{"label": "Active session", "matched": False, "details": "No active session is available for Seat / Sequence export checks."}],
-                metrics=[],
-            )
-            card["key"] = "export-consistency"
-            return card
-
-        master_rows = _phase2_master_export_rows()
-        seat_queryset = models.SeatAllocationRow.objects.filter(session=session).order_by(
-            F("sequence_no").asc(nulls_last=True),
-            "sort_order",
-            "requested_item",
-            "application_number",
-            "id",
-        )
-        seat_rows, seat_headers = _phase2_export_rows(seat_queryset, include_sequence=False)
-        sequence_rows, sequence_headers = _phase2_export_rows(seat_queryset, include_sequence=True)
-        checks = [
-            {
-                "label": "Master export vs Seat export",
-                **_sequence_exact_compare(
-                    left_rows=_sequence_project_rows(seat_rows, EXPORT_COLUMNS),
-                    left_headers=EXPORT_COLUMNS,
-                    right_rows=_sequence_project_rows(master_rows, EXPORT_COLUMNS),
-                    right_headers=EXPORT_COLUMNS,
-                    matched_label=f"Matched {len(master_rows)} row(s) across {len(EXPORT_COLUMNS)} shared column(s)",
-                    mismatch_label="Master vs Seat export comparison failed",
-                ),
-            },
-            {
-                "label": "Master export vs Sequence export",
-                **_sequence_exact_compare(
-                    left_rows=_sequence_project_rows(sequence_rows, EXPORT_COLUMNS),
-                    left_headers=EXPORT_COLUMNS,
-                    right_rows=_sequence_project_rows(master_rows, EXPORT_COLUMNS),
-                    right_headers=EXPORT_COLUMNS,
-                    matched_label=f"Matched {len(master_rows)} row(s) across {len(EXPORT_COLUMNS)} shared column(s)",
-                    mismatch_label="Master vs Sequence export comparison failed",
-                ),
-            },
-            {
-                "label": "Seat export vs Sequence export",
-                **_sequence_exact_compare(
-                    left_rows=_sequence_project_rows(sequence_rows, seat_headers),
-                    left_headers=seat_headers,
-                    right_rows=seat_rows,
-                    right_headers=seat_headers,
-                    matched_label=f"Matched {len(seat_rows)} row(s) across {len(seat_headers)} shared column(s)",
-                    mismatch_label="Seat vs Sequence export comparison failed",
-                ),
-            },
-        ]
-        metrics = [
-            {"label": "Master rows", "value": str(len(master_rows))},
-            {"label": "Seat rows", "value": str(len(seat_rows))},
-            {"label": "Sequence rows", "value": str(len(sequence_rows))},
-        ]
-        card = _reconciliation_module_card(
-            name="Export Consistency",
-            description="Confirms the generated exports still carry forward the same data between stages without silent loss.",
-            checks=checks,
-            metrics=metrics,
-        )
-        card["key"] = "export-consistency"
-        return card
-
-    def post(self, request, *args, **kwargs):
-        action = (request.POST.get("action") or "").strip()
-        session = _phase2_selected_session(request)
-        if action == "run_data_health":
-            request.session["reconciliation_data_health"] = self._run_data_health(session)
-        elif action == "run_data_module":
-            module_key = (request.POST.get("module_key") or "").strip()
-            if module_key:
-                request.session["reconciliation_data_health"] = self._merge_data_health_result(
-                    request.session.get("reconciliation_data_health"),
-                    self._run_data_health(session, [module_key]),
-                )
-        elif action == "run_health_check":
-            request.session["reconciliation_app_health"] = self._merge_app_health_result(
-                request.session.get("reconciliation_app_health"),
-                self._run_app_health_check(),
-            )
-        elif action == "run_health_suite":
-            suite_key = (request.POST.get("suite_key") or "").strip()
-            if suite_key:
-                request.session["reconciliation_app_health"] = self._merge_app_health_result(
-                    request.session.get("reconciliation_app_health"),
-                    self._run_app_health_check([suite_key]),
-                )
-        return HttpResponseRedirect(
-            _phase2_redirect_url(request, "ui:reconciliation-overview", session)
-        )
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        session = _phase2_selected_session(self.request)
-        data_health_result = self.request.session.get("reconciliation_data_health")
-        app_health_result = self.request.session.get("reconciliation_app_health")
-        module_name_map = {
-            "Dashboard Metrics": "dashboard-metrics",
-            "Application Entry": "application-entry",
-            "Seat Allocation": "seat-allocation",
-            "Sequence List": "sequence-list",
-            "Export Consistency": "export-consistency",
-        }
-        data_modules = []
-        for module in (data_health_result or {}).get("modules", []):
-            module_key = module.get("key") or module_name_map.get(module.get("name") or "")
-            data_modules.append({**module, "key": module_key or ""})
-        overall_metrics = (data_health_result or {}).get("overall_metrics", [])
-        data_overall_healthy = data_health_result["all_passed"] if data_health_result else None
-        app_overall_healthy = app_health_result["all_passed"] if app_health_result else None
-        app_suite_cards = []
-        suite_name_map = {suite["name"]: suite["key"] for suite in self.health_suites}
-        result_map = {}
-        for suite in (app_health_result or {}).get("suites", []):
-            suite_key = suite.get("key") or suite_name_map.get(suite.get("name") or "")
-            if suite_key:
-                result_map[suite_key] = {**suite, "key": suite_key}
-        for suite_def in self.health_suites:
-            suite_result = result_map.get(suite_def["key"])
-            app_suite_cards.append(
-                {
-                    "key": suite_def["key"],
-                    "name": suite_def["name"],
-                    "description": suite_def["description"],
-                    "matched": suite_result.get("matched") if suite_result else None,
-                    "details": suite_result.get("details") if suite_result else "Not run yet.",
-                    "tests_ran": suite_result.get("tests_ran", 0) if suite_result else 0,
-                }
-            )
-        overall_healthy = True
-        if data_overall_healthy is False or app_overall_healthy is False:
-            overall_healthy = False
-        context.update(
-            {
-                "page_title": "Reconciliation",
-                "checked_at_display": timezone.localtime().strftime("%d/%m/%Y %I:%M %p"),
-                "selected_session": session,
-                "modules": data_modules,
-                "data_modules": data_modules,
-                "data_health_result": data_health_result,
-                "data_overall_healthy": data_overall_healthy,
-                "app_health_result": app_health_result,
-                "app_overall_healthy": app_overall_healthy,
-                "overall_healthy": overall_healthy,
-                "overall_metrics": overall_metrics,
-                "app_suite_cards": app_suite_cards,
-            }
-        )
-        return context
-
 
 
 EXPORT_COLUMNS = [
@@ -7366,14 +6695,17 @@ def _token_generation_empty_value_summary(rows, headers):
     return entries
 
 
-def _token_generation_invalid_value_summary(rows):
+def _token_generation_invalid_value_summary(rows, headers=None):
     checks = [
         ("Quantity", "Quantity"),
         ("Cost Per Unit", "Cost Per Unit"),
         ("Total Value", "Total Value"),
     ]
+    header_set = {str(header or "").strip() for header in (headers or []) if str(header or "").strip()}
     entries = []
     for header, label in checks:
+        if header_set and header not in header_set:
+            continue
         invalid_count = 0
         for row in rows:
             value = _reconciliation_parse_decimal(row.get(header))
@@ -8098,6 +7430,13 @@ def _labels_audit_download(rows, *, download_kind, large_items):
             _phase2_parse_number(row.get("Start Token No")) or 0,
         )
 
+    def sort_by_item_and_start(row):
+        return (
+            str(row.get("Token Name") or row.get("Requested Item") or "").strip(),
+            str(row.get("Names") or "").strip(),
+            _phase2_parse_number(row.get("Start Token No")) or 0,
+        )
+
     row_filter = None
     group_by = None
     sort_key = None
@@ -8120,10 +7459,10 @@ def _labels_audit_download(rows, *, download_kind, large_items):
         sort_key = sort_by_name_and_start
     elif download_kind == "public":
         row_filter = lambda row: token_qty(row) > 0 and str(row.get("Beneficiary Type") or "").strip() == "Public"
-        sort_key = sort_by_name_and_start
+        sort_key = sort_by_item_and_start
     elif download_kind in {"chair_separate", "chair_continuous"}:
         if download_kind == "chair_separate":
-            row_filter = lambda row: (_phase2_parse_number(row.get("Token Print for ARTL")) or 0) != 0
+            row_filter = lambda row: token_qty(row) > 0
             group_by = lambda row: str(row.get("Token Name") or row.get("Requested Item") or "").strip()
         else:
             row_filter = lambda row: token_qty(row) > 0
@@ -8161,7 +7500,16 @@ def _labels_audit_download(rows, *, download_kind, large_items):
     actual_labels = len(entries)
     duplicate_tokens = max(actual_labels - len(set(tokens)), 0)
     missing_labels = max(expected_labels - actual_labels, 0)
-    page_count = ((actual_labels - 1) // labels_per_page) + 1 if actual_labels else 0
+    page_count = 0
+    if actual_labels:
+        if group_by:
+            grouped_counts = {}
+            for entry in entries:
+                group_key = str(entry.get("group") or "")
+                grouped_counts[group_key] = grouped_counts.get(group_key, 0) + 1
+            page_count = sum(((count - 1) // labels_per_page) + 1 for count in grouped_counts.values() if count > 0)
+        else:
+            page_count = ((actual_labels - 1) // labels_per_page) + 1
     ready = expected_labels > 0 and duplicate_tokens == 0 and invalid_range_rows == 0 and missing_labels == 0
     reason = ""
     status_label = "Data Ready"
@@ -8414,10 +7762,9 @@ def _phase2_replace_session_rows(session, upload_rows, *, source_file_name, user
 
 
 def _phase2_build_upload_rows(uploaded_file):
-    reader = _csv_reader_from_upload(uploaded_file)
-    headers = list(reader.fieldnames or [])
+    headers, uploaded_rows = _tabular_rows_from_upload(uploaded_file)
     if not headers:
-        raise ValueError("Uploaded CSV is empty.")
+        raise ValueError("Uploaded file is empty.")
 
     normalized_headers = {_phase2_normalize_text(header): header for header in headers}
     missing = [header for header in PHASE2_MASTER_REQUIRED_HEADERS if _phase2_normalize_text(header) not in normalized_headers]
@@ -8438,7 +7785,7 @@ def _phase2_build_upload_rows(uploaded_file):
     order = 0
     source_rows_for_reconciliation = []
     raw_rows = []
-    for source_row in reader:
+    for source_row in uploaded_rows:
         application_number = str(source_row.get(application_header) or "").strip()
         beneficiary_name = str(source_row.get(beneficiary_header) or "").strip()
         requested_item = str(source_row.get(requested_item_header) or "").strip()
@@ -8775,7 +8122,7 @@ class SeatAllocationListView(LoginRequiredMixin, RoleRequiredMixin, TemplateView
                 )
             uploaded = request.FILES.get("file")
             if not uploaded:
-                messages.error(request, "Choose a master-entry export CSV file.")
+                messages.error(request, "Choose a master-entry export CSV or Excel file.")
                 return HttpResponseRedirect(
                     _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
                 )
@@ -9030,6 +8377,42 @@ class SequenceListView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 },
             )
         return list(grouped.values())
+
+    def _uploaded_source_rows_from_file(self, uploaded_file):
+        headers, uploaded_rows = _tabular_rows_from_upload(uploaded_file)
+        if not headers:
+            raise ValueError("Uploaded file is empty.")
+
+        normalized_headers = {_phase2_normalize_text(header): header for header in headers if str(header or "").strip()}
+
+        def find_header(candidates):
+            for candidate in candidates:
+                match = normalized_headers.get(_phase2_normalize_text(candidate))
+                if match:
+                    return match
+            return None
+
+        item_header = find_header(["Requested Item", "Item", "Article", "Article Name", "requested_item"])
+        token_header = find_header(["Token Quantity", "Token Qty", "token_quantity", "Token"])
+        sequence_header = find_header(["Sequence No", "Sequence List", "sequence_no", "sequence list"])
+        if not item_header:
+            raise ValueError("Uploaded file missing item column. Expected Requested Item / Item / Article.")
+
+        source_rows = []
+        for source_row in uploaded_rows:
+            requested_item = str(source_row.get(item_header) or "").strip()
+            if not requested_item:
+                continue
+            source_rows.append(
+                {
+                    "requested_item": requested_item,
+                    "token_quantity": _phase2_parse_number(source_row.get(token_header)) if token_header else 0,
+                    "sequence_no": (_phase2_parse_number(source_row.get(sequence_header)) or None) if sequence_header else None,
+                    "row_map": {header: source_row.get(header, "") for header in headers},
+                    "headers": headers,
+                }
+            )
+        return {"headers": headers, "rows": source_rows}
 
     def _source_rows(self, session):
         rows = list(
@@ -9298,6 +8681,8 @@ class SequenceListView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 "sequence_source_rows": self._source_rows(session) if session else [],
                 "sequence_saved_items": self._saved_sequence_items(session) if session else [],
                 "sequence_master_items": self._master_items(),
+                "sequence_source_name": session.phase2_source_name if session else "",
+                "sequence_source_is_uploaded": bool(session and session.phase2_source_name and session.phase2_source_name != "master-entry-db"),
                 "sequence_default_items": SEQUENCE_DEFAULT_ITEMS,
                 "filters": {
                     "q": self.request.GET.get("q", ""),
@@ -9346,6 +8731,22 @@ class SequenceListView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
 
         action = (request.POST.get("action") or "").strip()
         start_from = _phase2_parse_number(request.POST.get("start_from")) or 1
+
+        if action == "parse_upload":
+            uploaded_file = request.FILES.get("file")
+            if not uploaded_file:
+                return JsonResponse({"error": "Choose a CSV or Excel file to upload."}, status=400)
+            try:
+                upload_result = self._uploaded_source_rows_from_file(uploaded_file)
+            except ValueError as exc:
+                return JsonResponse({"error": str(exc)}, status=400)
+            return JsonResponse(
+                {
+                    "rows": upload_result["rows"],
+                    "file_name": uploaded_file.name,
+                    "source_label": "Loaded Uploaded File",
+                }
+            )
 
         if action == "auto_assign":
             items = self._item_summaries(session)
@@ -9509,7 +8910,9 @@ class SequenceListView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                     ]
                 )
 
-                if submit_result["all_matched"] and not unassigned_master_items and not extra_sequence_items:
+                source_is_uploaded = bool(session.phase2_source_name and session.phase2_source_name != "master-entry-db")
+                allow_apply = source_is_uploaded or (submit_result["all_matched"] and not unassigned_master_items and not extra_sequence_items)
+                if allow_apply:
                     models.SeatAllocationRow.objects.filter(session=session).update(
                         sequence_no=None,
                         updated_by=request.user,
@@ -9523,6 +8926,11 @@ class SequenceListView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                             sequence_no=row["sequence_no"],
                             updated_by=request.user,
                             updated_at=timezone.now(),
+                        )
+                    if source_is_uploaded and not submit_result["all_matched"]:
+                        messages.warning(
+                            request,
+                            "Sequence list was applied to the uploaded Seat Allocation working copy. Current Master Data reconciliation still shows differences.",
                         )
                 else:
                     messages.warning(
@@ -9692,11 +9100,12 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
             uploaded_file = request.FILES.get("file")
             if not uploaded_file:
-                messages.error(request, "Choose a CSV file to upload.")
+                messages.error(request, "Choose a CSV or Excel file to upload.")
                 return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
-            reader = _csv_reader_from_upload(uploaded_file)
-            source_headers = list(reader.fieldnames or [])
-            source_rows = list(reader)
+            source_headers, source_rows = _tabular_rows_from_upload(uploaded_file)
+            if not source_headers:
+                messages.error(request, "Uploaded file is empty.")
+                return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
             dataset = {
                 "headers": source_headers,
                 "rows": source_rows,
@@ -9771,7 +9180,7 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
 
         if action == "run_data_prep":
             prepared_dataset = _token_generation_prepare_dataset(saved_dataset["rows"], saved_dataset["headers"])
-            invalid_value_summary = _token_generation_invalid_value_summary(prepared_dataset["rows"])
+            invalid_value_summary = _token_generation_invalid_value_summary(prepared_dataset["rows"], saved_dataset["headers"])
             if invalid_value_summary:
                 request.session["token_generation_prep_validation_summary"] = invalid_value_summary
                 request.session["token_generation_open_section"] = "step1"
@@ -9949,6 +9358,13 @@ class LabelGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 _phase2_parse_number(row.get("Start Token No")) or 0,
             )
 
+        def sort_by_item_and_start(row):
+            return (
+                str(row.get("Token Name") or row.get("Requested Item") or "").strip(),
+                str(row.get("Names") or "").strip(),
+                _phase2_parse_number(row.get("Start Token No")) or 0,
+            )
+
         label_buffer = None
         filename = None
 
@@ -10012,14 +9428,14 @@ class LabelGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             entries = _labels_expand_entries(
                 rows,
                 row_filter=lambda row: token_qty(row) > 0 and str(row.get("Beneficiary Type") or "").strip() == "Public",
-                sort_key=sort_by_name_and_start,
+                sort_key=sort_by_item_and_start,
             )
             label_buffer = services.generate_mnp_labels_pdf(entries, layout="12L", mode="continuous")
             filename = _labels_download_filename("5_Public_Labels")
         elif download_kind == "chair_separate":
             entries = _labels_expand_entries(
                 rows,
-                row_filter=lambda row: (_phase2_parse_number(row.get("Token Print for ARTL")) or 0) != 0,
+                row_filter=lambda row: token_qty(row) > 0,
                 group_by=lambda row: str(row.get("Token Name") or row.get("Requested Item") or "").strip(),
             )
             label_buffer = services.generate_mnp_labels_pdf(entries, layout="12L", mode="separate")
@@ -10155,28 +9571,67 @@ class LabelGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             if not request.user.has_module_permission(self.module_key, "export"):
                 messages.error(request, "You do not have permission to download labels.")
                 return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
-            custom_layout = str(request.POST.get("custom_label_layout") or "12L").strip().upper()
-            if custom_layout not in {"12L", "2L"}:
-                custom_layout = "12L"
-            custom_texts = request.POST.getlist("custom_label_text")
-            custom_counts = request.POST.getlist("custom_label_count")
-            custom_entries = []
-            for index, raw_text in enumerate(custom_texts):
-                text_value = str(raw_text or "").strip()
-                count_value = _phase2_parse_number(custom_counts[index] if index < len(custom_counts) else None) or 0
-                if text_value and count_value > 0:
-                    custom_entries.append({"text": text_value, "count": count_value})
-            if not custom_entries:
-                single_text = (request.POST.get("custom_label_text") or "").strip()
-                single_count = _phase2_parse_number(request.POST.get("custom_label_count")) or 0
-                if single_text and single_count > 0:
-                    custom_entries.append({"text": single_text, "count": single_count})
-            if not custom_entries:
-                messages.error(request, "Enter at least one custom label text and a count greater than zero.")
+
+            def _parse_custom_bulk(raw_text, layout):
+                default_font_size = 72 if layout == "A4" else 54 if layout == "2L" else 30
+                entries = []
+                for raw_line in str(raw_text or "").splitlines():
+                    line = str(raw_line or "").strip()
+                    if not line:
+                        continue
+                    parts = [part.strip() for part in line.split(",")]
+                    if len(parts) < 2:
+                        continue
+                    text_value = parts[0]
+                    count_value = _phase2_parse_number(parts[1]) or 0
+                    font_size_value = _phase2_parse_number(parts[2]) if len(parts) >= 3 else default_font_size
+                    font_size_value = max(8, min(int(font_size_value or default_font_size), 120))
+                    line_spacing_value = _phase2_parse_number(parts[3]) if len(parts) >= 4 else None
+                    if line_spacing_value is not None:
+                        line_spacing_value = max(0, min(int(line_spacing_value), 120))
+                    if text_value and count_value > 0:
+                        entries.append(
+                            {
+                                "text": text_value,
+                                "count": count_value,
+                                "font_size": font_size_value,
+                                "line_spacing": line_spacing_value,
+                            }
+                        )
+                return entries
+
+            custom_bulks = request.POST.getlist("custom_label_bulk")
+            custom_layouts = request.POST.getlist("custom_label_layout")
+            groups = []
+            for index, raw_bulk in enumerate(custom_bulks):
+                layout_value = str(custom_layouts[index] if index < len(custom_layouts) else "12L" or "12L").strip().upper()
+                if layout_value not in {"12L", "2L", "A4"}:
+                    layout_value = "12L"
+                entries = _parse_custom_bulk(raw_bulk, layout_value)
+                if entries:
+                    groups.append({"layout": layout_value, "entries": entries})
+
+            if not groups:
+                messages.error(request, "Paste at least one custom label row as Label text,count or Label text,count,font size,line spacing.")
                 return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
-            label_buffer = services.generate_mnp_custom_labels_pdf(custom_entries, layout=custom_layout)
-            response = HttpResponse(label_buffer.getvalue(), content_type="application/pdf")
-            response["Content-Disposition"] = f'attachment; filename="{_labels_download_filename("Custom_Labels")}"'
+
+            if len(groups) == 1:
+                label_buffer = services.generate_mnp_custom_labels_pdf(groups[0]["entries"], layout=groups[0]["layout"])
+                response = HttpResponse(label_buffer.getvalue(), content_type="application/pdf")
+                single_filename = _labels_download_filename("Custom_Labels_%s" % groups[0]["layout"])
+                response["Content-Disposition"] = f'attachment; filename="{single_filename}"'
+                return response
+
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as bundle:
+                for index, group in enumerate(groups, start=1):
+                    label_buffer = services.generate_mnp_custom_labels_pdf(group["entries"], layout=group["layout"])
+                    filename = _labels_download_filename(f"Custom_Labels_{index}_{group['layout']}")
+                    bundle.writestr(filename, label_buffer.getvalue())
+            zip_buffer.seek(0)
+            timestamp = timezone.localtime().strftime("%d_%b_%y_%H_%M")
+            response = HttpResponse(zip_buffer.getvalue(), content_type="application/zip")
+            response["Content-Disposition"] = f'attachment; filename="Custom_Labels_{timestamp}.zip"'
             return response
 
         return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')

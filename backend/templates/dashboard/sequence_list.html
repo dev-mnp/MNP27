@@ -436,8 +436,8 @@
       </div>
       <div class="sequence-header-actions">
         <button class="btn" id="sequence-load-db" type="button">Sync Data</button>
-        <input class="sequence-file-input" id="sequence-file-input" type="file" accept=".csv,text/csv">
-        <button class="btn" id="sequence-upload-csv" type="button">Upload CSV</button>
+        <input class="sequence-file-input" id="sequence-file-input" type="file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsm,application/vnd.ms-excel.sheet.macroEnabled.12">
+        <button class="btn" id="sequence-upload-csv" type="button">Upload</button>
         <details class="sequence-export-menu">
           <summary class="btn btn-subtle sequence-export-trigger">
             <span>Export</span>
@@ -452,7 +452,7 @@
     </div>
 
     <div class="sequence-source-summary" id="sequence-source-summary">
-      <span class="sequence-source-state" id="sequence-source-label">Loaded from Master Database</span>
+      <span class="sequence-source-state" id="sequence-source-label">Synced from Seat Allocation</span>
       <span>Rows: <strong id="sequence-row-count">0</strong></span>
       <span>Unique Items: <strong id="sequence-unique-count">0</strong></span>
       <span>Sequenced: <strong id="sequence-assigned-count">0</strong></span>
@@ -580,6 +580,8 @@
     {{ sequence_source_rows|json_script:"sequence-db-source" }}
     {{ sequence_saved_items|json_script:"sequence-saved-items" }}
     {{ sequence_master_items|json_script:"sequence-master-items" }}
+    {{ sequence_source_name|json_script:"sequence-source-name" }}
+    {{ sequence_source_is_uploaded|json_script:"sequence-source-is-uploaded" }}
     {{ sequence_default_items|json_script:"sequence-default-items" }}
   </section>
 
@@ -589,6 +591,8 @@
       const savedSequenceItems = JSON.parse(document.getElementById('sequence-saved-items')?.textContent || '[]');
       const masterItems = JSON.parse(document.getElementById('sequence-master-items')?.textContent || '[]');
       const defaultSequenceItems = JSON.parse(document.getElementById('sequence-default-items')?.textContent || '[]');
+      const dbSourceName = JSON.parse(document.getElementById('sequence-source-name')?.textContent || '""');
+      const dbSourceIsUploaded = JSON.parse(document.getElementById('sequence-source-is-uploaded')?.textContent || 'false');
 
       const fileInput = document.getElementById('sequence-file-input');
       const loadDbButton = document.getElementById('sequence-load-db');
@@ -706,12 +710,12 @@
         }
         if (!sourceRows.length) {
           syncStatus.classList.add('is-neutral');
-          syncStatus.textContent = `${syncPrefix}Master Data is available. You can arrange the Sequence List now, but Seat Allocation must be prepared and synced before sequence numbers can be applied there.`;
+          syncStatus.textContent = `${syncPrefix}Master Data is available. Prepare and save Seat Allocation first, then sync it here to build the Sequence List.`;
           return;
         }
         if (!summary.missingInSeatAllocation.length && !summary.extraInSeatAllocation.length && !summary.newToSequence.length) {
           syncStatus.classList.add('is-ok');
-          syncStatus.textContent = `${syncPrefix}Seat Allocation and Sequence List are in sync with Master Data. ${summary.masterCount} item(s) matched.`;
+          syncStatus.textContent = dbSourceIsUploaded ? `${syncPrefix}Uploaded Seat Allocation working copy is ready for sequencing. Current Master Data also matches ${summary.masterCount} item(s).` : `${syncPrefix}Seat Allocation and Sequence List are aligned with current Master Data. ${summary.masterCount} item(s) matched.`;
           return;
         }
         const parts = [];
@@ -731,7 +735,7 @@
           parts.push(`extra ${summary.extraInSeatAllocation.length}: ${preview}${more > 0 ? ` and ${more} more` : ''}`);
         }
         syncStatus.classList.add('is-warn');
-        syncStatus.textContent = `${syncPrefix}Master Data has changed. ${parts.join(' | ')}. Sync Data here to refresh the item list, and sync/save Seat Allocation before final sequence apply.`;
+        syncStatus.textContent = dbSourceIsUploaded ? `${syncPrefix}Uploaded Seat Allocation working copy differs from current Master Data. ${parts.join(' | ')}. You can continue sequencing this uploaded file, or re-sync if you want the latest Master Data list.` : `${syncPrefix}Seat Allocation is no longer aligned with current Master Data. ${parts.join(' | ')}. Sync Data here to refresh the item list, then sync/save Seat Allocation before final sequence apply.`;
       }
 
       function setFeedback(type, message) {
@@ -940,7 +944,7 @@
         sourceRows = dbSourceRows.slice();
         sourceFileName = '';
         lastSyncedAt = formatSyncTime(new Date());
-        sourceLabel.textContent = 'Synced from Master Database';
+        sourceLabel.textContent = dbSourceIsUploaded ? 'Synced from Uploaded Seat Allocation' : 'Synced from Seat Allocation';
         if (syncMeta && syncTime) {
           syncMeta.hidden = false;
           syncTime.textContent = lastSyncedAt;
@@ -958,64 +962,51 @@
           'info',
           sourceRows.length
             ? `Sync completed at ${lastSyncedAt}. Rows: ${effectiveRows.length}. Unique items: ${uniqueItems.length}. Restored saved sequence order where available.`
-            : `Sync completed at ${lastSyncedAt}. Master Data item list is available, but Seat Allocation rows are not available yet.`
+            : `Sync completed at ${lastSyncedAt}. Seat Allocation rows are not available yet.`
         );
         refreshMeta();
         updateSaveState();
       }
 
-      function handleUpload(file) {
-        const reader = new FileReader();
-        reader.onload = function() {
-          try {
-            const parsed = parseCSVRows(String(reader.result || ''));
-            if (parsed.length < 2) {
-              setFeedback('error', 'CSV is empty or invalid.');
-              return;
-            }
-            const headers = parsed[0].map((header) => String(header || '').trim());
-            const itemHeader = findHeaderName(headers, ['Requested Item', 'Item', 'Article', 'Article Name', 'requested_item']);
-            const tokenHeader = findHeaderName(headers, ['Token Quantity', 'Token Qty', 'token_quantity', 'Token']);
-            const sequenceHeader = findHeaderName(headers, ['Sequence No', 'Sequence List', 'sequence_no', 'sequence list']);
-            if (!itemHeader) {
-              setFeedback('error', 'CSV missing item column. Expected Requested Item / Item / Article.');
-              return;
-            }
-            const headerIndex = new Map(headers.map((header, index) => [header, index]));
-            sourceRows = parsed.slice(1).map((cells) => {
-              const rowMap = {};
-              headers.forEach((header, index) => {
-                rowMap[header] = cells[index] ?? '';
-              });
-              const tokenQuantity = tokenHeader ? parseNumber(cells[headerIndex.get(tokenHeader) || 0]) : 0;
-              const sequenceNo = sequenceHeader ? parseNumber(cells[headerIndex.get(sequenceHeader) || 0]) : 0;
-              return {
-                requested_item: String(cells[headerIndex.get(itemHeader) || 0] || '').trim(),
-                token_quantity: tokenQuantity,
-                sequence_no: sequenceNo || null,
-                row_map: rowMap,
-                headers,
-              };
-            }).filter((row) => row.requested_item);
-            sourceMode = 'csv';
-            sourceFileName = file.name;
-            lastSyncedAt = formatSyncTime(new Date());
-            sourceLabel.textContent = 'Loaded Uploaded File';
-            if (syncMeta && syncTime) {
-              syncMeta.hidden = false;
-              syncTime.textContent = lastSyncedAt;
-            }
-            fileMeta.hidden = false;
-            fileName.textContent = file.name;
-            rebuildLists(sourceRows, { preserveCurrent: false, forceUnassignedAll: false });
-            setFeedback('info', `Loaded ${sourceRows.length} row(s) from ${file.name} at ${lastSyncedAt}.`);
-            refreshMeta();
-            updateSaveState();
-          } catch (error) {
-            setFeedback('error', 'Failed to parse the uploaded CSV.');
+      async function handleUpload(file) {
+        const csrfToken = document.querySelector('#sequence-save-form input[name="csrfmiddlewaretoken"]')?.value
+          || document.querySelector('input[name="csrfmiddlewaretoken"]')?.value
+          || '';
+        const formData = new FormData();
+        formData.append('action', 'parse_upload');
+        formData.append('file', file);
+        if (csrfToken) {
+          formData.append('csrfmiddlewaretoken', csrfToken);
+        }
+        try {
+          const response = await fetch(window.location.href, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            setFeedback('error', payload.error || 'Failed to parse the uploaded file.');
+            return;
           }
-        };
-        reader.readAsText(file);
+          sourceRows = Array.isArray(payload.rows) ? payload.rows : [];
+          sourceMode = 'file';
+          sourceFileName = payload.file_name || file.name;
+          lastSyncedAt = formatSyncTime(new Date());
+          sourceLabel.textContent = payload.source_label || 'Loaded Uploaded File';
+          if (syncMeta && syncTime) {
+            syncMeta.hidden = false;
+            syncTime.textContent = lastSyncedAt;
+          }
+          fileMeta.hidden = false;
+          fileName.textContent = sourceFileName;
+          rebuildLists(sourceRows, { preserveCurrent: false, forceUnassignedAll: false });
+          setFeedback('info', `Loaded ${sourceRows.length} row(s) from ${sourceFileName} at ${lastSyncedAt}.`);
+          refreshMeta();
+          updateSaveState();
+        } catch (error) {
+          setFeedback('error', 'Failed to parse the uploaded file.');
+        }
       }
 
       function refreshMeta() {
@@ -1025,7 +1016,7 @@
         uniqueCount.textContent = String(uniqueItems.length);
         assignedCount.textContent = String(assignedItems.length);
         unassignedCount.textContent = String(unassignedItems.length);
-        if (sourceMode === 'csv' && sourceFileName) {
+        if (sourceMode !== 'db' && sourceFileName) {
           fileMeta.hidden = false;
           fileName.textContent = sourceFileName;
         } else {
@@ -1309,7 +1300,7 @@
           return;
         }
         const summary = reconciliationSummary();
-        if (sourceMode === 'db' && (summary.missingInSeatAllocation.length || summary.extraInSeatAllocation.length)) {
+        if (sourceMode === 'db' && !dbSourceIsUploaded && (summary.missingInSeatAllocation.length || summary.extraInSeatAllocation.length)) {
           const parts = [];
           if (summary.missingInSeatAllocation.length) {
             const preview = summary.missingInSeatAllocation.slice(0, 5).join(', ');
@@ -1362,7 +1353,7 @@
           return;
         }
         const summary = reconciliationSummary();
-        if (summary.missingInSeatAllocation.length || summary.extraInSeatAllocation.length) {
+        if (!dbSourceIsUploaded && (summary.missingInSeatAllocation.length || summary.extraInSeatAllocation.length)) {
           const parts = [];
           if (summary.missingInSeatAllocation.length) {
             const preview = summary.missingInSeatAllocation.slice(0, 5).join(', ');
@@ -1516,7 +1507,7 @@
       function updateSaveState() {
         if (!saveButton) return;
         saveButton.disabled = !masterItems.length || sourceMode !== 'db';
-        saveButton.title = sourceMode === 'db' ? '' : 'Save works only for database-backed sequence data.';
+        saveButton.title = sourceMode === 'db' ? (dbSourceIsUploaded ? 'Applies sequence to the uploaded Seat Allocation working copy.' : '') : 'Save works only for database-backed sequence data.';
       }
 
       loadFromDb();

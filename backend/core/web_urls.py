@@ -52,7 +52,6 @@ urlpatterns = [
     path("purchase-orders/<int:pk>/reopen/", web_views.PurchaseOrderReopenView.as_view(), name="purchase-order-reopen"),
     path("purchase-orders/<int:pk>/delete/", web_views.PurchaseOrderDeleteView.as_view(), name="purchase-order-delete"),
     path("applications/audit-logs/", web_views.ApplicationAuditLogListView.as_view(), name="application-audit-logs"),
-    path("reconciliation/", web_views.ReconciliationOverviewView.as_view(), name="reconciliation-overview"),
     path("users/", web_views.UserManagementListView.as_view(), name="user-list"),
     path("users/new/", web_views.UserManagementCreateView.as_view(), name="user-create"),
     path("users/<uuid:pk>/edit/", web_views.UserManagementUpdateView.as_view(), name="user-edit"),

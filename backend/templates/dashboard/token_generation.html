@@ -263,7 +263,7 @@
             {% csrf_token %}
             <input type="hidden" name="action" value="upload_csv">
             {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
-            <input id="token-upload-input" type="file" name="file" accept=".csv" style="display:none;">
+            <input id="token-upload-input" type="file" name="file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsm,application/vnd.ms-excel.sheet.macroEnabled.12" style="display:none;">
             <button class="btn btn-subtle" id="token-upload-trigger" type="button">Upload</button>
           </form>
         {% endif %}

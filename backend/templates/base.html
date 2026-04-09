@@ -1024,9 +1024,6 @@
               <a href="{% url 'ui:application-audit-logs' %}" class="menu-item {% if 'applications/audit-logs' in request.path %}active{% endif %}">
                 <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M12 8v5l3 2"/><path d="M20 12a8 8 0 1 1-2.34-5.66"/></svg></span><span class="menu-label">Audit Logs</span>
               </a>
-              <a href="{% url 'ui:reconciliation-overview' %}" class="menu-item {% if '/ui/reconciliation/' in request.path %}active{% endif %}">
-                <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/><path d="M4 4h16v16H4z"/></svg></span><span class="menu-label">Reconciliation</span>
-              </a>
             {% endif %}
             <a href="{% url 'ui:user-guide' %}" class="menu-item {% if '/ui/user-guide/' in request.path %}active{% endif %}">
               <span class="menu-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/></svg></span><span class="menu-label">User Guide</span>

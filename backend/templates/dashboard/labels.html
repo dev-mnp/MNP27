@@ -136,20 +136,41 @@
       display: flex;
       justify-content: flex-end;
     }
-    .labels-custom-table {
+    .labels-custom-bulk {
       display: grid;
-      gap: 10px;
+      gap: 8px;
+      margin-top: 0;
     }
-    .labels-custom-line {
+    .labels-custom-bulk textarea {
+      min-height: 140px;
+      resize: vertical;
+    }
+    .labels-custom-group {
       display: grid;
-      grid-template-columns: minmax(220px, 1fr) 120px;
-      gap: 10px;
+      grid-template-columns: minmax(0, 1fr) minmax(140px, 160px);
+      gap: 12px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: #fcfdff;
     }
     .labels-custom-actions {
-      display: grid;
-      grid-template-columns: minmax(140px, 160px) auto auto;
+      display: flex;
       gap: 10px;
       align-items: end;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .labels-custom-form {
+      grid-column: 1 / -1;
+      display: grid;
+      gap: 12px;
+    }
+    .labels-custom-hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: -2px;
     }
     .labels-audit-grid {
       display: grid;
@@ -208,7 +229,7 @@
       .labels-row-description {
         margin-top: 0;
       }
-      .labels-custom-line,
+      .labels-custom-group,
       .labels-custom-actions,
       .labels-audit-grid.cols-2,
       .labels-audit-grid.cols-3 {
@@ -539,22 +560,28 @@
             <h3>Custom Labels</h3>
           </div>
           <div></div>
-          <div class="labels-row-description">Type one or more custom label names with counts, choose 12L or 2L, then download the sheet.</div>
-          <form method="post" class="labels-inline" style="justify-self:end;">
+          <div class="labels-row-description">Each row can contain a different pasted list and a different sticker type. When you download, each row group is generated separately.</div>
+          <form method="post" class="labels-custom-form">
             {% csrf_token %}
             <input type="hidden" name="action" value="download_custom_labels">
             {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
-            <div class="labels-custom-table" id="custom-label-lines">
-              <div class="labels-custom-line">
-                <input class="input" type="text" name="custom_label_text" placeholder="Label text">
-                <input class="input" type="number" name="custom_label_count" min="1" value="1">
+            <div id="custom-label-groups" class="labels-custom-form">
+              <div class="labels-custom-group">
+                <div class="labels-custom-bulk">
+                  <textarea class="input" name="custom_label_bulk" placeholder="Paste one per line. Example:
+Govt School,4
+Tuticorin - GS,4,32
+Mixi,10"></textarea>
+                  <div class="labels-custom-hint">Format: <strong>Label text,count,font size,line spacing</strong>. Example: <code>Tuticorin - GS|Govt School,4,32,8</code>. Font size and line spacing are optional. Use <code>|</code> to force a second line.</div>
+                </div>
+                <select class="input" name="custom_label_layout">
+                  <option value="12L">12L</option>
+                  <option value="2L">2L</option>
+                  <option value="A4">A4 Landscape</option>
+                </select>
               </div>
             </div>
             <div class="labels-custom-actions">
-              <select class="input" name="custom_label_layout">
-                <option value="12L">12L</option>
-                <option value="2L">2L</option>
-              </select>
               <button id="custom-label-add" class="btn btn-subtle" type="button">Add Row</button>
               <button class="btn" type="submit" {% if not can_export %}disabled{% endif %}>Download</button>
             </div>
@@ -574,7 +601,7 @@
       const uploadTrigger = document.getElementById('labels-upload-trigger');
       const uploadForm = document.getElementById('labels-upload-form');
       const customAdd = document.getElementById('custom-label-add');
-      const customLines = document.getElementById('custom-label-lines');
+      const customGroups = document.getElementById('custom-label-groups');
 
       if (uploadInput && uploadTrigger && uploadForm) {
         uploadTrigger.addEventListener('click', () => uploadInput.click());
@@ -585,15 +612,25 @@
         });
       }
 
-      if (customAdd && customLines) {
+      if (customAdd && customGroups) {
         customAdd.addEventListener('click', () => {
-          const row = document.createElement('div');
-          row.className = 'labels-custom-line';
-          row.innerHTML = `
-            <input class="input" type="text" name="custom_label_text" placeholder="Label text">
-            <input class="input" type="number" name="custom_label_count" min="1" value="1">
+          const group = document.createElement('div');
+          group.className = 'labels-custom-group';
+          group.innerHTML = `
+            <div class="labels-custom-bulk">
+              <textarea class="input" name="custom_label_bulk" placeholder="Paste one per line. Example:
+Govt School,4
+Tuticorin - GS,4,32
+Mixi,10"></textarea>
+              <div class="labels-custom-hint">Format: <strong>Label text,count,font size</strong>. Example: <code>Tuticorin - GS|Govt School,4,32</code>. Use <code>|</code> to force a second line.</div>
+            </div>
+            <select class="input" name="custom_label_layout">
+              <option value="12L">12L</option>
+              <option value="2L">2L</option>
+              <option value="A4">A4 Landscape</option>
+            </select>
           `;
-          customLines.appendChild(row);
+          customGroups.appendChild(group);
         });
       }
     })();

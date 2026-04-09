@@ -901,6 +901,17 @@ LABEL_LAYOUTS = {
         "article_y": 35 * mm,
         "name_vertical_factor": 0.66,
     },
+    "A4": {
+        "page_size": landscape(A4),
+        "top_margin": 12 * mm,
+        "side_margin": 12 * mm,
+        "vertical_pitch": 0,
+        "horizontal_pitch": 0,
+        "label_height": landscape(A4)[1] - 24 * mm,
+        "label_width": landscape(A4)[0] - 24 * mm,
+        "number_across": 1,
+        "number_down": 1,
+    },
 }
 
 
@@ -994,8 +1005,7 @@ def generate_mnp_custom_labels_pdf(entries, *, layout: str = "12L") -> io.BytesI
     pdf_canvas = canvas.Canvas(buffer, pagesize=config["page_size"])
     _width, height = config["page_size"]
     per_page = config["number_across"] * config["number_down"]
-    font_size = 30 if layout == "12L" else 54
-    line_leading = 32 if layout == "12L" else 58
+    default_font_size = 72 if layout == "A4" else 30 if layout == "12L" else 54
 
     normalized_entries = []
     if isinstance(entries, list):
@@ -1003,20 +1013,41 @@ def generate_mnp_custom_labels_pdf(entries, *, layout: str = "12L") -> io.BytesI
             if isinstance(entry, dict):
                 text = str(entry.get("text") or "").strip()
                 count = int(entry.get("count") or 0)
+                font_size = int(entry.get("font_size") or default_font_size)
+                line_spacing = entry.get("line_spacing")
             elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
                 text = str(entry[0] or "").strip()
                 count = int(entry[1] or 0)
+                font_size = int(entry[2] or default_font_size) if len(entry) >= 3 else default_font_size
+                line_spacing = int(entry[3] or 0) if len(entry) >= 4 else None
             else:
                 text = str(entry or "").strip()
                 count = 1
+                font_size = default_font_size
+                line_spacing = None
+            font_size = max(8, min(font_size, 120))
+            if line_spacing is not None:
+                line_spacing = max(0, min(int(line_spacing), 120))
             if text and count > 0:
-                normalized_entries.extend([text] * count)
+                normalized_entries.extend([{"text": text, "font_size": font_size, "line_spacing": line_spacing}] * count)
     else:
         text = str(entries or "").strip()
         if text:
-            normalized_entries.append(text)
+            normalized_entries.append({"text": text, "font_size": default_font_size, "line_spacing": None})
 
-    for index, text in enumerate(normalized_entries):
+    def _custom_label_markup(raw_text: str) -> str:
+        escaped = escape(str(raw_text or "").strip())
+        escaped = escaped.replace("\r\n", "\n").replace("\r", "\n")
+        escaped = escaped.replace("|", "<br/>").replace("\n", "<br/>")
+        return escaped
+
+    for index, entry in enumerate(normalized_entries):
+        text = str(entry.get("text") or "").strip()
+        font_size = int(entry.get("font_size") or default_font_size)
+        line_spacing = entry.get("line_spacing")
+        line_leading = font_size + (6 if layout == "A4" else 2 if layout == "12L" else 4)
+        if line_spacing is not None:
+            line_leading = font_size + max(0, min(int(line_spacing), 120))
         if index and index % per_page == 0:
             pdf_canvas.showPage()
         slot_index = index % per_page
@@ -1026,12 +1057,12 @@ def generate_mnp_custom_labels_pdf(entries, *, layout: str = "12L") -> io.BytesI
         y = height - config["top_margin"] - row * config["vertical_pitch"] - config["label_height"]
 
         style = ParagraphStyle(
-            name=f"custom-{layout}",
+            name=f"custom-{layout}-{font_size}",
             fontSize=font_size,
             leading=line_leading,
             alignment=1,
         )
-        para = Paragraph(f"<b>{escape(text)}</b>", style)
+        para = Paragraph(f"<b>{_custom_label_markup(text)}</b>", style)
         wrapped_width, wrapped_height = para.wrap(config["label_width"] - 10 * mm, config["label_height"] - 10 * mm)
         para.drawOn(
             pdf_canvas,

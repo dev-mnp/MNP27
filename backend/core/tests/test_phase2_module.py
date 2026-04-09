@@ -268,73 +268,6 @@ class Phase2ModuleTests(TestCase):
         self.assertIn("Final Sequence vs Master Data", labels)
         self.assertIn("Final Sequence vs Seat Allocation", labels)
 
-    def test_reconciliation_overview_runs_data_health_on_demand(self):
-        session = models.EventSession.objects.create(session_name="2026 Event", event_year=2026, is_active=True)
-        article = models.Article.objects.create(
-            article_name="Medical Aid",
-            cost_per_unit=10000,
-            item_type=models.ItemTypeChoices.AID,
-            is_active=True,
-        )
-        models.PublicBeneficiaryEntry.objects.create(
-            application_number="P001",
-            name="Person 1",
-            aadhar_number="123456789012",
-            is_handicapped=models.HandicappedStatusChoices.NO,
-            article=article,
-            article_cost_per_unit=10000,
-            quantity=1,
-            total_amount=10000,
-            status=models.BeneficiaryStatusChoices.SUBMITTED,
-        )
-        models.SeatAllocationRow.objects.create(
-            session=session,
-            application_number="P001",
-            beneficiary_name="Person 1",
-            district="Non-District",
-            requested_item="Medical Aid",
-            quantity=1,
-            token_quantity=1,
-            sequence_no=5,
-            beneficiary_type="Public",
-            item_type="Aid",
-            master_headers=EXPORT_COLUMNS,
-            master_row=self._public_master_row(
-                application_number="P001",
-                name="Person 1",
-                requested_item="Medical Aid",
-                quantity=1,
-                total_value=10000,
-                aadhar_number="123456789012",
-            ),
-        )
-        models.SequenceListItem.objects.create(
-            session=session,
-            item_name="Medical Aid",
-            sequence_no=5,
-            sort_order=1,
-            created_by=self.user,
-            updated_by=self.user,
-        )
-
-        initial_response = self.client.get(reverse("ui:reconciliation-overview"), {"session": str(session.pk)})
-        self.assertEqual(initial_response.status_code, 200)
-        self.assertContains(initial_response, "Run Data Health")
-        self.assertNotContains(initial_response, "Dashboard Metrics")
-
-        response = self.client.post(
-            reverse("ui:reconciliation-overview"),
-            {"action": "run_data_health", "session": str(session.pk)},
-            follow=True,
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Dashboard Metrics")
-        self.assertContains(response, "Application Entry")
-        self.assertContains(response, "Seat Allocation")
-        self.assertContains(response, "Sequence List")
-        self.assertContains(response, "Export Consistency")
-
     def test_seat_allocation_export_excludes_sequence_column(self):
         session = models.EventSession.objects.create(session_name="2026 Event", event_year=2026, is_active=True)
         models.SeatAllocationRow.objects.create(
@@ -1199,13 +1132,42 @@ class Phase2ModuleTests(TestCase):
             {
                 "action": "download_custom_labels",
                 "session": str(session.pk),
-                "custom_label_text": "Special Counter",
-                "custom_label_count": "3",
+                "custom_label_bulk": "Special Counter|Counter 2,3,36,10",
             },
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/pdf")
         self.assertIn(b"%PDF", response.content[:10])
+
+    def test_labels_module_can_download_custom_labels_pdf_from_bulk_input(self):
+        session = models.EventSession.objects.create(session_name="2026 Event", event_year=2026, is_active=True)
+        response = self.client.post(
+            reverse("ui:labels"),
+            {
+                "action": "download_custom_labels",
+                "session": str(session.pk),
+                "custom_label_layout": "A4",
+                "custom_label_bulk": "Tuticorin - GS,4,40\nGovt School,2",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn(b"%PDF", response.content[:10])
+
+    def test_labels_module_can_download_custom_labels_zip_for_multiple_groups(self):
+        session = models.EventSession.objects.create(session_name="2026 Event", event_year=2026, is_active=True)
+        response = self.client.post(
+            reverse("ui:labels"),
+            {
+                "action": "download_custom_labels",
+                "session": str(session.pk),
+                "custom_label_layout": ["A4", "2L"],
+                "custom_label_bulk": ["Tuticorin - GS,4,40", "Mixi,2"],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/zip")
+        self.assertIn(b"PK", response.content[:4])
 
     def test_labels_module_upload_accepts_excel_file(self):
         session = models.EventSession.objects.create(session_name="2026 Event", event_year=2026, is_active=True)
