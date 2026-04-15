@@ -43,6 +43,7 @@ urlpatterns = [
     path("sequence-list/", web_views.SequenceListView.as_view(), name="sequence-list"),
     path("token-generation/", web_views.TokenGenerationView.as_view(), name="token-generation"),
     path("labels/", web_views.LabelGenerationView.as_view(), name="labels"),
+    path("reports/", web_views.ReportsView.as_view(), name="reports"),
     path("user-guide/", web_views.UserGuideView.as_view(), name="user-guide"),
     path("purchase-orders/", web_views.PurchaseOrderListView.as_view(), name="purchase-order-list"),
     path("purchase-orders/new/", web_views.PurchaseOrderCreateView.as_view(), name="purchase-order-create"),

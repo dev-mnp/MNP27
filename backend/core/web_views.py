@@ -18,6 +18,7 @@ import re
 import mimetypes
 import subprocess
 import sys
+from datetime import date
 from collections import Counter
 from decimal import Decimal, InvalidOperation
 from openpyxl import Workbook, load_workbook
@@ -48,6 +49,7 @@ from django.forms import inlineformset_factory
 
 from . import models
 from . import services
+from . import google_drive
 from .sequence_defaults import SEQUENCE_DEFAULT_ITEMS
 from .forms import (
     AppUserCreateForm,
@@ -362,6 +364,1541 @@ class UserGuideView(LoginRequiredMixin, TemplateView):
         context.update(
             {
                 "page_title": "User Guide",
+            }
+        )
+        return context
+
+
+REPORTS_WAITING_HALL_STATE_KEY = "reports_waiting_hall_acknowledgment"
+REPORTS_SHARED_LOGO_KEY = "reports_shared_logo"
+REPORTS_PUBLIC_ACK_STATE_KEY = "reports_public_acknowledgment"
+REPORTS_TOKEN_LOOKUP_STATE_KEY = "reports_token_lookup"
+REPORTS_PUBLIC_SIGNATURE_STATE_KEY = "reports_public_signature"
+REPORTS_DISTRICT_SIGNATURE_STATE_KEY = "reports_district_signature"
+REPORTS_SEGREGATION_STATE_KEY = "reports_segregation"
+REPORTS_DISTRIBUTION_STATE_KEY = "reports_distribution"
+
+
+def _reports_active_session():
+    return models.EventSession.objects.filter(is_active=True).order_by("-event_year", "session_name").first()
+
+
+def _reports_parse_date(raw_value: str | None) -> date:
+    raw = str(raw_value or "").strip()
+    if raw:
+        try:
+            return date.fromisoformat(raw)
+        except ValueError:
+            pass
+    return timezone.localdate()
+
+
+def _reports_waiting_hall_default_state():
+    return {
+        "loaded": False,
+        "synced_at": "",
+        "source": "",
+        "session_id": None,
+        "ignored_keys": [],
+        "rows": [],
+        "headers": [],
+        "beneficiary_type_filter": "",
+        "item_type_filter": models.ItemTypeChoices.AID,
+    }
+
+
+def _reports_waiting_hall_session_state(request):
+    state = request.session.get(REPORTS_WAITING_HALL_STATE_KEY) or {}
+    merged = _reports_waiting_hall_default_state()
+    merged.update(state)
+    return merged
+
+
+def _reports_shared_logo_state(request):
+    state = request.session.get(REPORTS_SHARED_LOGO_KEY) or {}
+    return {
+        "logo_name": str(state.get("logo_name") or ""),
+        "logo_content_type": str(state.get("logo_content_type") or ""),
+        "logo_base64": str(state.get("logo_base64") or ""),
+    }
+
+
+def _reports_set_shared_logo_state(request, *, uploaded_logo):
+    request.session[REPORTS_SHARED_LOGO_KEY] = {
+        "logo_name": str(getattr(uploaded_logo, "name", "") or ""),
+        "logo_content_type": str(getattr(uploaded_logo, "content_type", "") or "image/png"),
+        "logo_base64": base64.b64encode(uploaded_logo.read()).decode("ascii"),
+    }
+    request.session.modified = True
+
+
+def _reports_public_ack_default_state():
+    return {
+        "loaded": False,
+        "synced_at": "",
+        "source": "",
+        "session_id": None,
+        "rows": [],
+        "headers": [],
+        "template_name": "",
+        "template_base64": "",
+        "template_content_type": "application/pdf",
+        "template_fields": [],
+        "field_map": {},
+    }
+
+
+def _reports_public_ack_session_state(request):
+    state = request.session.get(REPORTS_PUBLIC_ACK_STATE_KEY) or {}
+    merged = _reports_public_ack_default_state()
+    merged.update(state)
+    merged["rows"] = [dict(row) for row in list(merged.get("rows") or [])]
+    merged["headers"] = [str(header or "") for header in list(merged.get("headers") or []) if str(header or "").strip()]
+    merged["template_fields"] = [dict(field) for field in list(merged.get("template_fields") or []) if isinstance(field, dict)]
+    merged["field_map"] = {
+        str(key or "").strip(): str(value or "").strip()
+        for key, value in dict(merged.get("field_map") or {}).items()
+        if str(key or "").strip()
+    }
+    return merged
+
+
+def _reports_set_public_ack_state(request, state):
+    request.session[REPORTS_PUBLIC_ACK_STATE_KEY] = state
+    request.session.modified = True
+
+
+def _reports_public_signature_default_state():
+    return {
+        "loaded": False,
+        "synced_at": "",
+        "source": "",
+        "session_id": None,
+        "rows": [],
+        "headers": [],
+        "selected_items": [],
+        "sort_modes": [],
+    }
+
+
+def _reports_public_signature_session_state(request):
+    state = request.session.get(REPORTS_PUBLIC_SIGNATURE_STATE_KEY) or {}
+    merged = _reports_public_signature_default_state()
+    merged.update(state)
+    merged["rows"] = [dict(row) for row in list(merged.get("rows") or [])]
+    merged["headers"] = [str(header or "") for header in list(merged.get("headers") or []) if str(header or "").strip()]
+    merged["selected_items"] = [
+        str(item or "").strip()
+        for item in list(merged.get("selected_items") or [])
+        if str(item or "").strip()
+    ]
+    sort_modes = [
+        str(mode or "").strip()
+        for mode in list(merged.get("sort_modes") or [])
+        if str(mode or "").strip()
+    ]
+    valid_modes = []
+    for mode in sort_modes:
+        if mode in {"application_number", "item_name", "token_number"} and mode not in valid_modes:
+            valid_modes.append(mode)
+    merged["sort_modes"] = valid_modes
+    return merged
+
+
+def _reports_set_public_signature_state(request, state):
+    request.session[REPORTS_PUBLIC_SIGNATURE_STATE_KEY] = state
+    request.session.modified = True
+
+
+def _reports_district_signature_default_state():
+    return {
+        "loaded": False,
+        "synced_at": "",
+        "source": "",
+        "session_id": None,
+        "rows": [],
+        "headers": [],
+    }
+
+
+def _reports_district_signature_session_state(request):
+    state = request.session.get(REPORTS_DISTRICT_SIGNATURE_STATE_KEY) or {}
+    merged = _reports_district_signature_default_state()
+    merged.update(state)
+    merged["rows"] = [dict(row) for row in list(merged.get("rows") or [])]
+    merged["headers"] = [str(header or "") for header in list(merged.get("headers") or []) if str(header or "").strip()]
+    return merged
+
+
+def _reports_set_district_signature_state(request, state):
+    request.session[REPORTS_DISTRICT_SIGNATURE_STATE_KEY] = state
+    request.session.modified = True
+
+
+def _reports_simple_report_default_state():
+    return {
+        "loaded": False,
+        "synced_at": "",
+        "source": "",
+        "session_id": None,
+        "rows": [],
+        "headers": [],
+    }
+
+
+def _reports_simple_report_session_state(request, state_key: str):
+    state = request.session.get(state_key) or {}
+    merged = _reports_simple_report_default_state()
+    merged.update(state)
+    merged["rows"] = [dict(row) for row in list(merged.get("rows") or [])]
+    merged["headers"] = [str(header or "") for header in list(merged.get("headers") or []) if str(header or "").strip()]
+    return merged
+
+
+def _reports_set_simple_report_state(request, state_key: str, state):
+    request.session[state_key] = state
+    request.session.modified = True
+
+
+def _reports_token_lookup_default_state():
+    return {
+        "loaded": False,
+        "synced_at": "",
+        "source": "",
+        "session_id": None,
+        "rows": [],
+        "headers": [],
+        "filters": {
+            "token_number": "",
+            "application_number": "",
+            "beneficiary_name": "",
+            "item_name": "",
+            "item_type": "",
+        },
+    }
+
+
+def _reports_token_lookup_session_state(request):
+    state = request.session.get(REPORTS_TOKEN_LOOKUP_STATE_KEY) or {}
+    merged = _reports_token_lookup_default_state()
+    merged.update(state)
+    merged["rows"] = [dict(row) for row in list(merged.get("rows") or [])]
+    merged["headers"] = [str(header or "") for header in list(merged.get("headers") or []) if str(header or "").strip()]
+    filters = dict(merged.get("filters") or {})
+    merged["filters"] = {
+        "token_number": str(filters.get("token_number") or "").strip(),
+        "application_number": str(filters.get("application_number") or "").strip(),
+        "beneficiary_name": str(filters.get("beneficiary_name") or "").strip(),
+        "item_name": str(filters.get("item_name") or "").strip(),
+        "item_type": str(filters.get("item_type") or "").strip(),
+    }
+    return merged
+
+
+def _reports_set_token_lookup_state(request, state):
+    request.session[REPORTS_TOKEN_LOOKUP_STATE_KEY] = state
+    request.session.modified = True
+
+
+def _reports_token_lookup_display_value(*values):
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text or value == 0:
+            return text
+    return ""
+
+
+def _reports_token_lookup_normalize_row(row):
+    item = dict(row or {})
+    token_start = _phase2_parse_number(item.get("Start Token No"))
+    token_end = _phase2_parse_number(item.get("End Token No"))
+    if token_start is None:
+        token_start = _phase2_parse_number(item.get("Token No"))
+    if token_end is None:
+        token_end = token_start
+    token_quantity = max(_phase2_parse_number(item.get("Token Quantity")) or 0, 0)
+    if token_quantity <= 0 and token_start and token_end and token_end >= token_start:
+        token_quantity = int(token_end - token_start + 1)
+    beneficiary_type = _reports_token_lookup_display_value(
+        item.get("Beneficiary Type"),
+        item.get("beneficiary_type"),
+    )
+    beneficiary_name = _reports_token_lookup_display_value(
+        item.get("Beneficiary Name"),
+        item.get("beneficiary_name"),
+        item.get("Names"),
+        item.get("Name"),
+    )
+    return {
+        "token_start": int(token_start or 0),
+        "token_end": int(token_end or token_start or 0),
+        "application_number": _reports_token_lookup_display_value(
+            item.get("Application Number"),
+            item.get("application_number"),
+            item.get("App No"),
+        ),
+        "beneficiary_name": beneficiary_name,
+        "beneficiary_type": beneficiary_type,
+        "district": _reports_token_lookup_display_value(
+            item.get("District"),
+            item.get("district"),
+            beneficiary_name if beneficiary_type == models.RecipientTypeChoices.DISTRICT else "",
+        ),
+        "item_name": _reports_token_lookup_display_value(
+            item.get("Requested Item"),
+            item.get("Token Name"),
+            item.get("Article"),
+        ),
+        "item_type": _reports_token_lookup_display_value(
+            item.get("Item Type"),
+            item.get("item_type"),
+        ),
+        "total_value": _reports_token_lookup_display_value(
+            item.get("Total Value"),
+            item.get("total_value"),
+            item.get("Total Amount"),
+            item.get("Amount"),
+        ),
+        "token_quantity": int(token_quantity),
+        "sequence_no": int(_phase2_parse_number(item.get("Sequence No")) or 0),
+    }
+
+
+def _reports_token_lookup_rows_from_session(session):
+    rows = list(
+        models.TokenGenerationRow.objects.filter(session=session).order_by(
+            "sort_order",
+            F("sequence_no").asc(nulls_last=True),
+            "requested_item",
+            "application_number",
+            "id",
+        )
+    )
+    prepared_rows = []
+    for row in rows:
+        row_data = dict(row.row_data or {})
+        row_data["Application Number"] = row.application_number or row_data.get("Application Number") or ""
+        row_data["Beneficiary Name"] = row.beneficiary_name or row_data.get("Beneficiary Name") or ""
+        row_data["Requested Item"] = row.requested_item or row_data.get("Requested Item") or ""
+        row_data["Beneficiary Type"] = row.beneficiary_type or row_data.get("Beneficiary Type") or ""
+        row_data["Sequence No"] = row.sequence_no if row.sequence_no is not None else row_data.get("Sequence No") or ""
+        row_data["Start Token No"] = row.start_token_no if row.start_token_no is not None else row_data.get("Start Token No") or 0
+        row_data["End Token No"] = row.end_token_no if row.end_token_no is not None else row_data.get("End Token No") or 0
+        existing_token_quantity = row_data.get("Token Quantity")
+        if existing_token_quantity in {None, ""}:
+            existing_token_quantity = max(
+                (row.end_token_no or 0) - (row.start_token_no or 0) + 1,
+                0,
+            )
+        row_data["Token Quantity"] = existing_token_quantity
+        row_data["Total Value"] = (
+            row_data.get("Total Value")
+            or row_data.get("total_value")
+            or row_data.get("Total Amount")
+            or row_data.get("Amount")
+            or ""
+        )
+        normalized = _reports_token_lookup_normalize_row(row_data)
+        if int(normalized.get("token_quantity") or 0) > 0:
+            prepared_rows.append(normalized)
+    return prepared_rows
+
+
+def _reports_token_lookup_data_rows(rows):
+    return [
+        normalized
+        for normalized in (_reports_token_lookup_normalize_row(row) for row in list(rows or []))
+        if int(normalized.get("token_quantity") or 0) > 0
+    ]
+
+
+def _reports_token_lookup_filters_from_post(post_data):
+    return {
+        "token_number": str(post_data.get("token_number") or "").strip(),
+        "application_number": str(post_data.get("application_number") or "").strip(),
+        "beneficiary_name": str(post_data.get("beneficiary_name") or "").strip(),
+        "item_name": str(post_data.get("item_name") or "").strip(),
+        "item_type": str(post_data.get("item_type") or "").strip(),
+    }
+
+
+def _reports_token_lookup_filter_rows(rows, filters):
+    filtered = list(rows or [])
+    token_number = _phase2_parse_number((filters or {}).get("token_number"))
+    application_number = str((filters or {}).get("application_number") or "").strip().casefold()
+    beneficiary_name = str((filters or {}).get("beneficiary_name") or "").strip().casefold()
+    item_name = str((filters or {}).get("item_name") or "").strip().casefold()
+    item_type = str((filters or {}).get("item_type") or "").strip().casefold()
+
+    if token_number:
+        filtered = [
+            row for row in filtered
+            if int(row.get("token_start") or 0) <= int(token_number) <= int(row.get("token_end") or row.get("token_start") or 0)
+        ]
+    if application_number:
+        filtered = [row for row in filtered if application_number in str(row.get("application_number") or "").casefold()]
+    if beneficiary_name:
+        filtered = [row for row in filtered if beneficiary_name in str(row.get("beneficiary_name") or "").casefold()]
+    if item_name:
+        filtered = [row for row in filtered if item_name in str(row.get("item_name") or "").casefold()]
+    if item_type:
+        filtered = [row for row in filtered if item_type in str(row.get("item_type") or "").casefold()]
+    return filtered
+
+
+def _reports_token_lookup_choice_values(rows, key):
+    return sorted(
+        {
+            str(row.get(key) or "").strip()
+            for row in list(rows or [])
+            if str(row.get(key) or "").strip()
+        },
+        key=lambda value: value.casefold(),
+    )
+
+
+def _reports_public_signature_normalize_row(row):
+    item = dict(row or {})
+    beneficiary_type = _reports_token_lookup_display_value(
+        item.get("Beneficiary Type"),
+        item.get("beneficiary_type"),
+    )
+    if beneficiary_type != models.RecipientTypeChoices.PUBLIC:
+        return None
+    token_start = _phase2_parse_number(item.get("Start Token No"))
+    token_end = _phase2_parse_number(item.get("End Token No"))
+    if token_start is None:
+        token_start = _phase2_parse_number(item.get("Token No"))
+    if token_end is None:
+        token_end = token_start
+    token_quantity = max(_phase2_parse_number(item.get("Token Quantity")) or 0, 0)
+    if token_quantity <= 0 and token_start and token_end and token_end >= token_start:
+        token_quantity = int(token_end - token_start + 1)
+    if token_quantity <= 0:
+        return None
+    application_number = _reports_token_lookup_display_value(
+        item.get("Application Number"),
+        item.get("application_number"),
+        item.get("App No"),
+    )
+    beneficiary_name = _reports_token_lookup_display_value(
+        item.get("Beneficiary Name"),
+        item.get("beneficiary_name"),
+        item.get("Names"),
+        item.get("Name"),
+    )
+    item_name = _reports_token_lookup_display_value(
+        item.get("Requested Item"),
+        item.get("requested_item"),
+        item.get("Token Name"),
+        item.get("Article"),
+    )
+    return {
+        "application_number": application_number,
+        "beneficiary_name": beneficiary_name,
+        "item_name": item_name,
+        "item_type": _reports_token_lookup_display_value(
+            item.get("Item Type"),
+            item.get("item_type"),
+        ),
+        "token_start": int(token_start or 0),
+        "token_end": int(token_end or token_start or 0),
+        "token_quantity": int(token_quantity),
+    }
+
+
+def _reports_public_signature_rows_from_dataset(rows):
+    prepared_rows = []
+    for row in list(rows or []):
+        normalized = _reports_public_signature_normalize_row(row)
+        if normalized:
+            prepared_rows.append(normalized)
+    return prepared_rows
+
+
+def _reports_public_signature_rows_from_session(session):
+    dataset = _token_generation_saved_dataset(session) if session else {"rows": []}
+    return _reports_public_signature_rows_from_dataset(dataset.get("rows") or [])
+
+
+def _reports_public_signature_item_options(rows):
+    counts = {}
+    for row in list(rows or []):
+        item_name = str(row.get("item_name") or "").strip()
+        if not item_name:
+            continue
+        counts[item_name] = counts.get(item_name, 0) + 1
+    return [
+        {
+            "item_name": item_name,
+            "row_count": counts[item_name],
+        }
+        for item_name in sorted(counts.keys(), key=lambda value: value.casefold())
+    ]
+
+
+def _reports_public_signature_sort_rows(rows, sort_modes):
+    selected_modes = [
+        str(mode or "").strip().casefold()
+        for mode in list(sort_modes or [])
+        if str(mode or "").strip()
+    ]
+    normalized_modes = []
+    for mode in selected_modes:
+        if mode in {"application_number", "item_name", "token_number"} and mode not in normalized_modes:
+            normalized_modes.append(mode)
+    selected_modes = normalized_modes
+    if not selected_modes:
+        return list(rows or [])
+
+    def _row_key(row):
+        application_number = services._public_signature_app_sort_key(str(row.get("application_number") or ""))
+        item_name = str(row.get("item_name") or "").strip().casefold()
+        token_number = int(row.get("token_start") or 0)
+        values = {
+            "application_number": application_number,
+            "item_name": item_name,
+            "token_number": token_number,
+        }
+        return tuple(values[mode] for mode in selected_modes)
+
+    return sorted(list(rows or []), key=_row_key)
+
+
+def _reports_district_signature_normalize_row(row):
+    item = dict(row or {})
+    beneficiary_type = _reports_token_lookup_display_value(
+        item.get("Beneficiary Type"),
+        item.get("beneficiary_type"),
+    )
+    if beneficiary_type != models.RecipientTypeChoices.DISTRICT:
+        return None
+    district_name = _reports_token_lookup_display_value(
+        item.get("District"),
+        item.get("district"),
+        item.get("Beneficiary Name"),
+        item.get("beneficiary_name"),
+        item.get("Names"),
+        item.get("Name"),
+    )
+    item_name = _reports_token_lookup_display_value(
+        item.get("Requested Item"),
+        item.get("requested_item"),
+        item.get("Token Name"),
+        item.get("Article"),
+    )
+    total_quantity = max(_phase2_parse_number(item.get("Quantity")) or 0, 0)
+    token_start = _phase2_parse_number(item.get("Start Token No"))
+    token_end = _phase2_parse_number(item.get("End Token No"))
+    if token_start is None:
+        token_start = _phase2_parse_number(item.get("Token No"))
+    if token_end is None:
+        token_end = token_start
+    token_quantity = max(_phase2_parse_number(item.get("Token Quantity")) or 0, 0)
+    if token_quantity <= 0 and token_start and token_end and token_end >= token_start:
+        token_quantity = int(token_end - token_start + 1)
+    if not district_name or not item_name or (total_quantity <= 0 and token_quantity <= 0):
+        return None
+    return {
+        "district_name": district_name,
+        "item_name": item_name,
+        "total_quantity": int(total_quantity),
+        "token_quantity": int(token_quantity),
+        "token_start": int(token_start or 0),
+        "token_end": int(token_end or token_start or 0),
+    }
+
+
+def _reports_district_signature_rows_from_dataset(rows):
+    prepared_rows = []
+    for row in list(rows or []):
+        normalized = _reports_district_signature_normalize_row(row)
+        if normalized:
+            prepared_rows.append(normalized)
+    return prepared_rows
+
+
+def _reports_district_signature_rows_from_session(session):
+    dataset = _token_generation_saved_dataset(session) if session else {"rows": []}
+    return _reports_district_signature_rows_from_dataset(dataset.get("rows") or [])
+
+
+def _reports_district_signature_grouped(rows):
+    grouped = {}
+    for row in list(rows or []):
+        district_name = str(row.get("district_name") or "").strip()
+        item_name = str(row.get("item_name") or "").strip()
+        if not district_name or not item_name:
+            continue
+        district_bucket = grouped.setdefault(district_name, {})
+        item_bucket = district_bucket.setdefault(
+            item_name,
+            {
+                "item_name": item_name,
+                "total_quantity": 0,
+                "token_quantity": 0,
+                "start_token": None,
+                "end_token": None,
+            },
+        )
+        item_bucket["total_quantity"] += int(row.get("total_quantity") or 0)
+        current_token_qty = int(row.get("token_quantity") or 0)
+        item_bucket["token_quantity"] += current_token_qty
+        token_start = int(row.get("token_start") or 0)
+        token_end = int(row.get("token_end") or 0)
+        if current_token_qty > 0 and token_start > 0:
+            item_bucket["start_token"] = token_start if item_bucket["start_token"] is None else min(item_bucket["start_token"], token_start)
+            item_bucket["end_token"] = token_end if item_bucket["end_token"] is None else max(item_bucket["end_token"], token_end)
+
+    districts = []
+    total_quantity = 0
+    total_token_quantity = 0
+    for district_name in sorted(grouped.keys(), key=lambda value: value.casefold()):
+        items = [grouped[district_name][name] for name in sorted(grouped[district_name].keys(), key=lambda value: value.casefold())]
+        district_total_qty = sum(int(item.get("total_quantity") or 0) for item in items)
+        district_token_qty = sum(int(item.get("token_quantity") or 0) for item in items)
+        positive_starts = [int(item["start_token"]) for item in items if item.get("start_token")]
+        positive_ends = [int(item["end_token"]) for item in items if item.get("end_token")]
+        districts.append(
+            {
+                "district_name": district_name,
+                "items": items,
+                "total_quantity": district_total_qty,
+                "token_quantity": district_token_qty,
+                "start_token": min(positive_starts) if positive_starts else None,
+                "end_token": max(positive_ends) if positive_ends else None,
+            }
+        )
+        total_quantity += district_total_qty
+        total_token_quantity += district_token_qty
+    return {
+        "districts": districts,
+        "district_count": len(districts),
+        "item_count": total_quantity,
+        "total_quantity": total_quantity,
+        "total_token_quantity": total_token_quantity,
+    }
+
+
+def _reports_public_ack_data_rows(rows):
+    prepared_rows = []
+    has_beneficiary_type = any(
+        str(row.get("Beneficiary Type") or row.get("beneficiary_type") or "").strip()
+        for row in rows
+    )
+    for row in rows:
+        item = dict(row or {})
+        beneficiary_type = str(item.get("Beneficiary Type") or item.get("beneficiary_type") or "").strip()
+        quantity = _phase2_parse_number(item.get("Quantity"))
+        if quantity is None:
+            quantity = _phase2_parse_number(item.get("Token Quantity"))
+        if quantity is None:
+            quantity = 0
+        if has_beneficiary_type and beneficiary_type and _phase2_normalize_text(beneficiary_type) != "public":
+            continue
+        if quantity <= 0 and has_beneficiary_type:
+            continue
+        if not has_beneficiary_type and quantity <= 0:
+            continue
+        item["Quantity"] = quantity
+        prepared_rows.append(item)
+    return prepared_rows
+
+
+def _reports_public_ack_template_fields(template_bytes):
+    fields = services._public_acknowledgment_pdf_fields(template_bytes)
+    return [
+        {
+            "field_name": field["field_name"],
+            "field_key": field["field_key"],
+        }
+        for field in fields
+    ]
+
+
+def _reports_public_ack_column_options(headers):
+    fallback = [
+        "District",
+        "Address",
+        "Application Number",
+        "Start Token No",
+        "Beneficiary Name",
+        "Mobile",
+        "Aadhar Number",
+        "Requested Item",
+        "Token Name",
+        "Total Value",
+        "Cost Per Unit",
+        "Cheque / RTGS in Favour",
+        "Name of Institution",
+        "Quantity",
+    ]
+    options = []
+    seen = set()
+    for header in list(headers or []) + fallback:
+        text = str(header or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        options.append(text)
+    return options
+
+
+def _reports_public_ack_default_field_map(headers, template_fields):
+    normalized_headers = {_phase2_normalize_text(header): header for header in (headers or []) if str(header or "").strip()}
+    candidates = {
+        "district": ["District"],
+        "address": ["Address"],
+        "app_no": ["Application Number"],
+        "token": ["Start Token No", "Token No", "Sequence No"],
+        "bf_name": ["Beneficiary Name", "Name of Beneficiary", "Name"],
+        "mobile": ["Mobile"],
+        "aadhar": ["Aadhar Number", "Aadhaar Number"],
+        "article": ["Requested Item", "Token Name", "Article"],
+        "value_aid": ["Total Value", "Cost Per Unit"],
+        "cheque_no": ["Cheque / RTGS in Favour", "Cheque No"],
+    }
+    mapping = {}
+    for field in template_fields or []:
+        field_key = str(field.get("field_key") or "").strip()
+        selected = ""
+        for candidate in candidates.get(field_key, []):
+            match = normalized_headers.get(_phase2_normalize_text(candidate))
+            if match:
+                selected = match
+                break
+        mapping[field_key] = selected
+    return mapping
+
+
+def _reports_public_ack_field_map_from_post(post_data, template_fields):
+    mapping = {}
+    for field in template_fields or []:
+        field_key = str(field.get("field_key") or "").strip()
+        mapping[field_key] = str(post_data.get(f"public_ack_map__{field_key}") or "").strip()
+    return mapping
+
+
+def _reports_public_ack_field_map_with_defaults(headers, template_fields, existing_map=None):
+    defaults = _reports_public_ack_default_field_map(headers, template_fields)
+    existing_map = {
+        str(key or "").strip(): str(value or "").strip()
+        for key, value in dict(existing_map or {}).items()
+        if str(key or "").strip()
+    }
+    merged = {}
+    for field in template_fields or []:
+        field_key = str(field.get("field_key") or "").strip()
+        merged[field_key] = existing_map.get(field_key) or defaults.get(field_key, "")
+    return merged
+
+
+def _reports_public_ack_normalize_dataset(rows):
+    return _reports_public_ack_data_rows(rows)
+
+
+def _reports_waiting_hall_grouped_data(rows, ignored_keys=None, beneficiary_type_filter="", item_type_filter=""):
+    ignored = set(ignored_keys or [])
+    selected_type = str(beneficiary_type_filter or "").strip().lower()
+    selected_item_type = str(item_type_filter or "").strip().lower()
+    if selected_type == "all":
+        selected_type = ""
+    if selected_item_type == "all":
+        selected_item_type = ""
+    grouped = {}
+    for row in rows:
+        beneficiary_type = str(row.get("Beneficiary Type") or row.get("beneficiary_type") or "").strip()
+        if selected_type and beneficiary_type.lower() != selected_type:
+            continue
+        item_type = str(row.get("Item Type") or row.get("item_type") or "").strip()
+        if selected_item_type and item_type.lower() != selected_item_type:
+            continue
+        waiting_quantity = _phase2_parse_number(row.get("Waiting Hall Quantity"))
+        if not waiting_quantity or waiting_quantity <= 0:
+            continue
+        raw_name = str(
+            row.get("District")
+            or row.get("Names")
+            or row.get("Beneficiary Name")
+            or row.get("Name of Beneficiary")
+            or row.get("Name of Institution")
+            or row.get("district")
+            or row.get("beneficiary_name")
+            or row.get("application_number")
+            or row.get("Application Number")
+            or ""
+        ).strip()
+        item_name = str(row.get("Requested Item") or row.get("requested_item") or "").strip()
+        if not raw_name or not item_name:
+            continue
+        beneficiary_type_label = beneficiary_type or "Unknown"
+        key = f"{beneficiary_type_label}||{raw_name}||{item_name}"
+        group_key = f"{beneficiary_type_label}||{raw_name}"
+        group_bucket = grouped.setdefault(
+            group_key,
+            {
+                "entity_name": raw_name,
+                "entity_kind": beneficiary_type_label,
+                "label_prefix": "District" if beneficiary_type_label == models.RecipientTypeChoices.DISTRICT else "Beneficiary",
+                "items_map": {},
+            },
+        )
+        entry = group_bucket["items_map"].setdefault(
+            item_name,
+            {
+                "key": key,
+                "entity_name": raw_name,
+                "entity_kind": beneficiary_type_label,
+                "requested_item": item_name,
+                "item_type": item_type,
+                "quantity": 0,
+            },
+        )
+        entry["quantity"] += int(waiting_quantity or 0)
+    districts = []
+    total_items = 0
+    total_quantity = 0
+    available_keys = []
+    for group_key in sorted(grouped.keys(), key=lambda value: value.lower()):
+        group_meta = grouped[group_key]
+        raw_items = [group_meta["items_map"][name] for name in sorted(group_meta["items_map"].keys(), key=lambda value: value.lower())]
+        available_keys.extend(item["key"] for item in raw_items)
+        filtered_items = [item for item in raw_items if item["key"] not in ignored]
+        district_total = sum(int(item["quantity"] or 0) for item in filtered_items)
+        total_items += len(filtered_items)
+        total_quantity += district_total
+        districts.append(
+            {
+                "entity_name": group_meta["entity_name"],
+                "entity_kind": group_meta["entity_kind"],
+                "label_prefix": group_meta["label_prefix"],
+                "items": filtered_items,
+                "raw_items": raw_items,
+                "total_quantity": district_total,
+                "item_count": len(filtered_items),
+            }
+        )
+    return {
+        "districts": districts,
+        "district_count": len(districts),
+        "item_count": total_items,
+        "total_quantity": total_quantity,
+        "available_keys": available_keys,
+    }
+
+
+class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
+    module_key = models.ModuleKeyChoices.REPORTS
+    permission_action = "view"
+    template_name = "dashboard/reports.html"
+
+    REPORT_TABS = (
+        {
+            "key": "token-lookup",
+            "label": "Token Lookup",
+            "description": "Search and inspect token-generated rows by token number, application number, name, district, or item.",
+        },
+        {
+            "key": "waiting-hall-acknowledgment",
+            "label": "Waiting Hall Acknowledgment",
+            "description": "District-wise article acknowledgment sheets for waiting hall collections.",
+        },
+        {
+            "key": "public-acknowledgment-form",
+            "label": "Public Acknowledgment Form",
+            "description": "Public beneficiary acknowledgment forms filled from an uploaded PDF template.",
+        },
+        {
+            "key": "public-signature",
+            "label": "Signatures",
+            "description": "Signature reports for public and district print sheets.",
+        },
+        {
+            "key": "reports-home",
+            "label": "Reports",
+            "description": "Segregation and distribution report staging cards.",
+        },
+    )
+
+    def post(self, request, *args, **kwargs):
+        active_tab = (request.POST.get("tab") or self.REPORT_TABS[0]["key"]).strip()
+        shared_logo = _reports_shared_logo_state(request)
+        if (request.POST.get("action") or "").strip() == "upload_shared_logo":
+            uploaded_logo = request.FILES.get("shared_logo")
+            if uploaded_logo:
+                _reports_set_shared_logo_state(request, uploaded_logo=uploaded_logo)
+                messages.success(request, "Reports logo updated.")
+            else:
+                messages.error(request, "Choose a logo file to upload.")
+            target = active_tab or self.REPORT_TABS[0]["key"]
+            return HttpResponseRedirect(f"{reverse('ui:reports')}?tab={target}")
+        action = (request.POST.get("action") or "").strip()
+        if active_tab == "reports-home":
+            segregation_state = _reports_simple_report_session_state(request, REPORTS_SEGREGATION_STATE_KEY)
+            distribution_state = _reports_simple_report_session_state(request, REPORTS_DISTRIBUTION_STATE_KEY)
+
+            def _simple_report_sync(state, label: str):
+                session = _reports_active_session()
+                dataset = _token_generation_saved_dataset(session) if session else {"rows": [], "headers": []}
+                rows = [dict(row) for row in dataset.get("rows") or []]
+                state.update(
+                    {
+                        "loaded": True,
+                        "synced_at": timezone.localtime().strftime("%d %b %Y at %H:%M"),
+                        "source": "Synced from Token Generation",
+                        "session_id": getattr(session, "pk", None),
+                        "rows": rows,
+                        "headers": _phase2_unique_headers(dataset.get("headers") or []),
+                    }
+                )
+                _reports_set_simple_report_state(request, label, state)
+                return len(rows)
+
+            def _simple_report_upload(state, label: str, uploaded_file):
+                source_headers, source_rows = _tabular_rows_from_upload(uploaded_file)
+                if not source_headers:
+                    return None, None
+                state.update(
+                    {
+                        "loaded": True,
+                        "synced_at": timezone.localtime().strftime("%d %b %Y at %H:%M"),
+                        "source": uploaded_file.name,
+                        "session_id": None,
+                        "rows": [dict(row) for row in source_rows],
+                        "headers": _phase2_unique_headers(source_headers),
+                    }
+                )
+                _reports_set_simple_report_state(request, label, state)
+                return len(source_rows), source_headers
+
+            if action == "sync_reports_segregation":
+                rows_count = _simple_report_sync(segregation_state, REPORTS_SEGREGATION_STATE_KEY)
+                messages.success(request, f"Segregation synced. Rows: {rows_count}.")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+
+            if action == "upload_reports_segregation":
+                uploaded_file = request.FILES.get("file")
+                if not uploaded_file:
+                    messages.error(request, "Choose a CSV or Excel file to upload.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+                rows_count, source_headers = _simple_report_upload(segregation_state, REPORTS_SEGREGATION_STATE_KEY, uploaded_file)
+                if rows_count is None:
+                    messages.error(request, "Uploaded file is empty.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+                messages.success(request, f"Uploaded {rows_count} segregation row(s).")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+
+            if action == "sync_reports_distribution":
+                rows_count = _simple_report_sync(distribution_state, REPORTS_DISTRIBUTION_STATE_KEY)
+                messages.success(request, f"Distribution synced. Rows: {rows_count}.")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+
+            if action == "upload_reports_distribution":
+                uploaded_file = request.FILES.get("file")
+                if not uploaded_file:
+                    messages.error(request, "Choose a CSV or Excel file to upload.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+                rows_count, source_headers = _simple_report_upload(distribution_state, REPORTS_DISTRIBUTION_STATE_KEY, uploaded_file)
+                if rows_count is None:
+                    messages.error(request, "Uploaded file is empty.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+                messages.success(request, f"Uploaded {rows_count} distribution row(s).")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+
+            return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+
+        if active_tab == "token-lookup":
+            state = _reports_token_lookup_session_state(request)
+            if action == "sync_token_lookup":
+                session = _reports_active_session()
+                dataset = _token_generation_saved_dataset(session) if session else {"rows": [], "headers": []}
+                rows = _reports_token_lookup_rows_from_session(session) if session else []
+                state.update(
+                    {
+                        "loaded": True,
+                        "synced_at": timezone.localtime().strftime("%d %b %Y at %H:%M"),
+                        "source": "Synced from Token Generation",
+                        "session_id": getattr(session, "pk", None),
+                        "rows": rows,
+                        "headers": _phase2_unique_headers(dataset.get("headers") or []),
+                    }
+                )
+                _reports_set_token_lookup_state(request, state)
+                messages.success(request, f"Token Lookup synced. Rows: {len(rows)}.")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=token-lookup")
+
+            if action == "upload_token_lookup":
+                uploaded_file = request.FILES.get("file")
+                if not uploaded_file:
+                    messages.error(request, "Choose a CSV or Excel file to upload.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=token-lookup")
+                source_headers, source_rows = _tabular_rows_from_upload(uploaded_file)
+                if not source_headers:
+                    messages.error(request, "Uploaded file is empty.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=token-lookup")
+                rows = _reports_token_lookup_data_rows(source_rows)
+                state.update(
+                    {
+                        "loaded": True,
+                        "synced_at": timezone.localtime().strftime("%d %b %Y at %H:%M"),
+                        "source": uploaded_file.name,
+                        "session_id": None,
+                        "rows": rows,
+                        "headers": _phase2_unique_headers(source_headers),
+                    }
+                )
+                _reports_set_token_lookup_state(request, state)
+                messages.success(request, f"Uploaded {len(rows)} token lookup row(s).")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=token-lookup")
+
+            if action == "clear_token_lookup_filters":
+                state["filters"] = _reports_token_lookup_default_state()["filters"]
+                _reports_set_token_lookup_state(request, state)
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=token-lookup")
+
+            if action == "search_token_lookup":
+                if not state.get("loaded"):
+                    messages.warning(request, "Sync Data or Upload a file first before searching tokens.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=token-lookup")
+                state["filters"] = _reports_token_lookup_filters_from_post(request.POST)
+                _reports_set_token_lookup_state(request, state)
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=token-lookup")
+
+            return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=token-lookup")
+
+        if active_tab == "public-acknowledgment-form":
+            state = _reports_public_ack_session_state(request)
+            if action == "sync_public_ack":
+                session = _reports_active_session()
+                dataset = _token_generation_saved_dataset(session) if session else {"rows": [], "headers": []}
+                rows = _reports_public_ack_normalize_dataset(dataset.get("rows") or [])
+                headers = _phase2_unique_headers(dataset.get("headers") or [])
+                template_fields = list(state.get("template_fields") or [])
+                state.update(
+                    {
+                        "loaded": True,
+                        "synced_at": timezone.localtime().strftime("%d %b %Y at %H:%M"),
+                        "source": "Synced from Token Generation",
+                        "session_id": getattr(session, "pk", None),
+                        "rows": rows,
+                        "headers": headers,
+                        "field_map": _reports_public_ack_field_map_with_defaults(
+                            headers,
+                            template_fields,
+                            state.get("field_map"),
+                        ),
+                    }
+                )
+                _reports_set_public_ack_state(request, state)
+                messages.success(request, f"Public Acknowledgment Form synced. Rows: {len(rows)}.")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-acknowledgment-form")
+
+            if action == "upload_public_ack_data":
+                uploaded_file = request.FILES.get("file")
+                if not uploaded_file:
+                    messages.error(request, "Choose a CSV or Excel file to upload.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-acknowledgment-form")
+                source_headers, source_rows = _tabular_rows_from_upload(uploaded_file)
+                if not source_headers:
+                    messages.error(request, "Uploaded file is empty.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-acknowledgment-form")
+                rows = _reports_public_ack_normalize_dataset(source_rows)
+                template_fields = list(state.get("template_fields") or [])
+                state.update(
+                    {
+                        "loaded": True,
+                        "synced_at": timezone.localtime().strftime("%d %b %Y at %H:%M"),
+                        "source": uploaded_file.name,
+                        "session_id": None,
+                        "rows": rows,
+                        "headers": _phase2_unique_headers(source_headers),
+                        "field_map": _reports_public_ack_field_map_with_defaults(
+                            source_headers,
+                            template_fields,
+                            state.get("field_map"),
+                        ),
+                    }
+                )
+                _reports_set_public_ack_state(request, state)
+                messages.success(request, f"Uploaded {len(rows)} public acknowledgment row(s).")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-acknowledgment-form")
+
+            if action == "upload_public_ack_template":
+                uploaded_template = request.FILES.get("template_pdf") or request.FILES.get("template")
+                if not uploaded_template:
+                    messages.error(request, "Choose a PDF template to upload.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-acknowledgment-form")
+                template_bytes = uploaded_template.read()
+                template_fields = _reports_public_ack_template_fields(template_bytes)
+                if not template_fields:
+                    messages.error(request, "No fillable fields were found in the uploaded PDF template.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-acknowledgment-form")
+                state.update(
+                    {
+                        "template_name": uploaded_template.name,
+                        "template_base64": base64.b64encode(template_bytes).decode("ascii"),
+                        "template_content_type": "application/pdf",
+                        "template_fields": template_fields,
+                        "field_map": _reports_public_ack_field_map_with_defaults(
+                            state.get("headers") or [],
+                            template_fields,
+                            state.get("field_map"),
+                        ),
+                    }
+                )
+                _reports_set_public_ack_state(request, state)
+                messages.success(request, f"Template loaded with {len(template_fields)} fillable field(s).")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-acknowledgment-form")
+
+            if action == "download_public_ack":
+                if not state.get("loaded"):
+                    messages.error(request, "Sync Data or Upload a file first before downloading this report.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-acknowledgment-form")
+                if not state.get("template_base64"):
+                    messages.error(request, "Upload a PDF template first.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-acknowledgment-form")
+                rows = list(state.get("rows") or [])
+                if not rows:
+                    messages.error(request, "No public acknowledgment rows are available for the current selection.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-acknowledgment-form")
+                template_fields = list(state.get("template_fields") or [])
+                submitted_map = _reports_public_ack_field_map_from_post(request.POST, template_fields)
+                field_map = _reports_public_ack_field_map_with_defaults(
+                    state.get("headers") or [],
+                    template_fields,
+                    {**state.get("field_map", {}), **{key: value for key, value in submitted_map.items() if value}},
+                )
+                state["field_map"] = field_map
+                _reports_set_public_ack_state(request, state)
+                template_bytes = base64.b64decode(state.get("template_base64") or "")
+                if not template_bytes:
+                    messages.error(request, "Upload a valid PDF template first.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-acknowledgment-form")
+                field_name_map = {
+                    field["field_name"]: field_map.get(field["field_key"], "")
+                    for field in template_fields
+                    if field_map.get(field["field_key"], "")
+                }
+                if not field_name_map:
+                    messages.error(request, "Map at least one template field before downloading.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-acknowledgment-form")
+                buffer = services.generate_public_acknowledgment_pdf(
+                    template_bytes,
+                    rows,
+                    field_name_map,
+                )
+                filename = f"public_acknowledgment_{timezone.localtime().strftime('%d_%b_%y_%H_%M')}.pdf"
+                response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
+                response["Content-Disposition"] = f'attachment; filename="{filename}"'
+                return response
+
+            return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-acknowledgment-form")
+
+        if active_tab == "public-signature":
+            state = _reports_public_signature_session_state(request)
+            district_state = _reports_district_signature_session_state(request)
+            if action == "sync_public_signature":
+                session = _reports_active_session()
+                dataset = _token_generation_saved_dataset(session) if session else {"rows": [], "headers": []}
+                rows = _reports_public_signature_rows_from_session(session) if session else []
+                state.update(
+                    {
+                        "loaded": True,
+                        "synced_at": timezone.localtime().strftime("%d %b %Y at %H:%M"),
+                        "source": "Synced from Token Generation",
+                        "session_id": getattr(session, "pk", None),
+                        "rows": rows,
+                        "headers": _phase2_unique_headers(dataset.get("headers") or []),
+                        "selected_items": [],
+                        "sort_modes": [],
+                    }
+                )
+                _reports_set_public_signature_state(request, state)
+                messages.success(request, f"Public Signature synced. Rows: {len(rows)}.")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
+
+            if action == "upload_public_signature":
+                uploaded_file = request.FILES.get("file")
+                if not uploaded_file:
+                    messages.error(request, "Choose a CSV or Excel file to upload.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
+                source_headers, source_rows = _tabular_rows_from_upload(uploaded_file)
+                if not source_headers:
+                    messages.error(request, "Uploaded file is empty.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
+                rows = _reports_public_signature_rows_from_dataset(source_rows)
+                state.update(
+                    {
+                        "loaded": True,
+                        "synced_at": timezone.localtime().strftime("%d %b %Y at %H:%M"),
+                        "source": uploaded_file.name,
+                        "session_id": None,
+                        "rows": rows,
+                        "headers": _phase2_unique_headers(source_headers),
+                        "selected_items": [],
+                        "sort_modes": [],
+                    }
+                )
+                _reports_set_public_signature_state(request, state)
+                messages.success(request, f"Uploaded {len(rows)} public signature row(s).")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
+
+            if action == "set_public_signature_sort":
+                ordered_modes = [
+                    str(mode or "").strip()
+                    for mode in (request.POST.get("sort_modes_order") or "").split(",")
+                    if str(mode or "").strip() in {"application_number", "item_name", "token_number"}
+                ]
+                requested_modes = []
+                for mode in ordered_modes:
+                    if mode not in requested_modes:
+                        requested_modes.append(mode)
+                if not requested_modes:
+                    requested_modes = [
+                        str(mode or "").strip()
+                        for mode in request.POST.getlist("sort_modes")
+                        if str(mode or "").strip() in {"application_number", "item_name", "token_number"} and str(mode or "").strip() not in requested_modes
+                    ]
+                state["sort_modes"] = requested_modes
+                _reports_set_public_signature_state(request, state)
+                messages.success(request, "Public Signature sort updated.")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
+
+            if action == "download_public_signature":
+                if not state.get("loaded"):
+                    messages.error(request, "Sync Data or Upload a file first before downloading this report.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
+                download_format = (request.POST.get("download_format") or "pdf").strip().lower()
+                selected_items = [
+                    str(item or "").strip()
+                    for item in request.POST.getlist("selected_items")
+                    if str(item or "").strip()
+                ]
+                state["selected_items"] = selected_items
+                _reports_set_public_signature_state(request, state)
+                if not selected_items:
+                    messages.error(request, "Select at least one public item before downloading.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
+                selected_rows = [
+                    row for row in list(state.get("rows") or [])
+                    if str(row.get("item_name") or "").strip() in set(selected_items)
+                ]
+                if not selected_rows:
+                    messages.error(request, "No public rows are available for the selected items.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
+                selected_rows = _reports_public_signature_sort_rows(selected_rows, state.get("sort_modes"))
+                stamp = timezone.localtime().strftime('%d_%b_%y_%H_%M')
+                if download_format == "xlsx":
+                    buffer = services.generate_public_signature_xlsx(selected_rows)
+                    filename = f"public_signature_{stamp}.xlsx"
+                    content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                else:
+                    buffer = services.generate_public_signature_pdf(selected_rows)
+                    filename = f"public_signature_{stamp}.pdf"
+                    content_type = "application/pdf"
+                response = HttpResponse(buffer.getvalue(), content_type=content_type)
+                response["Content-Disposition"] = f'attachment; filename="{filename}"'
+                return response
+
+            if action == "sync_district_signature":
+                session = _reports_active_session()
+                dataset = _token_generation_saved_dataset(session) if session else {"rows": [], "headers": []}
+                rows = _reports_district_signature_rows_from_session(session) if session else []
+                district_state.update(
+                    {
+                        "loaded": True,
+                        "synced_at": timezone.localtime().strftime("%d %b %Y at %H:%M"),
+                        "source": "Synced from Token Generation",
+                        "session_id": getattr(session, "pk", None),
+                        "rows": rows,
+                        "headers": _phase2_unique_headers(dataset.get("headers") or []),
+                    }
+                )
+                _reports_set_district_signature_state(request, district_state)
+                messages.success(request, f"District Signature synced. Rows: {len(rows)}.")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
+
+            if action == "upload_district_signature":
+                uploaded_file = request.FILES.get("file")
+                if not uploaded_file:
+                    messages.error(request, "Choose a CSV or Excel file to upload.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
+                source_headers, source_rows = _tabular_rows_from_upload(uploaded_file)
+                if not source_headers:
+                    messages.error(request, "Uploaded file is empty.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
+                rows = _reports_district_signature_rows_from_dataset(source_rows)
+                district_state.update(
+                    {
+                        "loaded": True,
+                        "synced_at": timezone.localtime().strftime("%d %b %Y at %H:%M"),
+                        "source": uploaded_file.name,
+                        "session_id": None,
+                        "rows": rows,
+                        "headers": _phase2_unique_headers(source_headers),
+                    }
+                )
+                _reports_set_district_signature_state(request, district_state)
+                messages.success(request, f"Uploaded {len(rows)} district signature row(s).")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
+
+            if action == "download_district_signature":
+                if not district_state.get("loaded"):
+                    messages.error(request, "Sync Data or Upload a file first before downloading this report.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
+                download_format = (request.POST.get("download_format") or "pdf").strip().lower()
+                grouped = _reports_district_signature_grouped(district_state.get("rows") or [])
+                if not grouped.get("districts"):
+                    messages.error(request, "No district rows are available for this report.")
+                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
+                stamp = timezone.localtime().strftime('%d_%b_%y_%H_%M')
+                logo_bytes = base64.b64decode(shared_logo["logo_base64"]) if shared_logo.get("logo_base64") else None
+                if logo_bytes:
+                    logo_bytes, logo_mime = services._optimized_report_logo(
+                        logo_bytes,
+                        shared_logo.get("logo_content_type") or "image/png",
+                        max_width_px=180,
+                        max_height_px=180,
+                    )
+                else:
+                    logo_mime = shared_logo.get("logo_content_type") or "image/png"
+                if download_format == "xlsx":
+                    buffer = services.generate_district_signature_xlsx(
+                        grouped.get("districts") or [],
+                        custom_logo=logo_bytes,
+                        custom_logo_mime_type=logo_mime,
+                    )
+                    filename = f"district_signature_{stamp}.xlsx"
+                    content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                else:
+                    buffer = services.generate_district_signature_pdf(
+                        grouped.get("districts") or [],
+                        custom_logo=logo_bytes,
+                    )
+                    filename = f"district_signature_{stamp}.pdf"
+                    content_type = "application/pdf"
+                response = HttpResponse(buffer.getvalue(), content_type=content_type)
+                response["Content-Disposition"] = f'attachment; filename="{filename}"'
+                return response
+
+            return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
+
+        if active_tab != "waiting-hall-acknowledgment":
+            return HttpResponseRedirect(f"{reverse('ui:reports')}?tab={active_tab}")
+
+        state = _reports_waiting_hall_session_state(request)
+        shared_logo = _reports_shared_logo_state(request)
+
+        if action == "sync_waiting_hall":
+            session = _reports_active_session()
+            dataset = _token_generation_saved_dataset(session) if session else {"rows": [], "headers": []}
+            rows = [dict(row) for row in dataset.get("rows") or []]
+            grouped = _reports_waiting_hall_grouped_data(rows, ignored_keys=[])
+            state.update(
+                {
+                    "loaded": True,
+                    "synced_at": timezone.localtime().strftime("%d %b %Y at %H:%M"),
+                    "source": "Synced from Token Generation",
+                    "session_id": getattr(session, "pk", None),
+                    "ignored_keys": [],
+                    "rows": rows,
+                    "headers": list(dataset.get("headers") or []),
+                    "beneficiary_type_filter": "",
+                    "item_type_filter": models.ItemTypeChoices.AID,
+                }
+            )
+            request.session[REPORTS_WAITING_HALL_STATE_KEY] = state
+            request.session.modified = True
+            messages.success(request, f"Waiting Hall Acknowledgment synced. Districts: {grouped['district_count']}, items: {grouped['item_count']}.")
+            return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=waiting-hall-acknowledgment")
+
+        if action == "upload_waiting_hall":
+            uploaded_file = request.FILES.get("file")
+            if not uploaded_file:
+                messages.error(request, "Choose a CSV or Excel file to upload.")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=waiting-hall-acknowledgment")
+            source_headers, source_rows = _tabular_rows_from_upload(uploaded_file)
+            if not source_headers:
+                messages.error(request, "Uploaded file is empty.")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=waiting-hall-acknowledgment")
+            grouped = _reports_waiting_hall_grouped_data(source_rows, ignored_keys=[])
+            state.update(
+                {
+                    "loaded": True,
+                    "synced_at": timezone.localtime().strftime("%d %b %Y at %H:%M"),
+                    "source": uploaded_file.name,
+                    "session_id": None,
+                    "ignored_keys": [],
+                    "rows": source_rows,
+                    "headers": source_headers,
+                    "beneficiary_type_filter": "",
+                    "item_type_filter": models.ItemTypeChoices.AID,
+                }
+            )
+            request.session[REPORTS_WAITING_HALL_STATE_KEY] = state
+            request.session.modified = True
+            messages.success(request, f"Uploaded {len(source_rows)} row(s) into Waiting Hall Acknowledgment.")
+            return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=waiting-hall-acknowledgment")
+
+        selected_ignored = request.POST.getlist("ignored_keys")
+        state["ignored_keys"] = selected_ignored
+        if "beneficiary_type_filter" in request.POST:
+            state["beneficiary_type_filter"] = str(request.POST.get("beneficiary_type_filter") or "").strip()
+        else:
+            state["beneficiary_type_filter"] = str(state.get("beneficiary_type_filter") or "").strip()
+        if "item_type_filter" in request.POST:
+            state["item_type_filter"] = str(request.POST.get("item_type_filter") or "").strip()
+        else:
+            state["item_type_filter"] = str(state.get("item_type_filter") or models.ItemTypeChoices.AID).strip()
+
+        request.session[REPORTS_WAITING_HALL_STATE_KEY] = state
+        request.session.modified = True
+
+        if action == "save_waiting_hall":
+            messages.success(request, "Waiting Hall Acknowledgment selections saved.")
+            return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=waiting-hall-acknowledgment")
+
+        if action == "download_waiting_hall":
+            if not state.get("loaded"):
+                messages.error(request, "Sync Data or Upload a file first before downloading this report.")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=waiting-hall-acknowledgment")
+            grouped = _reports_waiting_hall_grouped_data(
+                state.get("rows") or [],
+                ignored_keys=state.get("ignored_keys"),
+                beneficiary_type_filter=state.get("beneficiary_type_filter"),
+                item_type_filter=state.get("item_type_filter"),
+            )
+            report_groups = [group for group in grouped["districts"] if group["items"]]
+            if not report_groups:
+                messages.error(request, "No printable waiting hall rows are available for the current filter. Check whether all rows under this filter were ignored.")
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=waiting-hall-acknowledgment")
+            event_year = timezone.localdate().year
+            event_date = date(event_year, 3, 3)
+            age_label = services._ordinal(max(event_date.year - 1940, 1))
+            logo_bytes = base64.b64decode(shared_logo["logo_base64"]) if shared_logo.get("logo_base64") else None
+            output_format = (request.POST.get("download_format") or "pdf").strip().lower()
+            if output_format == "pdf":
+                buffer = services.generate_waiting_hall_acknowledgment_pdf(
+                    report_groups,
+                    event_age_label=age_label,
+                    event_date=event_date,
+                    custom_logo=logo_bytes,
+                )
+                filename = f"district_waiting_hall_acknowledgment_{timezone.localtime().strftime('%d_%b_%y_%H_%M')}.pdf"
+                response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
+                response["Content-Disposition"] = f'attachment; filename="{filename}"'
+                return response
+            document_bytes = services.generate_waiting_hall_acknowledgment_doc(
+                report_groups,
+                event_age_label=age_label,
+                event_date=event_date,
+                custom_logo=logo_bytes,
+                custom_logo_mime_type=shared_logo.get("logo_content_type") or "image/png",
+            )
+            filename = f"district_waiting_hall_acknowledgment_{timezone.localtime().strftime('%d_%b_%y_%H_%M')}.docx"
+            response = HttpResponse(
+                document_bytes,
+                content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+            response["Content-Disposition"] = f'attachment; filename="{filename}"'
+            return response
+
+        return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=waiting-hall-acknowledgment")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        active_tab = (self.request.GET.get("tab") or self.REPORT_TABS[0]["key"]).strip()
+        tab_keys = {tab["key"] for tab in self.REPORT_TABS}
+        if active_tab not in tab_keys:
+            active_tab = self.REPORT_TABS[0]["key"]
+        active_tab_meta = next(tab for tab in self.REPORT_TABS if tab["key"] == active_tab)
+        token_lookup_state = _reports_token_lookup_session_state(self.request)
+        token_lookup_rows = list(token_lookup_state.get("rows") or [])
+        token_lookup_filtered_rows = _reports_token_lookup_filter_rows(token_lookup_rows, token_lookup_state.get("filters"))
+        token_lookup_item_options = _reports_token_lookup_choice_values(token_lookup_rows, "item_name")
+        token_lookup_item_type_options = _reports_token_lookup_choice_values(token_lookup_rows, "item_type")
+        public_signature_state = _reports_public_signature_session_state(self.request)
+        public_signature_rows = list(public_signature_state.get("rows") or [])
+        public_signature_item_options = _reports_public_signature_item_options(public_signature_rows)
+        district_signature_state = _reports_district_signature_session_state(self.request)
+        district_signature_rows = list(district_signature_state.get("rows") or [])
+        district_signature_grouped = _reports_district_signature_grouped(district_signature_rows) if district_signature_state.get("loaded") else {
+            "districts": [],
+            "district_count": 0,
+            "item_count": 0,
+            "total_quantity": 0,
+            "total_token_quantity": 0,
+        }
+        waiting_hall_state = _reports_waiting_hall_session_state(self.request)
+        waiting_hall_grouped = _reports_waiting_hall_grouped_data(
+            waiting_hall_state.get("rows") or [],
+            ignored_keys=waiting_hall_state.get("ignored_keys"),
+        ) if waiting_hall_state.get("loaded") else {
+            "districts": [],
+            "district_count": 0,
+            "item_count": 0,
+            "total_quantity": 0,
+            "available_keys": [],
+        }
+        public_ack_state = _reports_public_ack_session_state(self.request)
+        public_ack_template_fields = list(public_ack_state.get("template_fields") or [])
+        public_ack_rows = list(public_ack_state.get("rows") or [])
+        segregation_state = _reports_simple_report_session_state(self.request, REPORTS_SEGREGATION_STATE_KEY)
+        segregation_rows = list(segregation_state.get("rows") or [])
+        distribution_state = _reports_simple_report_session_state(self.request, REPORTS_DISTRIBUTION_STATE_KEY)
+        distribution_rows = list(distribution_state.get("rows") or [])
+        context.update(
+            {
+                "page_title": "Reports",
+                "report_tabs": self.REPORT_TABS,
+                "active_report_tab": active_tab,
+                "active_report_tab_meta": active_tab_meta,
+                "token_lookup_state": token_lookup_state,
+                "token_lookup_row_count": len(token_lookup_rows),
+                "token_lookup_filtered_rows": token_lookup_filtered_rows,
+                "token_lookup_match_count": len(token_lookup_filtered_rows),
+                "token_lookup_total_token_quantity": sum(int(row.get("token_quantity") or 0) for row in token_lookup_filtered_rows),
+                "token_lookup_item_options": token_lookup_item_options,
+                "token_lookup_item_type_options": token_lookup_item_type_options,
+                "public_signature_state": public_signature_state,
+                "public_signature_row_count": len(public_signature_rows),
+                "public_signature_item_options": public_signature_item_options,
+                "district_signature_state": district_signature_state,
+                "district_signature_row_count": len(district_signature_rows),
+                "district_signature_grouped": district_signature_grouped,
+                "waiting_hall_state": waiting_hall_state,
+                "waiting_hall_grouped": waiting_hall_grouped,
+                "reports_shared_logo": _reports_shared_logo_state(self.request),
+                "public_ack_state": public_ack_state,
+                "public_ack_rows": public_ack_rows,
+                "public_ack_row_count": len(public_ack_rows),
+                "public_ack_template_fields": public_ack_template_fields,
+                "segregation_state": segregation_state,
+                "segregation_row_count": len(segregation_rows),
+                "distribution_state": distribution_state,
+                "distribution_row_count": len(distribution_rows),
+                "public_ack_field_rows": [
+                    {
+                        "field_name": field.get("field_name") or "",
+                        "field_key": field.get("field_key") or "",
+                        "selected_value": public_ack_state.get("field_map", {}).get(field.get("field_key") or "", ""),
+                    }
+                    for field in public_ack_template_fields
+                ],
+                "public_ack_column_options": _reports_public_ack_column_options(public_ack_state.get("headers") or []),
+                "waiting_hall_beneficiary_type_choices": [
+                    ("", "All"),
+                    (models.RecipientTypeChoices.DISTRICT, "District"),
+                    (models.RecipientTypeChoices.PUBLIC, "Public"),
+                    (models.RecipientTypeChoices.INSTITUTIONS, "Institutions"),
+                ],
+                "waiting_hall_item_type_choices": [
+                    (models.ItemTypeChoices.AID, "Aid"),
+                    (models.ItemTypeChoices.ARTICLE, "Article"),
+                    ("", "All"),
+                ],
             }
         )
         return context
@@ -771,8 +2308,7 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             sort_dir=sort_dir,
         )
         public_entries = list(public_entries)
-        public_attachment_map = _public_attachment_preview_map([entry.id for entry in public_entries])
-        public_attachment_lists = _public_attachment_preview_lists([entry.id for entry in public_entries])
+        public_attachment_map, public_attachment_lists = _public_attachment_preview_data([entry.id for entry in public_entries])
         for entry in public_entries:
             entry_history_matches = _public_history_matches(entry.aadhar_number)
             entry.public_history_summary = _public_history_summary(entry_history_matches)
@@ -781,7 +2317,7 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             attachment_items = [item for item in attachment_items if item]
             entry.attachment_id = attachment.id if attachment else None
             entry.attachment_preview_url = reverse("ui:application-attachment-download", kwargs={"attachment_id": attachment.id}) if attachment else ""
-            entry.attachment_source = (attachment.file.name or "").lower() if attachment and attachment.file else ""
+            entry.attachment_source = _attachment_preview_source(attachment)
             entry.attachment_title = _attachment_preview_title(attachment)
             entry.attachment_count = len(attachment_items)
             entry.attachment_items_json = json.dumps(attachment_items)
@@ -1032,12 +2568,201 @@ def _attachment_name_exists(queryset, final_name):
     return False
 
 
+def _attachment_application_reference(attachment):
+    if not attachment:
+        return ""
+    if attachment.application_type == models.ApplicationAttachmentTypeChoices.DISTRICT and attachment.district_id:
+        return attachment.district.application_number or ""
+    if attachment.application_type == models.ApplicationAttachmentTypeChoices.PUBLIC and attachment.public_entry_id:
+        return attachment.public_entry.application_number or f"PUBLIC-{attachment.public_entry_id}"
+    if attachment.application_type == models.ApplicationAttachmentTypeChoices.INSTITUTION:
+        return attachment.institution_application_number or ""
+    return ""
+
+
+def _save_application_attachment(*, uploaded, display_name, application_type, uploaded_by, district=None, public_entry=None, institution_application_number=None):
+    attachment_kwargs = {
+        "application_type": application_type,
+        "district": district,
+        "public_entry": public_entry,
+        "institution_application_number": institution_application_number,
+        "file_name": display_name,
+        "uploaded_by": uploaded_by,
+    }
+    application_reference = (
+        (district.application_number if district else "")
+        or (public_entry.application_number if public_entry else "")
+        or institution_application_number
+        or ""
+    )
+    if google_drive.is_configured():
+        drive_file = google_drive.upload_application_attachment(
+            content=uploaded.read(),
+            display_name=display_name,
+            content_type=str(getattr(uploaded, "content_type", "") or mimetypes.guess_type(display_name)[0] or "application/octet-stream"),
+            application_type=application_type,
+            application_reference=application_reference,
+        )
+        attachment_kwargs.update(
+            {
+                "drive_file_id": str(drive_file.get("file_id") or "").strip(),
+                "drive_mime_type": str(drive_file.get("mime_type") or "").strip(),
+                "drive_view_url": str(drive_file.get("view_url") or "").strip(),
+            }
+        )
+    else:
+        attachment_kwargs["file"] = uploaded
+    return models.ApplicationAttachment.objects.create(**attachment_kwargs)
+
+
+def _delete_application_attachment_file(attachment):
+    if attachment.drive_file_id:
+        google_drive.delete_file(attachment.drive_file_id)
+    elif attachment.file:
+        attachment.file.delete(save=False)
+
+
+def _sync_drive_attachments_for_application(
+    *,
+    application_type,
+    application_reference,
+    district=None,
+    public_entry=None,
+    institution_application_number=None,
+):
+    if not google_drive.is_configured():
+        return []
+    reference = (application_reference or "").strip()
+    if not reference:
+        return []
+    filters = {"application_type": application_type}
+    if district is not None:
+        filters["district"] = district
+    if public_entry is not None:
+        filters["public_entry"] = public_entry
+    if institution_application_number is not None:
+        filters["institution_application_number"] = institution_application_number
+    attachments = list(
+        models.ApplicationAttachment.objects.filter(**filters).select_related("uploaded_by").order_by("-created_at", "-id")
+    )
+    drive_files = google_drive.list_application_attachments(
+        application_type=application_type,
+        application_reference=reference,
+    )
+    if not drive_files:
+        stale_drive_only_ids = [
+            attachment.id
+            for attachment in attachments
+            if attachment.drive_file_id and not attachment.file
+        ]
+        if stale_drive_only_ids:
+            models.ApplicationAttachment.objects.filter(id__in=stale_drive_only_ids).delete()
+        return list(
+            models.ApplicationAttachment.objects.filter(**filters).select_related("uploaded_by").order_by("-created_at", "-id")
+        )
+
+    def _normalized_name(value):
+        return str(value or "").strip().casefold()
+
+    existing_by_id = {
+        str(attachment.drive_file_id or "").strip(): attachment
+        for attachment in attachments
+        if str(attachment.drive_file_id or "").strip()
+    }
+    available_by_name = {}
+    for drive_file in drive_files:
+        normalized_name = _normalized_name(drive_file.get("file_name"))
+        if normalized_name and normalized_name not in available_by_name:
+            available_by_name[normalized_name] = drive_file
+
+    touched_ids = set()
+    seen_drive_ids = {
+        str(item.get("file_id") or "").strip()
+        for item in drive_files
+        if str(item.get("file_id") or "").strip()
+    }
+    for attachment in attachments:
+        matched_drive_file = None
+        drive_id = str(attachment.drive_file_id or "").strip()
+        if drive_id and drive_id in existing_by_id and any(str(item.get("file_id") or "").strip() == drive_id for item in drive_files):
+            matched_drive_file = next(
+                (item for item in drive_files if str(item.get("file_id") or "").strip() == drive_id),
+                None,
+            )
+        elif not attachment.file:
+            matched_drive_file = available_by_name.get(_normalized_name(attachment.file_name))
+        if not matched_drive_file:
+            continue
+        update_fields = []
+        matched_id = str(matched_drive_file.get("file_id") or "").strip()
+        if attachment.drive_file_id != matched_id:
+            attachment.drive_file_id = matched_id
+            update_fields.append("drive_file_id")
+        matched_mime = str(matched_drive_file.get("mime_type") or "").strip()
+        if attachment.drive_mime_type != matched_mime:
+            attachment.drive_mime_type = matched_mime
+            update_fields.append("drive_mime_type")
+        matched_view = str(matched_drive_file.get("view_url") or "").strip()
+        if attachment.drive_view_url != matched_view:
+            attachment.drive_view_url = matched_view
+            update_fields.append("drive_view_url")
+        matched_name = str(matched_drive_file.get("file_name") or "").strip()
+        if matched_name and attachment.file_name != matched_name:
+            attachment.file_name = matched_name
+            update_fields.append("file_name")
+        if update_fields:
+            attachment.save(update_fields=update_fields)
+        touched_ids.add(matched_id)
+
+    stale_attachment_ids = []
+    for attachment in attachments:
+        drive_id = str(attachment.drive_file_id or "").strip()
+        if not drive_id:
+            continue
+        if attachment.file:
+            continue
+        if drive_id in seen_drive_ids:
+            continue
+        stale_attachment_ids.append(attachment.id)
+
+    for drive_file in drive_files:
+        matched_id = str(drive_file.get("file_id") or "").strip()
+        if not matched_id or matched_id in touched_ids:
+            continue
+        existing_attachment = existing_by_id.get(matched_id)
+        if existing_attachment:
+            continue
+        attachments.append(
+            models.ApplicationAttachment.objects.create(
+                application_type=application_type,
+                district=district,
+                public_entry=public_entry,
+                institution_application_number=institution_application_number,
+                file_name=str(drive_file.get("file_name") or "").strip(),
+                drive_file_id=matched_id,
+                drive_mime_type=str(drive_file.get("mime_type") or "").strip(),
+                drive_view_url=str(drive_file.get("view_url") or "").strip(),
+            )
+        )
+
+    if stale_attachment_ids:
+        models.ApplicationAttachment.objects.filter(id__in=stale_attachment_ids).delete()
+
+    return list(
+        models.ApplicationAttachment.objects.filter(**filters).select_related("uploaded_by").order_by("-created_at", "-id")
+    )
+
+
 def _district_attachment_context(district):
     has_saved_application = bool(district and models.DistrictBeneficiaryEntry.objects.filter(district=district).exists())
     attachments = []
     upload_url = ""
     if has_saved_application:
-        attachments = list(models.ApplicationAttachment.objects.filter(district=district).select_related("uploaded_by").order_by("-created_at"))
+        attachments = _sync_drive_attachments_for_application(
+            application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
+            application_reference=district.application_number,
+            district=district,
+        )
         upload_url = reverse("ui:district-attachment-upload", kwargs={"district_id": district.id})
     return _attachment_upload_context(
         attachments=attachments,
@@ -1052,7 +2777,11 @@ def _public_attachment_context(entry):
     attachments = []
     upload_url = ""
     if has_saved_application:
-        attachments = list(models.ApplicationAttachment.objects.filter(public_entry=entry).select_related("uploaded_by").order_by("-created_at"))
+        attachments = _sync_drive_attachments_for_application(
+            application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
+            application_reference=entry.application_number or f"PUBLIC-{entry.pk}",
+            public_entry=entry,
+        )
         upload_url = reverse("ui:public-attachment-upload", kwargs={"pk": entry.pk})
     context = _attachment_upload_context(
         attachments=attachments,
@@ -1069,11 +2798,10 @@ def _institution_attachment_context(application_number):
     attachments = []
     upload_url = ""
     if has_saved_application:
-        attachments = list(
-            models.ApplicationAttachment.objects.filter(
-                application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
-                institution_application_number=application_number,
-            ).select_related("uploaded_by").order_by("-created_at")
+        attachments = _sync_drive_attachments_for_application(
+            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+            application_reference=application_number,
+            institution_application_number=application_number,
         )
         upload_url = reverse("ui:institution-attachment-upload", kwargs={"application_number": application_number})
     return _attachment_upload_context(
@@ -1084,9 +2812,9 @@ def _institution_attachment_context(application_number):
     )
 
 
-def _district_attachment_preview_map(district_ids):
+def _district_attachment_preview_data(district_ids):
     if not district_ids:
-        return {}
+        return {}, {}
     attachments = (
         models.ApplicationAttachment.objects.filter(
             application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
@@ -1095,31 +2823,27 @@ def _district_attachment_preview_map(district_ids):
         .order_by("district_id", "-created_at", "-id")
     )
     preview_map = {}
+    preview_lists = {}
     for attachment in attachments:
         if attachment.district_id not in preview_map:
             preview_map[attachment.district_id] = attachment
+        preview_lists.setdefault(attachment.district_id, []).append(attachment)
+    return preview_map, preview_lists
+
+
+def _district_attachment_preview_map(district_ids):
+    preview_map, _preview_lists = _district_attachment_preview_data(district_ids)
     return preview_map
 
 
 def _district_attachment_preview_lists(district_ids):
-    if not district_ids:
-        return {}
-    attachments = (
-        models.ApplicationAttachment.objects.filter(
-            application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
-            district_id__in=district_ids,
-        )
-        .order_by("district_id", "-created_at", "-id")
-    )
-    preview_map = {}
-    for attachment in attachments:
-        preview_map.setdefault(attachment.district_id, []).append(attachment)
-    return preview_map
+    _preview_map, preview_lists = _district_attachment_preview_data(district_ids)
+    return preview_lists
 
 
-def _public_attachment_preview_map(entry_ids):
+def _public_attachment_preview_data(entry_ids):
     if not entry_ids:
-        return {}
+        return {}, {}
     attachments = (
         models.ApplicationAttachment.objects.filter(
             application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
@@ -1128,31 +2852,27 @@ def _public_attachment_preview_map(entry_ids):
         .order_by("public_entry_id", "-created_at", "-id")
     )
     preview_map = {}
+    preview_lists = {}
     for attachment in attachments:
         if attachment.public_entry_id not in preview_map:
             preview_map[attachment.public_entry_id] = attachment
+        preview_lists.setdefault(attachment.public_entry_id, []).append(attachment)
+    return preview_map, preview_lists
+
+
+def _public_attachment_preview_map(entry_ids):
+    preview_map, _preview_lists = _public_attachment_preview_data(entry_ids)
     return preview_map
 
 
 def _public_attachment_preview_lists(entry_ids):
-    if not entry_ids:
-        return {}
-    attachments = (
-        models.ApplicationAttachment.objects.filter(
-            application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
-            public_entry_id__in=entry_ids,
-        )
-        .order_by("public_entry_id", "-created_at", "-id")
-    )
-    preview_map = {}
-    for attachment in attachments:
-        preview_map.setdefault(attachment.public_entry_id, []).append(attachment)
-    return preview_map
+    _preview_map, preview_lists = _public_attachment_preview_data(entry_ids)
+    return preview_lists
 
 
-def _institution_attachment_preview_map(application_numbers):
+def _institution_attachment_preview_data(application_numbers):
     if not application_numbers:
-        return {}
+        return {}, {}
     attachments = (
         models.ApplicationAttachment.objects.filter(
             application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
@@ -1161,29 +2881,24 @@ def _institution_attachment_preview_map(application_numbers):
         .order_by("institution_application_number", "-created_at", "-id")
     )
     preview_map = {}
+    preview_lists = {}
     for attachment in attachments:
         key = attachment.institution_application_number
         if key and key not in preview_map:
             preview_map[key] = attachment
+        if key:
+            preview_lists.setdefault(key, []).append(attachment)
+    return preview_map, preview_lists
+
+
+def _institution_attachment_preview_map(application_numbers):
+    preview_map, _preview_lists = _institution_attachment_preview_data(application_numbers)
     return preview_map
 
 
 def _institution_attachment_preview_lists(application_numbers):
-    if not application_numbers:
-        return {}
-    attachments = (
-        models.ApplicationAttachment.objects.filter(
-            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
-            institution_application_number__in=application_numbers,
-        )
-        .order_by("institution_application_number", "-created_at", "-id")
-    )
-    preview_map = {}
-    for attachment in attachments:
-        key = attachment.institution_application_number
-        if key:
-            preview_map.setdefault(key, []).append(attachment)
-    return preview_map
+    _preview_map, preview_lists = _institution_attachment_preview_data(application_numbers)
+    return preview_lists
 
 
 def _attachment_preview_title(attachment):
@@ -1191,6 +2906,8 @@ def _attachment_preview_title(attachment):
         return ""
     if attachment.file_name:
         return attachment.file_name
+    if attachment.drive_view_url:
+        return "Attachment"
     if attachment.file:
         return os.path.basename(attachment.file.name)
     return ""
@@ -1200,13 +2917,33 @@ def _attachment_preview_payload(attachment):
     if not attachment:
         return None
     preview_url = reverse("ui:application-attachment-download", kwargs={"attachment_id": attachment.id})
+    source_name = _attachment_preview_source(attachment)
     return {
         "id": attachment.id,
         "title": _attachment_preview_title(attachment),
         "preview_url": preview_url,
         "download_url": f"{preview_url}?download=1",
-        "source": (attachment.file.name or "").lower() if attachment.file else "",
+        "source": source_name,
     }
+
+
+def _attachment_preview_source(attachment):
+    if not attachment:
+        return ""
+    if attachment.file and attachment.file.name:
+        return (attachment.file.name or "").lower()
+    source_name = (attachment.file_name or "").lower()
+    mime_type = (attachment.drive_mime_type or "").lower()
+    if source_name and "." not in os.path.basename(source_name):
+        if mime_type == "application/pdf":
+            source_name = f"{source_name}.pdf"
+        elif mime_type.startswith("image/"):
+            ext = mime_type.split("/", 1)[1].strip()
+            if ext == "jpeg":
+                ext = "jpg"
+            if ext:
+                source_name = f"{source_name}.{ext}"
+    return source_name
 
 
 def _attachment_items_b64(items):
@@ -1638,8 +3375,7 @@ def _build_district_entry_summaries():
         key = entry.district_id
         grouped.setdefault(key, []).append(entry)
 
-    attachment_map = _district_attachment_preview_map(list(grouped.keys()))
-    attachment_lists = _district_attachment_preview_lists(list(grouped.keys()))
+    attachment_map, attachment_lists = _district_attachment_preview_data(list(grouped.keys()))
     summaries = []
     for district_id, district_entries in grouped.items():
         first = district_entries[0]
@@ -1665,7 +3401,7 @@ def _build_district_entry_summaries():
                 "created_at": max(entry.created_at for entry in district_entries),
                 "attachment_id": attachment.id if attachment else None,
                 "attachment_preview_url": reverse("ui:application-attachment-download", kwargs={"attachment_id": attachment.id}) if attachment else "",
-                "attachment_source": (attachment.file.name or "").lower() if attachment and attachment.file else "",
+                "attachment_source": _attachment_preview_source(attachment),
                 "attachment_title": _attachment_preview_title(attachment),
                 "attachment_count": len(attachment_items),
                 "attachment_items_json": json.dumps(attachment_items),
@@ -2311,8 +4047,7 @@ def _build_institution_entry_summaries():
         key = entry.application_number or str(entry.pk)
         grouped.setdefault(key, []).append(entry)
 
-    attachment_map = _institution_attachment_preview_map(list(grouped.keys()))
-    attachment_lists = _institution_attachment_preview_lists(list(grouped.keys()))
+    attachment_map, attachment_lists = _institution_attachment_preview_data(list(grouped.keys()))
     summaries = []
     for application_number, group_entries in grouped.items():
         first = group_entries[0]
@@ -2335,7 +4070,7 @@ def _build_institution_entry_summaries():
                 "mobile": first.mobile,
                 "attachment_id": attachment.id if attachment else None,
                 "attachment_preview_url": reverse("ui:application-attachment-download", kwargs={"attachment_id": attachment.id}) if attachment else "",
-                "attachment_source": (attachment.file.name or "").lower() if attachment and attachment.file else "",
+                "attachment_source": _attachment_preview_source(attachment),
                 "attachment_title": _attachment_preview_title(attachment),
                 "attachment_count": len(attachment_items),
                 "attachment_items_json": json.dumps(attachment_items),
@@ -3339,20 +5074,26 @@ class ApplicationAttachmentDownloadView(LoginRequiredMixin, RoleRequiredMixin, V
     permission_action = "view"
     def get(self, request, *args, **kwargs):
         attachment = get_object_or_404(models.ApplicationAttachment.objects.select_related("uploaded_by"), pk=kwargs["attachment_id"])
-        if not attachment.file:
+        if not attachment.file and not attachment.drive_file_id:
             raise Http404("File not found.")
-        stored_name = os.path.basename(attachment.file.name)
-        if attachment.application_type == models.ApplicationAttachmentTypeChoices.DISTRICT and attachment.district_id:
-            application_reference = attachment.district.application_number
-        elif attachment.application_type == models.ApplicationAttachmentTypeChoices.PUBLIC and attachment.public_entry_id:
-            application_reference = attachment.public_entry.application_number or f"PUBLIC-{attachment.public_entry_id}"
-        elif attachment.application_type == models.ApplicationAttachmentTypeChoices.INSTITUTION:
-            application_reference = attachment.institution_application_number
-        else:
-            application_reference = ""
+        stored_name = attachment.file_name or (os.path.basename(attachment.file.name) if attachment.file else "attachment")
+        application_reference = _attachment_application_reference(attachment)
         display_name = _prefixed_attachment_name(application_reference, stored_name, attachment.file_name or stored_name)
         as_attachment = (request.GET.get("download") or "").strip() == "1"
         content_type, _ = mimetypes.guess_type(stored_name)
+        content_type = attachment.drive_mime_type or content_type or "application/octet-stream"
+        if attachment.drive_file_id:
+            file_bytes = google_drive.download_file(attachment.drive_file_id)
+            if as_attachment:
+                display_root, display_ext = os.path.splitext(display_name)
+                _, stored_ext = os.path.splitext(stored_name)
+                download_name = display_name if display_ext else f"{display_name}{stored_ext}"
+                response = HttpResponse(file_bytes, content_type=content_type)
+                response["Content-Disposition"] = f'attachment; filename="{download_name}"'
+                return response
+            response = HttpResponse(file_bytes, content_type=content_type)
+            response["Content-Disposition"] = "inline"
+            return response
         if as_attachment:
             display_root, display_ext = os.path.splitext(display_name)
             _, stored_ext = os.path.splitext(stored_name)
@@ -3361,12 +5102,12 @@ class ApplicationAttachmentDownloadView(LoginRequiredMixin, RoleRequiredMixin, V
                 attachment.file.open("rb"),
                 as_attachment=True,
                 filename=download_name,
-                content_type=content_type or "application/octet-stream",
+                content_type=content_type,
             )
         response = FileResponse(
             attachment.file.open("rb"),
             as_attachment=False,
-            content_type=content_type or "application/octet-stream",
+            content_type=content_type,
         )
         response["Content-Disposition"] = "inline"
         return response
@@ -3396,11 +5137,11 @@ class DistrictApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin
         if _attachment_name_exists(attachments_qs, display_name):
             messages.error(request, "A file with this name already exists for this application. Please rename it before uploading.")
             return HttpResponseRedirect(reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}))
-        models.ApplicationAttachment.objects.create(
+        _save_application_attachment(
+            uploaded=uploaded,
+            display_name=display_name,
             application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
             district=district,
-            file=uploaded,
-            file_name=display_name,
             uploaded_by=request.user,
         )
         messages.success(request, "Attachment uploaded.")
@@ -3418,8 +5159,7 @@ class DistrictApplicationAttachmentDeleteView(LoginRequiredMixin, WriteRoleMixin
             application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
             district=district,
         )
-        if attachment.file:
-            attachment.file.delete(save=False)
+        _delete_application_attachment_file(attachment)
         attachment.delete()
         messages.success(request, "Attachment removed.")
         return HttpResponseRedirect(reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}))
@@ -3450,11 +5190,11 @@ class PublicApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin, 
         if _attachment_name_exists(attachments_qs, display_name):
             messages.error(request, "A file with this name already exists for this application. Please rename it before uploading.")
             return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": entry.pk}))
-        models.ApplicationAttachment.objects.create(
+        _save_application_attachment(
+            uploaded=uploaded,
+            display_name=display_name,
             application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
             public_entry=entry,
-            file=uploaded,
-            file_name=display_name,
             uploaded_by=request.user,
         )
         messages.success(request, "Attachment uploaded.")
@@ -3472,8 +5212,7 @@ class PublicApplicationAttachmentDeleteView(LoginRequiredMixin, WriteRoleMixin, 
             application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
             public_entry=entry,
         )
-        if attachment.file:
-            attachment.file.delete(save=False)
+        _delete_application_attachment_file(attachment)
         attachment.delete()
         messages.success(request, "Attachment removed.")
         return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": entry.pk}))
@@ -3505,11 +5244,11 @@ class InstitutionApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMi
         if _attachment_name_exists(attachments_qs, display_name):
             messages.error(request, "A file with this name already exists for this application. Please rename it before uploading.")
             return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": application_number}))
-        models.ApplicationAttachment.objects.create(
+        _save_application_attachment(
+            uploaded=uploaded,
+            display_name=display_name,
             application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
             institution_application_number=application_number,
-            file=uploaded,
-            file_name=display_name,
             uploaded_by=request.user,
         )
         messages.success(request, "Attachment uploaded.")
@@ -3527,8 +5266,7 @@ class InstitutionApplicationAttachmentDeleteView(LoginRequiredMixin, WriteRoleMi
             application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
             institution_application_number=application_number,
         )
-        if attachment.file:
-            attachment.file.delete(save=False)
+        _delete_application_attachment_file(attachment)
         attachment.delete()
         messages.success(request, "Attachment removed.")
         return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": application_number}))

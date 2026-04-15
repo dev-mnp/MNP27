@@ -349,6 +349,13 @@
       font-size: 0.88rem;
       flex: 1 1 auto;
     }
+    .sequence-item-meta {
+      margin-left: auto;
+      color: #64748b;
+      font-size: 0.8rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
     .sequence-item-index {
       width: 54px;
       flex: 0 0 54px;
@@ -1044,6 +1051,17 @@
         return map;
       }
 
+      function tokenQuantityMap() {
+        const map = new Map();
+        getEffectiveRows(sourceRows).forEach((row) => {
+          const item = String(row.requested_item || '').trim();
+          if (!item) return;
+          const quantity = parseNumber(row.token_quantity);
+          map.set(item, (map.get(item) || 0) + quantity);
+        });
+        return map;
+      }
+
       function updateCategoryOptions() {
         const categories = categoryMap();
         const leftCategories = Array.from(new Set(unassignedItems.map((item) => categories.get(item) || 'Uncategorized'))).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
@@ -1092,6 +1110,7 @@
 
       function renderUnassigned() {
         const items = filteredUnassignedItems();
+        const tokenMap = tokenQuantityMap();
         leftList.innerHTML = '';
         if (!items.length) {
           leftList.innerHTML = '<div class="sequence-empty">No unassigned items.</div>';
@@ -1104,8 +1123,10 @@
           row.innerHTML = `
             <input type="checkbox" ${selectedLeft.has(item) ? 'checked' : ''}>
             <span class="sequence-item-label"></span>
+            <span class="sequence-item-meta"></span>
           `;
           row.querySelector('.sequence-item-label').textContent = item;
+          row.querySelector('.sequence-item-meta').textContent = `Token Qty: ${tokenMap.get(item) || 0}`;
           row.querySelector('input').addEventListener('change', function(event) {
             if (event.target.checked) selectedLeft.add(item);
             else selectedLeft.delete(item);
@@ -1119,6 +1140,7 @@
       function renderAssigned() {
         const items = filteredAssignedItems();
         const indexMap = sequenceByItem();
+        const tokenMap = tokenQuantityMap();
         rightList.innerHTML = '';
         if (!items.length) {
           rightList.innerHTML = '<div class="sequence-empty">No sequenced items yet.</div>';
@@ -1135,10 +1157,12 @@
               <input class="sequence-item-order-input" type="number" min="${sequenceStart}" step="1" ${assignedSortEnabled ? 'disabled' : ''}>
             </span>
             <span class="sequence-item-label"></span>
+            <span class="sequence-item-meta"></span>
           `;
           const orderInput = wrapper.querySelector('.sequence-item-order-input');
           orderInput.value = String(indexMap.get(row.item) || '');
           wrapper.querySelector('.sequence-item-label').textContent = row.item;
+          wrapper.querySelector('.sequence-item-meta').textContent = `Token Qty: ${tokenMap.get(row.item) || 0}`;
           wrapper.querySelector('input').addEventListener('change', function(event) {
             if (event.target.checked) selectedRight.add(row.item);
             else selectedRight.delete(row.item);

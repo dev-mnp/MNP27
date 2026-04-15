@@ -2,15 +2,24 @@ from __future__ import annotations
 
 import csv
 import io
+import zipfile
+from pathlib import Path
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from openpyxl import Workbook
+from openpyxl import load_workbook
+from pypdf import PdfReader
 
 from core import models
+from core import services
 from core.web_views import EXPORT_COLUMNS
 from core.web_views import _phase2_master_change_state
+from core.web_views import _reports_public_signature_rows_from_dataset
+from core.web_views import _reports_district_signature_grouped
+from core.web_views import _reports_district_signature_rows_from_dataset
+from core.web_views import _reports_token_lookup_data_rows
 
 
 class Phase2ModuleTests(TestCase):
@@ -71,6 +80,459 @@ class Phase2ModuleTests(TestCase):
         self.assertContains(response, "Application Entry")
         self.assertContains(response, "Seat Allocation")
         self.assertContains(response, "Token Generation")
+
+    def test_reports_page_is_available_for_logged_in_user(self):
+        response = self.client.get(reverse("ui:reports"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Reports")
+        self.assertContains(response, "Token Lookup")
+        self.assertContains(response, "Waiting Hall Acknowledgment")
+        self.assertContains(response, "Public Acknowledgment Form")
+
+    def test_token_lookup_normalizes_missing_district_for_district_rows(self):
+        rows = _reports_token_lookup_data_rows(
+            [
+                {
+                    "Application Number": "D001",
+                    "Beneficiary Name": "Ariyalur",
+                    "Beneficiary Type": "District",
+                    "Requested Item": "Medical Aid",
+                    "Token Quantity": "4",
+                    "Start Token No": "1",
+                    "End Token No": "4",
+                    "Sequence No": "7",
+                }
+            ]
+        )
+
+        self.assertEqual(rows[0]["district"], "Ariyalur")
+        self.assertEqual(rows[0]["beneficiary_type"], "District")
+        self.assertEqual(rows[0]["token_start"], 1)
+        self.assertEqual(rows[0]["token_end"], 4)
+
+    def test_token_lookup_derives_display_name_and_total_value(self):
+        rows = _reports_token_lookup_data_rows(
+            [
+                {
+                    "Application Number": "P023",
+                    "Beneficiary Name": "Valli.M",
+                    "Requested Item": "Education Aid",
+                    "Item Type": "Aid",
+                    "Token Quantity": "1",
+                    "Start Token No": "1498",
+                    "End Token No": "1498",
+                }
+            ]
+        )
+
+        self.assertEqual(rows[0]["application_number"], "P023")
+        self.assertEqual(rows[0]["beneficiary_name"], "Valli.M")
+        self.assertEqual(rows[0]["item_name"], "Education Aid")
+        self.assertEqual(rows[0]["item_type"], "Aid")
+
+    def test_district_signature_rows_grouped_by_district_and_item(self):
+        rows = _reports_district_signature_rows_from_dataset(
+            [
+                {
+                    "Beneficiary Type": "District",
+                    "Beneficiary Name": "Ariyalur",
+                    "Requested Item": "Education Aid",
+                    "Quantity": "4",
+                    "Token Quantity": "1",
+                    "Start Token No": "403",
+                    "End Token No": "403",
+                },
+                {
+                    "Beneficiary Type": "District",
+                    "Beneficiary Name": "Ariyalur",
+                    "Requested Item": "Education Aid",
+                    "Quantity": "3",
+                    "Token Quantity": "0",
+                    "Start Token No": "0",
+                    "End Token No": "0",
+                },
+                {
+                    "Beneficiary Type": "District",
+                    "Beneficiary Name": "Ariyalur",
+                    "Requested Item": "Medical Aid",
+                    "Quantity": "2",
+                    "Token Quantity": "0",
+                    "Start Token No": "0",
+                    "End Token No": "0",
+                },
+                {
+                    "Beneficiary Type": "Public",
+                    "Beneficiary Name": "Valli.M",
+                    "Requested Item": "Goat",
+                    "Quantity": "1",
+                    "Token Quantity": "1",
+                    "Start Token No": "2",
+                    "End Token No": "2",
+                },
+            ]
+        )
+
+        grouped = _reports_district_signature_grouped(rows)
+
+        self.assertEqual(grouped["district_count"], 1)
+        self.assertEqual(grouped["item_count"], 2)
+        self.assertEqual(grouped["districts"][0]["district_name"], "Ariyalur")
+        self.assertEqual(grouped["districts"][0]["items"][0]["total_quantity"], 7)
+        self.assertEqual(grouped["districts"][0]["items"][0]["token_quantity"], 1)
+        self.assertEqual(grouped["districts"][0]["start_token"], 403)
+        self.assertEqual(grouped["districts"][0]["end_token"], 403)
+
+    def test_public_signature_rows_keep_only_public_with_positive_tokens(self):
+        rows = _reports_public_signature_rows_from_dataset(
+            [
+                {
+                    "Application Number": "P023",
+                    "Beneficiary Name": "Valli.M",
+                    "Requested Item": "Education Aid",
+                    "Beneficiary Type": "Public",
+                    "Item Type": "Aid",
+                    "Token Quantity": "1",
+                    "Start Token No": "1498",
+                    "End Token No": "1498",
+                },
+                {
+                    "Application Number": "I001",
+                    "Beneficiary Name": "Institution One",
+                    "Requested Item": "Laptop",
+                    "Beneficiary Type": "Institutions",
+                    "Item Type": "Article",
+                    "Token Quantity": "1",
+                    "Start Token No": "200",
+                    "End Token No": "200",
+                },
+                {
+                    "Application Number": "P024",
+                    "Beneficiary Name": "Govindasamy.K",
+                    "Requested Item": "Medical Aid",
+                    "Beneficiary Type": "Public",
+                    "Item Type": "Aid",
+                    "Token Quantity": "0",
+                    "Start Token No": "0",
+                    "End Token No": "0",
+                },
+            ]
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["application_number"], "P023")
+        self.assertEqual(rows[0]["item_name"], "Education Aid")
+
+    def test_district_signature_xlsx_merges_signature_and_separates_districts(self):
+        buffer = services.generate_district_signature_xlsx(
+            [
+                {
+                    "district_name": "Ariyalur",
+                    "total_quantity": 7,
+                    "token_quantity": 1,
+                    "items": [
+                        {
+                            "item_name": "Education Aid",
+                            "total_quantity": 4,
+                            "token_quantity": 1,
+                            "start_token": 403,
+                            "end_token": 403,
+                        }
+                    ],
+                },
+                {
+                    "district_name": "Cuddalore",
+                    "total_quantity": 5,
+                    "token_quantity": 2,
+                    "items": [
+                        {
+                            "item_name": "Medical Aid",
+                            "total_quantity": 5,
+                            "token_quantity": 2,
+                            "start_token": 404,
+                            "end_token": 405,
+                        }
+                    ],
+                },
+            ]
+        )
+
+        workbook = load_workbook(buffer)
+        worksheet = workbook.active
+
+        self.assertTrue(any("F2:F4" in str(merged) for merged in worksheet.merged_cells.ranges))
+        self.assertTrue(any("F6:F8" in str(merged) for merged in worksheet.merged_cells.ranges))
+        self.assertEqual(worksheet["A5"].value, None)
+        self.assertEqual(worksheet.row_dimensions[5].height, 8)
+
+    def test_token_lookup_session_rows_include_model_token_quantity(self):
+        session = models.EventSession.objects.create(session_name="Event", event_year=2026, is_active=True)
+        models.TokenGenerationRow.objects.create(
+            session=session,
+            source_file_name="Token Data",
+            application_number="P023",
+            beneficiary_name="Valli.M",
+            requested_item="Education Aid",
+            beneficiary_type=models.RecipientTypeChoices.PUBLIC,
+            sequence_no=7,
+            start_token_no=1498,
+            end_token_no=1500,
+            headers=[],
+            row_data={"Application Number": "P023", "Beneficiary Name": "Valli.M"},
+        )
+
+        from core.web_views import _reports_token_lookup_rows_from_session
+
+        rows = _reports_token_lookup_rows_from_session(session)
+
+        self.assertEqual(rows[0]["token_quantity"], 3)
+        self.assertEqual(rows[0]["token_start"], 1498)
+        self.assertEqual(rows[0]["token_end"], 1500)
+
+    def test_token_lookup_session_rows_include_total_value(self):
+        session = models.EventSession.objects.create(session_name="Event", event_year=2026, is_active=True)
+        models.TokenGenerationRow.objects.create(
+            session=session,
+            source_file_name="Token Data",
+            application_number="P023",
+            beneficiary_name="Valli.M",
+            requested_item="Education Aid",
+            beneficiary_type=models.RecipientTypeChoices.PUBLIC,
+            sequence_no=7,
+            start_token_no=1498,
+            end_token_no=1498,
+            headers=[],
+            row_data={
+                "Application Number": "P023",
+                "Beneficiary Name": "Valli.M",
+                "Requested Item": "Education Aid",
+                "Beneficiary Type": "Public",
+                "Item Type": "Aid",
+                "Token Quantity": 1,
+                "Total Value": "10000",
+            },
+        )
+
+        from core.web_views import _reports_token_lookup_rows_from_session
+
+        rows = _reports_token_lookup_rows_from_session(session)
+
+        self.assertEqual(rows[0]["total_value"], "10000")
+
+    def test_reports_token_lookup_sync_keeps_only_positive_token_rows(self):
+        session = models.EventSession.objects.create(session_name="Event", event_year=2026, is_active=True)
+        models.TokenGenerationRow.objects.create(
+            session=session,
+            source_file_name="Token Data",
+            application_number="P001",
+            beneficiary_name="Person One",
+            requested_item="Goat",
+            beneficiary_type=models.RecipientTypeChoices.PUBLIC,
+            sequence_no=1,
+            start_token_no=10,
+            end_token_no=12,
+            headers=[],
+            row_data={},
+        )
+        models.TokenGenerationRow.objects.create(
+            session=session,
+            source_file_name="Token Data",
+            application_number="P002",
+            beneficiary_name="Person Two",
+            requested_item="Laptop",
+            beneficiary_type=models.RecipientTypeChoices.PUBLIC,
+            sequence_no=2,
+            start_token_no=0,
+            end_token_no=0,
+            headers=[],
+            row_data={"Token Quantity": 0},
+        )
+
+        response = self.client.post(
+            reverse("ui:reports"),
+            {"tab": "token-lookup", "action": "sync_token_lookup"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        follow = self.client.get(reverse("ui:reports"), {"tab": "token-lookup"})
+        self.assertContains(follow, "Person One")
+        self.assertNotContains(follow, "Person Two")
+
+    def test_reports_waiting_hall_sync_loads_district_waiting_hall_rows(self):
+        session = models.EventSession.objects.create(session_name="Event", event_year=2026, is_active=True)
+        headers = [*EXPORT_COLUMNS, "Waiting Hall Quantity", "Token Quantity", "Sequence No"]
+        models.TokenGenerationRow.objects.create(
+            session=session,
+            source_file_name="Synced from Sequence List",
+            application_number="D001",
+            beneficiary_name="Ariyalur",
+            requested_item="Medical Aid",
+            beneficiary_type=models.RecipientTypeChoices.DISTRICT,
+            headers=headers,
+            row_data={
+                "Application Number": "D001",
+                "Beneficiary Name": "Ariyalur",
+                "Requested Item": "Medical Aid",
+                "Beneficiary Type": "District",
+                "Waiting Hall Quantity": 4,
+                "Token Quantity": 0,
+                "Sequence No": 1,
+            },
+        )
+        models.TokenGenerationRow.objects.create(
+            session=session,
+            source_file_name="Synced from Sequence List",
+            application_number="P001",
+            beneficiary_name="Person 1",
+            requested_item="Goat",
+            beneficiary_type=models.RecipientTypeChoices.PUBLIC,
+            headers=headers,
+            row_data={
+                "Application Number": "P001",
+                "Beneficiary Name": "Person 1",
+                "Requested Item": "Goat",
+                "Beneficiary Type": "Public",
+                "Waiting Hall Quantity": 2,
+                "Token Quantity": 0,
+                "Sequence No": 2,
+            },
+        )
+
+        response = self.client.post(
+            reverse("ui:reports"),
+            {"tab": "waiting-hall-acknowledgment", "action": "sync_waiting_hall"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        follow = self.client.get(reverse("ui:reports"), {"tab": "waiting-hall-acknowledgment"})
+        self.assertContains(follow, "Ariyalur")
+        self.assertContains(follow, "Medical Aid")
+        self.assertContains(follow, "Person 1")
+
+    def test_reports_waiting_hall_document_download_respects_ignored_items(self):
+        session = models.EventSession.objects.create(session_name="Event", event_year=2026, is_active=True)
+        headers = [*EXPORT_COLUMNS, "Waiting Hall Quantity", "Token Quantity", "Sequence No"]
+        models.TokenGenerationRow.objects.create(
+            session=session,
+            source_file_name="Synced from Sequence List",
+            application_number="D001",
+            beneficiary_name="Ariyalur",
+            requested_item="Medical Aid",
+            beneficiary_type=models.RecipientTypeChoices.DISTRICT,
+            headers=headers,
+            row_data={
+                "Application Number": "D001",
+                "Beneficiary Name": "Ariyalur",
+                "Requested Item": "Medical Aid",
+                "Beneficiary Type": "District",
+                "Waiting Hall Quantity": 4,
+                "Token Quantity": 0,
+                "Sequence No": 1,
+            },
+        )
+        models.TokenGenerationRow.objects.create(
+            session=session,
+            source_file_name="Synced from Sequence List",
+            application_number="D001",
+            beneficiary_name="Ariyalur",
+            requested_item="Sewing Machine",
+            beneficiary_type=models.RecipientTypeChoices.DISTRICT,
+            headers=headers,
+            row_data={
+                "Application Number": "D001",
+                "Beneficiary Name": "Ariyalur",
+                "Requested Item": "Sewing Machine",
+                "Beneficiary Type": "District",
+                "Waiting Hall Quantity": 2,
+                "Token Quantity": 0,
+                "Sequence No": 1,
+            },
+        )
+
+        sync_response = self.client.post(
+            reverse("ui:reports"),
+            {"tab": "waiting-hall-acknowledgment", "action": "sync_waiting_hall"},
+        )
+        self.assertEqual(sync_response.status_code, 302)
+
+        response = self.client.post(
+            reverse("ui:reports"),
+            {
+                "tab": "waiting-hall-acknowledgment",
+                "action": "download_waiting_hall",
+                "download_format": "docx",
+                "item_type_filter": "All",
+                "ignored_keys": ["District||Ariyalur||Medical Aid"],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+        with zipfile.ZipFile(io.BytesIO(response.content)) as generated:
+            document_xml = generated.read("word/document.xml").decode("utf-8")
+        self.assertIn("Sewing Machine", document_xml)
+        self.assertNotIn("Medical Aid", document_xml)
+
+    def test_public_acknowledgment_pdf_uses_aid_values_only_for_aid_rows(self):
+        from core import services
+
+        template_path = Path("/Users/aswathshakthi/PycharmProjects/MLMR/Project-MNP/Token/Token/Acknowledgment/data/Public ACK 2026.pdf")
+        template_bytes = template_path.read_bytes()
+        rows = [
+            {
+                "District": "District A",
+                "Address": "Address A",
+                "Application Number": "P001",
+                "Start Token No": "1",
+                "Beneficiary Name": "Person A",
+                "Mobile": "9000000001",
+                "Aadhar Number": "123456789012",
+                "Requested Item": "Hearing Aid",
+                "Item Type": "Article",
+                "Total Value": "10000",
+                "Cheque / RTGS in Favour": "N/A",
+            },
+            {
+                "District": "District B",
+                "Address": "Address B",
+                "Application Number": "P002",
+                "Start Token No": "2",
+                "Beneficiary Name": "Person B",
+                "Mobile": "9000000002",
+                "Aadhar Number": "123456789013",
+                "Requested Item": "Auto (3 wheeler) - Aid",
+                "Item Type": "Aid",
+                "Total Value": "20000",
+                "Cheque / RTGS in Favour": "N/A",
+            },
+        ]
+        field_map = {
+            "district": "District",
+            "address": "Address",
+            "App no": "Application Number",
+            "token": "Start Token No",
+            "bf name": "Beneficiary Name",
+            "mobile": "Mobile",
+            "Aadhar": "Aadhar Number",
+            "article": "Requested Item",
+            "value_aid": "Total Value",
+            "cheque_no": "Cheque / RTGS in Favour",
+        }
+
+        generated = services.generate_public_acknowledgment_pdf(template_bytes, rows, field_map)
+        reader = PdfReader(io.BytesIO(generated.getvalue()))
+        first_page = reader.pages[0]
+        second_page = reader.pages[1]
+        first_text = (first_page.extract_text() or "").replace("\n", " ")
+        second_text = (second_page.extract_text() or "").replace("\n", " ")
+
+        self.assertIn("Hearing Aid", first_text)
+        self.assertNotIn("10000", first_text)
+        self.assertIn("Auto (3 wheeler) - Aid", second_text)
+        self.assertIn("20000", second_text)
 
     def test_seat_allocation_upload_keeps_same_master_row_key_as_separate_rows(self):
         session = models.EventSession.objects.create(session_name="2026 Event", event_year=2026, is_active=True)

@@ -1,0 +1,1039 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <style>
+    .report-select-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #64748b;
+      font-size: 0.78rem;
+      font-weight: 600;
+      white-space: nowrap;
+      padding: 0 10px;
+      min-height: 32px;
+      border: 1px solid #dbe3ef;
+      border-radius: 9px;
+      background: #f8fafc;
+    }
+    .report-select-toggle input {
+      width: 14px;
+      height: 14px;
+      margin: 0;
+      accent-color: var(--accent-primary);
+    }
+    .report-download-menu {
+      position: relative;
+    }
+    .report-download-menu summary {
+      list-style: none;
+    }
+    .report-download-menu summary::-webkit-details-marker {
+      display: none;
+    }
+    .report-download-menu > summary.btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 40px;
+      padding: 9px 14px;
+      border-radius: 12px;
+      box-sizing: border-box;
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.12);
+    }
+    .report-download-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .report-download-panel {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 160px;
+      padding: 8px;
+      border: 1px solid #dbe3ef;
+      border-radius: 14px;
+      background: #ffffff;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+      display: grid;
+      gap: 6px;
+      z-index: 20;
+    }
+    .report-download-option {
+      display: block;
+      width: 100%;
+      padding: 10px 12px;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: #0f172a;
+      text-align: left;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .report-download-option:hover {
+      background: #f8fafc;
+    }
+  </style>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const selectAll = document.getElementById("public-signature-select-all");
+      const itemCheckboxes = Array.from(document.querySelectorAll(".public-signature-item-checkbox"));
+      const sortCheckboxes = Array.from(document.querySelectorAll(".public-signature-sort-checkbox"));
+      const publicSignatureForm = document.getElementById("public-signature-form");
+      const publicSignatureAction = document.getElementById("public-signature-action");
+      const publicSignatureSortOrder = document.getElementById("public-signature-sort-order");
+
+      if (publicSignatureForm && publicSignatureAction && publicSignatureSortOrder && sortCheckboxes.length) {
+        let selectedSortModes = String(publicSignatureSortOrder.value || "")
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean);
+
+        sortCheckboxes.forEach((checkbox) => {
+          checkbox.addEventListener("change", () => {
+            selectedSortModes = selectedSortModes.filter((value) => value !== checkbox.value);
+            if (checkbox.checked) {
+              selectedSortModes.push(checkbox.value);
+            }
+            publicSignatureSortOrder.value = selectedSortModes.join(",");
+            publicSignatureAction.value = "set_public_signature_sort";
+            publicSignatureForm.submit();
+          });
+        });
+      }
+
+      if (!selectAll || !itemCheckboxes.length) {
+        return;
+      }
+
+      const syncSelectAllState = () => {
+        const checkedCount = itemCheckboxes.filter((checkbox) => checkbox.checked).length;
+        selectAll.checked = checkedCount === itemCheckboxes.length;
+        selectAll.indeterminate = checkedCount > 0 && checkedCount < itemCheckboxes.length;
+      };
+
+      selectAll.addEventListener("change", () => {
+        itemCheckboxes.forEach((checkbox) => {
+          checkbox.checked = selectAll.checked;
+        });
+        selectAll.indeterminate = false;
+      });
+
+      itemCheckboxes.forEach((checkbox) => {
+        checkbox.addEventListener("change", syncSelectAllState);
+      });
+
+      syncSelectAllState();
+    });
+  </script>
+  <section class="card">
+    <div class="toolbar" style="justify-content: space-between; margin-bottom: 20px;">
+      <div>
+        <h2 style="margin: 0 0 6px;">Reports</h2>
+        <p style="margin: 0; color: var(--text-secondary); max-width: 920px;">
+          Generate print-ready and editable operational reports from the saved workflow data.
+        </p>
+      </div>
+      <form method="post" enctype="multipart/form-data" class="toolbar" style="margin-bottom: 0;">
+        {% csrf_token %}
+        <input type="hidden" name="tab" value="{{ active_report_tab }}">
+        <input id="reports-shared-logo-input" type="file" name="shared_logo" accept=".png,.jpg,.jpeg,.webp" style="display:none;" onchange="this.form.submit();" />
+        <input type="hidden" name="action" value="upload_shared_logo" />
+        <button class="btn report-download-trigger" type="button" onclick="document.getElementById('reports-shared-logo-input').click();">Upload Logo</button>
+        {% if reports_shared_logo.logo_name %}
+          <span class="small" style="color: var(--text-secondary);">{{ reports_shared_logo.logo_name }}</span>
+        {% endif %}
+      </form>
+    </div>
+
+    <div class="toolbar" style="margin-bottom: 20px;">
+      {% for tab in report_tabs %}
+        <a
+          class="btn report-download-trigger"
+          {% if active_report_tab == tab.key %}style="background: #eff6ff; border-color: #93c5fd; color: #1d4ed8;"{% endif %}
+          href="{% url 'ui:reports' %}?tab={{ tab.key }}"
+        >
+          {{ tab.label }}
+        </a>
+      {% endfor %}
+    </div>
+
+    {% if active_report_tab == "reports-home" %}
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
+        <section class="card" style="background: #f8fafc; margin: 0;">
+          <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+            <div>
+              <h3 style="margin: 0 0 8px;">Segregation</h3>
+              <p style="margin: 0; color: var(--text-secondary); max-width: 520px;">
+                Sync the final token data or upload a CSV / Excel file to stage segregation report rows.
+              </p>
+            </div>
+            <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
+              <form method="post" style="margin: 0;">
+                {% csrf_token %}
+                <input type="hidden" name="tab" value="reports-home">
+                <button class="btn report-download-trigger" type="submit" name="action" value="sync_reports_segregation">Sync Data</button>
+              </form>
+              <form method="post" enctype="multipart/form-data" style="margin: 0;">
+                {% csrf_token %}
+                <input type="hidden" name="tab" value="reports-home">
+                <input id="reports-segregation-upload-input" type="file" name="file" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="this.form.submit();" />
+                <input type="hidden" name="action" value="upload_reports_segregation" />
+                <button class="btn report-download-trigger" type="button" onclick="document.getElementById('reports-segregation-upload-input').click();">Upload CSV / Excel</button>
+              </form>
+            </div>
+          </div>
+          <div style="margin: 12px 0 0; color: var(--text-secondary); font-size: 0.96rem;">
+            {% if segregation_state.loaded %}
+              <span style="color: #b91c1c; font-weight: 600;">{{ segregation_state.source }}</span>
+              <span style="margin-left: 12px;">Rows: <strong style="color: var(--text-primary);">{{ segregation_row_count }}</strong></span>
+              <span style="margin-left: 12px;">Columns: <strong style="color: var(--text-primary);">{{ segregation_state.headers|length }}</strong></span>
+              <span style="margin-left: 12px;">Loaded: <strong style="color: var(--text-primary);">{{ segregation_state.synced_at }}</strong></span>
+            {% else %}
+              <span style="color: var(--text-secondary);">Use Sync Data to pull the current token file or upload CSV / Excel to stage segregation data.</span>
+            {% endif %}
+          </div>
+        </section>
+
+        <section class="card" style="background: #f8fafc; margin: 0;">
+          <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+            <div>
+              <h3 style="margin: 0 0 8px;">Distribution</h3>
+              <p style="margin: 0; color: var(--text-secondary); max-width: 520px;">
+                Sync the final token data or upload a CSV / Excel file to stage distribution report rows.
+              </p>
+            </div>
+            <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
+              <form method="post" style="margin: 0;">
+                {% csrf_token %}
+                <input type="hidden" name="tab" value="reports-home">
+                <button class="btn report-download-trigger" type="submit" name="action" value="sync_reports_distribution">Sync Data</button>
+              </form>
+              <form method="post" enctype="multipart/form-data" style="margin: 0;">
+                {% csrf_token %}
+                <input type="hidden" name="tab" value="reports-home">
+                <input id="reports-distribution-upload-input" type="file" name="file" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="this.form.submit();" />
+                <input type="hidden" name="action" value="upload_reports_distribution" />
+                <button class="btn report-download-trigger" type="button" onclick="document.getElementById('reports-distribution-upload-input').click();">Upload CSV / Excel</button>
+              </form>
+            </div>
+          </div>
+          <div style="margin: 12px 0 0; color: var(--text-secondary); font-size: 0.96rem;">
+            {% if distribution_state.loaded %}
+              <span style="color: #b91c1c; font-weight: 600;">{{ distribution_state.source }}</span>
+              <span style="margin-left: 12px;">Rows: <strong style="color: var(--text-primary);">{{ distribution_row_count }}</strong></span>
+              <span style="margin-left: 12px;">Columns: <strong style="color: var(--text-primary);">{{ distribution_state.headers|length }}</strong></span>
+              <span style="margin-left: 12px;">Loaded: <strong style="color: var(--text-primary);">{{ distribution_state.synced_at }}</strong></span>
+            {% else %}
+              <span style="color: var(--text-secondary);">Use Sync Data to pull the current token file or upload CSV / Excel to stage distribution data.</span>
+            {% endif %}
+          </div>
+        </section>
+      </div>
+    {% elif active_report_tab == "token-lookup" %}
+      <div class="card" style="background: #f8fafc;">
+        <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+          <div>
+            <h3 style="margin: 0 0 8px;">Token Lookup</h3>
+            <p style="margin: 0; color: var(--text-secondary); max-width: 920px;">
+              Sync the final Token Generation file or upload a CSV / Excel file, then search by token number, application number, beneficiary name, district, or item.
+            </p>
+          </div>
+          <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
+            <form method="post" style="margin: 0;">
+              {% csrf_token %}
+              <input type="hidden" name="tab" value="token-lookup">
+              <button class="btn report-download-trigger" type="submit" name="action" value="sync_token_lookup">Sync Data</button>
+            </form>
+            <form method="post" enctype="multipart/form-data" style="margin: 0;">
+              {% csrf_token %}
+              <input type="hidden" name="tab" value="token-lookup">
+              <input id="token-lookup-upload-input" type="file" name="file" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="this.form.submit();" />
+              <input type="hidden" name="action" value="upload_token_lookup" />
+              <button class="btn report-download-trigger" type="button" onclick="document.getElementById('token-lookup-upload-input').click();">Upload CSV / Excel</button>
+            </form>
+          </div>
+        </div>
+
+        <div style="margin: 12px 0 16px; color: var(--text-secondary); font-size: 0.96rem;">
+          {% if token_lookup_state.loaded %}
+            <span style="color: #b91c1c; font-weight: 600;">{{ token_lookup_state.source }}</span>
+            <span style="margin-left: 12px;">Rows: <strong style="color: var(--text-primary);">{{ token_lookup_row_count }}</strong></span>
+            <span style="margin-left: 12px;">Matches: <strong style="color: var(--text-primary);">{{ token_lookup_match_count }}</strong></span>
+            <span style="margin-left: 12px;">Token Qty: <strong style="color: var(--text-primary);">{{ token_lookup_total_token_quantity }}</strong></span>
+            <span style="margin-left: 12px;">Loaded: <strong style="color: var(--text-primary);">{{ token_lookup_state.synced_at }}</strong></span>
+          {% else %}
+            <span style="color: var(--text-secondary);">Sync Data uses the final Token Generation file. Upload accepts CSV and Excel if you want to search from a file directly.</span>
+          {% endif %}
+        </div>
+
+        <form method="post" style="margin: 0;">
+          {% csrf_token %}
+          <input type="hidden" name="tab" value="token-lookup">
+          <input type="hidden" name="action" value="search_token_lookup">
+          <div class="card" style="margin-top: 0; margin-bottom: 0;">
+          <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+            <div>
+              <h4 style="margin: 0 0 6px;">Search</h4>
+              <div class="text-muted" style="font-size: 14px; margin-bottom: 6px;">Enter one or more filters to find the exact token owner.</div>
+            </div>
+          </div>
+            <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: end;">
+              <label style="display: grid; gap: 6px;">
+                <span class="text-muted" style="font-size: 13px; font-weight: 600;">Token Number</span>
+                <input type="text" name="token_number" value="{{ token_lookup_state.filters.token_number }}" placeholder="e.g. 1498" style="width: 100%;">
+              </label>
+              <label style="display: grid; gap: 6px;">
+                <span class="text-muted" style="font-size: 13px; font-weight: 600;">Application Number</span>
+                <input type="text" name="application_number" value="{{ token_lookup_state.filters.application_number }}" placeholder="e.g. P023" style="width: 100%;">
+              </label>
+              <label style="display: grid; gap: 6px;">
+                <span class="text-muted" style="font-size: 13px; font-weight: 600;">Beneficiary Name</span>
+                <input type="text" name="beneficiary_name" value="{{ token_lookup_state.filters.beneficiary_name }}" placeholder="Search name" style="width: 100%;">
+              </label>
+              <label style="display: grid; gap: 6px;">
+                <span class="text-muted" style="font-size: 13px; font-weight: 600;">Item</span>
+                <select name="item_name" style="width: 100%;">
+                  <option value="">All Items</option>
+                  {% for option in token_lookup_item_options %}
+                    <option value="{{ option }}" {% if token_lookup_state.filters.item_name == option %}selected{% endif %}>{{ option }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+              <label style="display: grid; gap: 6px;">
+                <span class="text-muted" style="font-size: 13px; font-weight: 600;">Item Type</span>
+                <select name="item_type" style="width: 100%;">
+                  <option value="">All Types</option>
+                  {% for option in token_lookup_item_type_options %}
+                    <option value="{{ option }}" {% if token_lookup_state.filters.item_type == option %}selected{% endif %}>{{ option }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+            </div>
+            <div class="toolbar" style="justify-content: flex-end; margin-top: 12px; margin-bottom: 0; gap: 8px;">
+              <button class="btn report-download-trigger" type="submit">Search</button>
+              <button class="btn report-download-trigger" type="submit" name="action" value="clear_token_lookup_filters">Clear</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="card" style="margin-top: 16px; margin-bottom: 0;">
+          <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">
+            <div>
+              <h4 style="margin: 0 0 6px;">Results</h4>
+              <div class="text-muted" style="font-size: 14px;">Showing matching token rows from the loaded file.</div>
+            </div>
+            {% if token_lookup_state.loaded %}
+              <div style="color: var(--text-secondary); font-size: 0.92rem;">
+                Found <strong style="color: var(--text-primary);">{{ token_lookup_match_count }}</strong> matching row(s)
+              </div>
+            {% endif %}
+          </div>
+
+          {% if token_lookup_state.loaded %}
+            {% if token_lookup_filtered_rows %}
+              <div style="border: 1px solid var(--border-color); border-radius: 14px; overflow: hidden;">
+                <table id="token-lookup-table" class="data-table" style="width: 100%; border-collapse: collapse;">
+                  <thead>
+                    <tr>
+                      <th style="text-align: left; padding: 12px 14px;">
+                        <button type="button" class="token-sort-header" data-sort-key="token" data-sort-type="number" style="all: unset; cursor: pointer; font: inherit; font-weight: 700;">Token No.</button>
+                      </th>
+                      <th style="text-align: left; padding: 12px 14px;">
+                        <button type="button" class="token-sort-header" data-sort-key="application" data-sort-type="text" style="all: unset; cursor: pointer; font: inherit; font-weight: 700;">Application No.</button>
+                      </th>
+                      <th style="text-align: left; padding: 12px 14px;">
+                        <button type="button" class="token-sort-header" data-sort-key="beneficiary" data-sort-type="text" style="all: unset; cursor: pointer; font: inherit; font-weight: 700;">Beneficiary</button>
+                      </th>
+                      <th style="text-align: left; padding: 12px 14px;">
+                        <button type="button" class="token-sort-header" data-sort-key="beneficiary_type" data-sort-type="text" style="all: unset; cursor: pointer; font: inherit; font-weight: 700;">Beneficiary Type</button>
+                      </th>
+                      <th style="text-align: left; padding: 12px 14px;">
+                        <button type="button" class="token-sort-header" data-sort-key="item" data-sort-type="text" style="all: unset; cursor: pointer; font: inherit; font-weight: 700;">Item</button>
+                      </th>
+                      <th style="text-align: left; padding: 12px 14px;">
+                        <button type="button" class="token-sort-header" data-sort-key="item_type" data-sort-type="text" style="all: unset; cursor: pointer; font: inherit; font-weight: 700;">Item Type</button>
+                      </th>
+                      <th style="text-align: right; padding: 12px 14px;">
+                        <button type="button" class="token-sort-header" data-sort-key="total_value" data-sort-type="number" style="all: unset; cursor: pointer; font: inherit; font-weight: 700;">Total Value</button>
+                      </th>
+                      <th style="text-align: center; padding: 12px 14px;">
+                        <button type="button" class="token-sort-header" data-sort-key="qty" data-sort-type="number" style="all: unset; cursor: pointer; font: inherit; font-weight: 700;">Token Qty</button>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in token_lookup_filtered_rows %}
+                      <tr data-sort-token="{{ row.token_start }}" data-sort-application="{{ row.application_number|default:'' }}" data-sort-beneficiary="{{ row.beneficiary_name|default:'' }}" data-sort-beneficiary-type="{{ row.beneficiary_type|default:'' }}" data-sort-item="{{ row.item_name|default:'' }}" data-sort-item-type="{{ row.item_type|default:'' }}" data-sort-total-value="{{ row.total_value|default:'' }}" data-sort-qty="{{ row.token_quantity }}">
+                        <td style="padding: 10px 14px; border-top: 1px solid var(--border-color); font-weight: 700;">{{ row.token_start }}{% if row.token_end and row.token_end != row.token_start %} - {{ row.token_end }}{% endif %}</td>
+                        <td style="padding: 10px 14px; border-top: 1px solid var(--border-color);">{{ row.application_number }}</td>
+                        <td style="padding: 10px 14px; border-top: 1px solid var(--border-color);">{{ row.beneficiary_name }}</td>
+                        <td style="padding: 10px 14px; border-top: 1px solid var(--border-color);">{{ row.beneficiary_type }}</td>
+                        <td style="padding: 10px 14px; border-top: 1px solid var(--border-color);">{{ row.item_name }}</td>
+                        <td style="padding: 10px 14px; border-top: 1px solid var(--border-color);">{{ row.item_type }}</td>
+                        <td style="padding: 10px 14px; border-top: 1px solid var(--border-color); text-align: right;">{{ row.total_value }}</td>
+                        <td style="padding: 10px 14px; border-top: 1px solid var(--border-color); text-align: center; font-weight: 700;">{{ row.token_quantity }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div style="padding: 18px 0; color: var(--text-secondary);">
+                No matching rows found for the current search.
+              </div>
+            {% endif %}
+          {% else %}
+            <div style="padding: 18px 0; color: var(--text-secondary);">
+              Click `Sync Data` or `Upload CSV / Excel` first to load the token file for searching.
+            </div>
+          {% endif %}
+        </div>
+        <script>
+          (function() {
+            const table = document.getElementById('token-lookup-table');
+            if (!table) return;
+            const tbody = table.querySelector('tbody');
+            const headers = table.querySelectorAll('.token-sort-header');
+            const state = { key: 'token', dir: 'asc', type: 'number' };
+
+            const readValue = (row, key) => {
+                const map = {
+                  token: row.dataset.sortToken,
+                  application: row.dataset.sortApplication,
+                  beneficiary: row.dataset.sortBeneficiary,
+                  beneficiaryType: row.dataset.sortBeneficiaryType,
+                  item: row.dataset.sortItem,
+                  itemType: row.dataset.sortItemType,
+                  totalValue: row.dataset.sortTotalValue,
+                  qty: row.dataset.sortQty,
+                };
+              return map[key] ?? '';
+            };
+
+            const compareRows = (left, right) => {
+              const leftValue = readValue(left, state.key);
+              const rightValue = readValue(right, state.key);
+              let result = 0;
+              if (state.type === 'number') {
+                result = (Number(leftValue) || 0) - (Number(rightValue) || 0);
+              } else {
+                result = String(leftValue || '').localeCompare(String(rightValue || ''), undefined, { sensitivity: 'base', numeric: true });
+              }
+              return state.dir === 'asc' ? result : -result;
+            };
+
+            const renderSortMarkers = () => {
+              headers.forEach((button) => {
+                const active = button.dataset.sortKey === state.key;
+                button.textContent = button.dataset.sortKey === 'token' ? 'Token No.' :
+                  button.dataset.sortKey === 'application' ? 'Application No.' :
+                  button.dataset.sortKey === 'beneficiary' ? 'Beneficiary' :
+                  button.dataset.sortKey === 'beneficiary_type' ? 'Beneficiary Type' :
+                  button.dataset.sortKey === 'item' ? 'Item' :
+                  button.dataset.sortKey === 'item_type' ? 'Item Type' :
+                  button.dataset.sortKey === 'total_value' ? 'Total Value' : 'Token Qty';
+                if (active) {
+                  button.textContent += state.dir === 'asc' ? ' ▲' : ' ▼';
+                }
+              });
+            };
+
+            const sortTable = () => {
+              const rows = Array.from(tbody.querySelectorAll('tr'));
+              rows.sort(compareRows);
+              rows.forEach((row) => tbody.appendChild(row));
+              renderSortMarkers();
+            };
+
+            headers.forEach((button) => {
+              button.addEventListener('click', () => {
+                const key = button.dataset.sortKey;
+                const type = button.dataset.sortType || 'text';
+                if (state.key === key) {
+                  state.dir = state.dir === 'asc' ? 'desc' : 'asc';
+                } else {
+                  state.key = key;
+                  state.dir = 'asc';
+                  state.type = type;
+                }
+                sortTable();
+              });
+            });
+
+            document.addEventListener('click', (event) => {
+              document.querySelectorAll('.report-download-menu[open]').forEach((menu) => {
+                if (!menu.contains(event.target)) {
+                  menu.removeAttribute('open');
+                }
+              });
+            });
+
+            document.addEventListener('keydown', (event) => {
+              if (event.key !== 'Escape') return;
+              document.querySelectorAll('.report-download-menu[open]').forEach((menu) => {
+                menu.removeAttribute('open');
+              });
+            });
+
+            sortTable();
+          })();
+        </script>
+      </div>
+    {% endif %}
+
+    {% if active_report_tab == "public-signature" %}
+      <div class="card" style="background: #f8fafc;">
+        <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+          <div>
+            <h3 style="margin: 0 0 8px;">Signatures</h3>
+            <p style="margin: 0; color: var(--text-secondary); max-width: 920px;">
+              Create public and district signature sheets from the final token file or from an uploaded CSV / Excel file.
+            </p>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 0; margin-bottom: 16px;">
+        <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
+          <div>
+              <h4 style="margin: 0 0 2px;">Public Signature</h4>
+            </div>
+            <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
+              <form method="post" style="margin: 0;">
+                {% csrf_token %}
+                <input type="hidden" name="tab" value="public-signature">
+                <button class="btn report-download-trigger" type="submit" name="action" value="sync_public_signature">Sync Data</button>
+              </form>
+              <form method="post" enctype="multipart/form-data" style="margin: 0;">
+                {% csrf_token %}
+                <input type="hidden" name="tab" value="public-signature">
+                <input id="public-signature-upload-input" type="file" name="file" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="this.form.submit();" />
+                <input type="hidden" name="action" value="upload_public_signature" />
+                <button class="btn report-download-trigger" type="button" onclick="document.getElementById('public-signature-upload-input').click();">Upload CSV / Excel</button>
+              </form>
+            </div>
+          </div>
+
+          <div style="margin: -4px 0 10px; color: var(--text-secondary); font-size: 0.96rem;">
+            {% if public_signature_state.loaded %}
+              <span style="color: #b91c1c; font-weight: 600;">{{ public_signature_state.source }}</span>
+              <span style="margin-left: 12px;">Rows: <strong style="color: var(--text-primary);">{{ public_signature_row_count }}</strong></span>
+              <span style="margin-left: 12px;">Items: <strong style="color: var(--text-primary);">{{ public_signature_item_options|length }}</strong></span>
+              <span style="margin-left: 12px;">Loaded: <strong style="color: var(--text-primary);">{{ public_signature_state.synced_at }}</strong></span>
+            {% else %}
+              <span style="color: var(--text-secondary);">Sync Data uses the final Token Generation file. Upload accepts CSV and Excel if you want to work from a file directly.</span>
+            {% endif %}
+          </div>
+
+          <form method="post" id="public-signature-form" style="margin: 0;">
+            {% csrf_token %}
+            <input type="hidden" name="tab" value="public-signature">
+            <input type="hidden" id="public-signature-action" name="action" value="download_public_signature">
+            <input type="hidden" id="public-signature-sort-order" name="sort_modes_order" value="{{ public_signature_state.sort_modes|join:',' }}">
+            <div>
+              <div class="toolbar" style="justify-content: space-between; margin-bottom: 12px;">
+                <div>
+                  <h5 style="margin: 0 0 4px;">Item Selection</h5>
+                </div>
+              </div>
+
+              <div class="toolbar" style="justify-content: flex-start; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;">
+                <label class="report-select-toggle">
+                  <input type="checkbox" id="public-signature-select-all">
+                  <span>Select all</span>
+                </label>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                  <label class="report-select-toggle">
+                    <input
+                      type="checkbox"
+                      class="public-signature-sort-checkbox"
+                      name="sort_modes"
+                      value="application_number"
+                      {% if "application_number" in public_signature_state.sort_modes %}checked{% endif %}
+                    >
+                    <span>Application No.</span>
+                  </label>
+                  <label class="report-select-toggle">
+                    <input
+                      type="checkbox"
+                      class="public-signature-sort-checkbox"
+                      name="sort_modes"
+                      value="item_name"
+                      {% if "item_name" in public_signature_state.sort_modes %}checked{% endif %}
+                    >
+                    <span>Article Name</span>
+                  </label>
+                  <label class="report-select-toggle">
+                    <input
+                      type="checkbox"
+                      class="public-signature-sort-checkbox"
+                      name="sort_modes"
+                      value="token_number"
+                      {% if "token_number" in public_signature_state.sort_modes %}checked{% endif %}
+                    >
+                    <span>Token No.</span>
+                  </label>
+                </div>
+              </div>
+
+              {% if public_signature_state.loaded and public_signature_item_options %}
+                <div style="border: 1px solid var(--border-color); border-radius: 14px; padding: 14px; max-height: 260px; overflow: auto;">
+                  <div style="display: grid; gap: 8px;">
+                    {% for option in public_signature_item_options %}
+                      <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <span style="min-width: 26px; color: var(--text-secondary); font-weight: 600;">{{ forloop.counter }}.</span>
+                        <input type="checkbox" name="selected_items" value="{{ option.item_name }}" class="public-signature-item-checkbox" {% if option.item_name in public_signature_state.selected_items %}checked{% endif %}>
+                        <span>{{ option.item_name }} ({{ option.row_count }})</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% elif public_signature_state.loaded %}
+                <div style="padding: 18px 0; color: var(--text-secondary);">
+                  No public token rows are available in the current file.
+                </div>
+              {% else %}
+                <div style="padding: 18px 0; color: var(--text-secondary);">
+                  No data loaded yet. Click `Sync Data` or `Upload CSV / Excel` first.
+                </div>
+              {% endif %}
+
+              <div class="toolbar" style="justify-content: flex-end; margin-top: 16px; margin-bottom: 0; gap: 8px;">
+                <details class="report-download-menu">
+                  <summary class="btn report-download-trigger" {% if not public_signature_state.loaded %}style="pointer-events:none; opacity:0.55;"{% endif %}>Download ▾</summary>
+                  <div class="report-download-panel">
+                    <button class="report-download-option" type="submit" name="download_format" value="pdf" onclick="document.getElementById('public-signature-action').value='download_public_signature';" {% if not public_signature_state.loaded %}disabled{% endif %}>PDF</button>
+                    <button class="report-download-option" type="submit" name="download_format" value="xlsx" onclick="document.getElementById('public-signature-action').value='download_public_signature';" {% if not public_signature_state.loaded %}disabled{% endif %}>Excel</button>
+                  </div>
+                </details>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="card" style="margin-top: 0; margin-bottom: 0;">
+          <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+            <div>
+              <h4 style="margin: 0 0 6px;">District Signature</h4>
+              <div class="text-muted" style="font-size: 14px; margin-bottom: 6px;">District-wise grouped signature sheet with mandatory columns for total quantity, token quantity, start token, end token, and signature.</div>
+            </div>
+            <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
+              <form method="post" style="margin: 0;">
+                {% csrf_token %}
+                <input type="hidden" name="tab" value="public-signature">
+                <button class="btn report-download-trigger" type="submit" name="action" value="sync_district_signature">Sync Data</button>
+              </form>
+              <form method="post" enctype="multipart/form-data" style="margin: 0;">
+                {% csrf_token %}
+                <input type="hidden" name="tab" value="public-signature">
+                <input id="district-signature-upload-input" type="file" name="file" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="this.form.submit();" />
+                <input type="hidden" name="action" value="upload_district_signature" />
+                <button class="btn report-download-trigger" type="button" onclick="document.getElementById('district-signature-upload-input').click();">Upload CSV / Excel</button>
+              </form>
+            </div>
+          </div>
+
+          <div style="margin: 12px 0 16px; color: var(--text-secondary); font-size: 0.96rem;">
+            {% if district_signature_state.loaded %}
+              <span style="color: #b91c1c; font-weight: 600;">{{ district_signature_state.source }}</span>
+              <span style="margin-left: 12px;">Districts: <strong style="color: var(--text-primary);">{{ district_signature_grouped.district_count }}</strong></span>
+              <span style="margin-left: 12px;">Items: <strong style="color: var(--text-primary);">{{ district_signature_grouped.item_count }}</strong></span>
+              <span style="margin-left: 12px;">Loaded: <strong style="color: var(--text-primary);">{{ district_signature_state.synced_at }}</strong></span>
+            {% else %}
+              <span style="color: var(--text-secondary);">Sync Data uses the final Token Generation file. Upload accepts CSV and Excel if you want to work from a file directly.</span>
+            {% endif %}
+          </div>
+
+          <form method="post" style="margin: 0;">
+            {% csrf_token %}
+            <input type="hidden" name="tab" value="public-signature">
+            <input type="hidden" name="action" value="download_district_signature">
+            <div class="toolbar" style="justify-content: flex-end; margin-top: 16px; margin-bottom: 0; gap: 8px;">
+              <details class="report-download-menu">
+                <summary class="btn report-download-trigger" {% if not district_signature_state.loaded %}style="pointer-events:none; opacity:0.55;"{% endif %}>Download ▾</summary>
+                <div class="report-download-panel">
+                  <button class="report-download-option" type="submit" name="download_format" value="pdf" {% if not district_signature_state.loaded %}disabled{% endif %}>PDF</button>
+                  <button class="report-download-option" type="submit" name="download_format" value="xlsx" {% if not district_signature_state.loaded %}disabled{% endif %}>Excel</button>
+                </div>
+              </details>
+            </div>
+          </form>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if active_report_tab == "waiting-hall-acknowledgment" %}
+      <div class="card" style="background: #f8fafc;">
+        <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+          <div>
+            <h3 style="margin: 0 0 8px;">Waiting Hall Acknowledgment</h3>
+            <p style="margin: 0; color: var(--text-secondary); max-width: 920px;">
+              Use the final Token Generation file or upload a CSV / Excel file, then choose any waiting-hall rows to ignore before downloading the report.
+            </p>
+          </div>
+          <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
+            <form method="post" style="margin: 0;">
+              {% csrf_token %}
+              <input type="hidden" name="tab" value="waiting-hall-acknowledgment">
+              <button class="btn report-download-trigger" type="submit" name="action" value="sync_waiting_hall">Sync Data</button>
+            </form>
+            <form method="post" enctype="multipart/form-data" style="margin: 0;">
+              {% csrf_token %}
+              <input type="hidden" name="tab" value="waiting-hall-acknowledgment">
+              <input id="waiting-hall-upload-input" type="file" name="file" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="this.form.submit();" />
+              <input type="hidden" name="action" value="upload_waiting_hall" />
+              <button class="btn report-download-trigger" type="button" onclick="document.getElementById('waiting-hall-upload-input').click();">Upload</button>
+            </form>
+          </div>
+        </div>
+
+        <div style="margin: 12px 0 16px; color: var(--text-secondary); font-size: 0.96rem;">
+          {% if waiting_hall_state.loaded %}
+            <span style="color: #b91c1c; font-weight: 600;">{{ waiting_hall_state.source }}</span>
+            <span style="margin-left: 12px;">Beneficiaries: <strong style="color: var(--text-primary);">{{ waiting_hall_grouped.district_count }}</strong></span>
+            <span style="margin-left: 12px;">Waiting Hall Qty: <strong style="color: var(--text-primary);">{{ waiting_hall_grouped.total_quantity }}</strong></span>
+            <span style="margin-left: 12px;">Loaded: <strong style="color: var(--text-primary);">{{ waiting_hall_state.synced_at }}</strong></span>
+          {% else %}
+            <span style="color: var(--text-secondary);">Sync Data uses the final Token Generation file. Upload accepts CSV and Excel if you want to work from a file directly.</span>
+          {% endif %}
+        </div>
+
+        <form method="post" id="waiting-hall-report-form">
+          {% csrf_token %}
+          <input type="hidden" name="tab" value="waiting-hall-acknowledgment">
+          <input type="hidden" name="action" id="waiting-hall-report-action" value="save_waiting_hall">
+
+          <div class="card" style="margin-top: 0; margin-bottom: 0;">
+            <div class="toolbar" style="justify-content: space-between; margin-bottom: 12px;">
+              <div>
+                <h4 style="margin: 0 0 6px;">Item Selection</h4>
+                <div class="text-muted" style="font-size: 14px; margin-bottom: 6px;">Select items that are moved as Cheque or need to be ignored</div>
+                {% if waiting_hall_state.loaded and waiting_hall_grouped.districts %}
+                  <label class="report-select-toggle" for="waiting-hall-select-all">
+                    <input id="waiting-hall-select-all" type="checkbox">
+                    <span>Select all</span>
+                  </label>
+                {% endif %}
+              </div>
+              <div class="toolbar" style="margin-bottom: 0;">
+                <select
+                  id="waiting-hall-beneficiary-type"
+                  name="beneficiary_type_filter"
+                >
+                  {% for value, label in waiting_hall_beneficiary_type_choices %}
+                    <option value="{{ value }}" {% if waiting_hall_state.beneficiary_type_filter == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+                <select
+                  id="waiting-hall-item-type"
+                  name="item_type_filter"
+                >
+                  {% for value, label in waiting_hall_item_type_choices %}
+                    <option value="{{ value }}" {% if waiting_hall_state.item_type_filter == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+
+            {% if waiting_hall_state.loaded and waiting_hall_grouped.districts %}
+              <div id="waiting-hall-selection-list" style="border: 1px solid var(--border-color); border-radius: 14px; padding: 12px 14px; max-height: 260px; overflow: auto; padding-right: 10px;">
+                {% for district_group in waiting_hall_grouped.districts %}
+                  <div class="waiting-hall-group" data-beneficiary-type="{{ district_group.entity_kind|lower }}" style="padding: 6px 0 10px; background: transparent;">
+                    <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">
+                      <div>
+                        <label style="display: inline-flex; align-items: center; gap: 10px; font-weight: 700; cursor: pointer;">
+                          <input class="waiting-hall-group-toggle" type="checkbox">
+                          <span>{{ district_group.label_prefix }}: {{ district_group.entity_name }}</span>
+                        </label>
+                      </div>
+                    </div>
+                    <div style="display: grid; gap: 6px; padding-left: 24px;">
+                      {% for item in district_group.raw_items %}
+                        <label class="waiting-hall-item-label" style="display: flex; align-items: center; gap: 10px; padding: 2px 0;">
+                          <input class="waiting-hall-ignore-checkbox" data-item-type="{{ item.item_type|default:''|lower }}" type="checkbox" name="ignored_keys" value="{{ item.key }}" {% if item.key in waiting_hall_state.ignored_keys %}checked{% endif %} />
+                          <span style="flex: 1;">{{ district_group.entity_name }} - {{ item.requested_item }} ({{ item.quantity }})</span>
+                        </label>
+                      {% endfor %}
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+              <div style="margin-top: 10px; color: var(--text-secondary); font-size: 0.88rem;">
+                Ignored: {{ waiting_hall_state.ignored_keys|length }}
+              </div>
+            {% else %}
+              <div style="padding: 18px 0; color: var(--text-secondary);">
+                No data loaded yet. Click `Sync Data` or `Upload` first.
+              </div>
+            {% endif %}
+
+            <div class="toolbar" style="justify-content: flex-end; margin-top: 16px; margin-bottom: 0; gap: 8px;">
+              <button class="btn report-download-trigger" type="submit" onclick="document.getElementById('waiting-hall-report-action').value='save_waiting_hall';" {% if not waiting_hall_state.loaded %}disabled{% endif %}>Save</button>
+              <details class="report-download-menu" {% if not waiting_hall_state.loaded %}style="pointer-events:none; opacity:0.6;"{% endif %}>
+                <summary class="btn report-download-trigger">Download</summary>
+                <div class="report-download-panel">
+                  <button
+                    class="report-download-option"
+                    type="submit"
+                    onclick="document.getElementById('waiting-hall-report-action').value='download_waiting_hall'; this.form.querySelector('input[name=download_format]').value='pdf';"
+                    {% if not waiting_hall_state.loaded %}disabled{% endif %}
+                  >
+                    PDF
+                  </button>
+                  <button
+                    class="report-download-option"
+                    type="submit"
+                    onclick="document.getElementById('waiting-hall-report-action').value='download_waiting_hall'; this.form.querySelector('input[name=download_format]').value='docx';"
+                    {% if not waiting_hall_state.loaded %}disabled{% endif %}
+                  >
+                    Word
+                  </button>
+                </div>
+              </details>
+              <input type="hidden" name="download_format" value="pdf">
+            </div>
+          </div>
+        </form>
+      </div>
+    {% endif %}
+    {% if active_report_tab == "public-acknowledgment-form" %}
+      <div class="card" style="background: #f8fafc;">
+        <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+          <div>
+            <h3 style="margin: 0 0 8px;">Public Acknowledgment Form</h3>
+            <p style="margin: 0; color: var(--text-secondary); max-width: 920px;">
+              Sync from the final Token Generation file or upload a CSV / Excel file, upload the fillable PDF template, map the fields, and download the filled acknowledgments.
+            </p>
+          </div>
+          <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
+            <form method="post" style="margin: 0;">
+              {% csrf_token %}
+              <input type="hidden" name="tab" value="public-acknowledgment-form">
+              <button class="btn report-download-trigger" type="submit" name="action" value="sync_public_ack">Sync Data</button>
+            </form>
+            <form method="post" enctype="multipart/form-data" style="margin: 0;">
+              {% csrf_token %}
+              <input type="hidden" name="tab" value="public-acknowledgment-form">
+              <input id="public-ack-data-upload-input" type="file" name="file" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="this.form.submit();" />
+              <input type="hidden" name="action" value="upload_public_ack_data" />
+              <button class="btn report-download-trigger" type="button" onclick="document.getElementById('public-ack-data-upload-input').click();">Upload CSV / Excel</button>
+            </form>
+            <form method="post" enctype="multipart/form-data" style="margin: 0;">
+              {% csrf_token %}
+              <input type="hidden" name="tab" value="public-acknowledgment-form">
+              <input id="public-ack-template-upload-input" type="file" name="template_pdf" accept=".pdf" style="display:none;" onchange="this.form.submit();" />
+              <input type="hidden" name="action" value="upload_public_ack_template" />
+              <button class="btn report-download-trigger" type="button" onclick="document.getElementById('public-ack-template-upload-input').click();">Upload PDF Template</button>
+            </form>
+          </div>
+        </div>
+
+        <div style="margin: 12px 0 16px; color: var(--text-secondary); font-size: 0.96rem;">
+          {% if public_ack_state.loaded %}
+            <span style="color: #b91c1c; font-weight: 600;">{{ public_ack_state.source }}</span>
+            <span style="margin-left: 12px;">Rows: <strong style="color: var(--text-primary);">{{ public_ack_row_count }}</strong></span>
+            <span style="margin-left: 12px;">Loaded: <strong style="color: var(--text-primary);">{{ public_ack_state.synced_at }}</strong></span>
+            {% if public_ack_state.template_name %}
+              <span style="margin-left: 12px;">Template: <strong style="color: var(--text-primary);">{{ public_ack_state.template_name }}</strong></span>
+            {% endif %}
+          {% else %}
+            <span style="color: var(--text-secondary);">Sync Data uses the final Token Generation file. Upload accepts CSV and Excel if you want to work from a file directly.</span>
+          {% endif %}
+        </div>
+
+        <div class="card" style="margin-top: 0; margin-bottom: 0;">
+          <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+            <div>
+              <h4 style="margin: 0 0 6px;">Field Mapping</h4>
+              <div class="text-muted" style="font-size: 14px; margin-bottom: 6px;">
+                Map each PDF field to a data column. Leave a field blank if you do not want it filled.
+              </div>
+            </div>
+          </div>
+
+          {% if public_ack_template_fields %}
+            <div style="border: 1px solid var(--border-color); border-radius: 14px; overflow: hidden;">
+              <table class="data-table" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                  <tr>
+                    <th style="text-align: left; padding: 12px 14px;">PDF Field</th>
+                    <th style="text-align: left; padding: 12px 14px;">Column</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for field in public_ack_field_rows %}
+                    <tr>
+                      <td style="padding: 10px 14px; border-top: 1px solid var(--border-color); font-weight: 600;">{{ field.field_name }}</td>
+                      <td style="padding: 10px 14px; border-top: 1px solid var(--border-color);">
+                        <select name="public_ack_map__{{ field.field_key }}" form="public-ack-download-form" style="width: 100%; max-width: 420px;">
+                          <option value="">-- Leave blank --</option>
+                          {% for column_name in public_ack_column_options %}
+                            <option value="{{ column_name }}" {% if field.selected_value == column_name %}selected{% endif %}>{{ column_name }}</option>
+                          {% endfor %}
+                        </select>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div style="padding: 16px 0; color: var(--text-secondary);">
+              Upload a PDF template to detect the fillable fields, then map them here.
+            </div>
+          {% endif %}
+
+          <form id="public-ack-download-form" method="post" style="margin: 0;">
+            {% csrf_token %}
+            <input type="hidden" name="tab" value="public-acknowledgment-form">
+            <input type="hidden" name="action" value="download_public_ack">
+            <div class="toolbar" style="justify-content: flex-end; margin-top: 16px; margin-bottom: 0; gap: 8px;">
+              <button class="btn report-download-trigger" type="submit" {% if not public_ack_state.loaded or not public_ack_state.template_base64 %}disabled{% endif %}>Download</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    {% endif %}
+  </section>
+  <script>
+    (function() {
+      const selectAllToggle = document.getElementById('waiting-hall-select-all');
+      const beneficiaryTypeFilter = document.getElementById('waiting-hall-beneficiary-type');
+      const itemTypeFilter = document.getElementById('waiting-hall-item-type');
+      const beneficiaryStorageKey = 'reports.waitingHall.beneficiaryTypeFilter';
+      const itemTypeStorageKey = 'reports.waitingHall.itemTypeFilter';
+      if (!selectAllToggle) return;
+
+      function getVisibleCheckboxes() {
+        return Array.from(document.querySelectorAll('.waiting-hall-group'))
+          .filter((group) => group.style.display !== 'none')
+          .flatMap((group) => Array.from(group.querySelectorAll('.waiting-hall-ignore-checkbox')).filter((checkbox) => checkbox.closest('.waiting-hall-item-label')?.style.display !== 'none'));
+      }
+
+      function applyFilters() {
+        if (!beneficiaryTypeFilter) return;
+        const selectedValue = String(beneficiaryTypeFilter.value || '').trim().toLowerCase();
+        const selectedItemType = String(itemTypeFilter?.value || '').trim().toLowerCase();
+        document.querySelectorAll('.waiting-hall-group').forEach((group) => {
+          const groupType = String(group.dataset.beneficiaryType || '').trim().toLowerCase();
+          let groupVisible = !selectedValue || groupType === selectedValue;
+          const rowLabels = Array.from(group.querySelectorAll('.waiting-hall-item-label'));
+          let anyVisibleRow = false;
+          rowLabels.forEach((label) => {
+            const checkbox = label.querySelector('.waiting-hall-ignore-checkbox');
+            const rowItemType = String(checkbox?.dataset.itemType || '').trim().toLowerCase();
+            const rowVisible = (!selectedItemType || rowItemType === selectedItemType);
+            label.style.display = rowVisible ? '' : 'none';
+            if (rowVisible) anyVisibleRow = true;
+          });
+          group.style.display = groupVisible && anyVisibleRow ? '' : 'none';
+          syncGroupState(group);
+        });
+      }
+
+      function syncSelectAllState() {
+        const checkboxes = getVisibleCheckboxes();
+        if (!checkboxes.length) {
+          selectAllToggle.checked = false;
+          selectAllToggle.indeterminate = false;
+          selectAllToggle.disabled = true;
+          return;
+        }
+        selectAllToggle.disabled = false;
+        const checkedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+        selectAllToggle.checked = checkedCount === checkboxes.length;
+        selectAllToggle.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+      }
+
+      function syncGroupState(group) {
+        const groupToggle = group.querySelector('.waiting-hall-group-toggle');
+        if (!groupToggle) return;
+        const checkboxes = Array.from(group.querySelectorAll('.waiting-hall-ignore-checkbox'))
+          .filter((checkbox) => checkbox.closest('.waiting-hall-item-label')?.style.display !== 'none');
+        if (!checkboxes.length || group.style.display === 'none') {
+          groupToggle.checked = false;
+          groupToggle.indeterminate = false;
+          groupToggle.disabled = true;
+          return;
+        }
+        groupToggle.disabled = false;
+        const checkedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+        groupToggle.checked = checkedCount === checkboxes.length;
+        groupToggle.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+      }
+
+      function syncAllGroupStates() {
+        document.querySelectorAll('.waiting-hall-group').forEach((group) => {
+          syncGroupState(group);
+        });
+      }
+
+      selectAllToggle.addEventListener('change', function() {
+        const shouldCheck = selectAllToggle.checked;
+        getVisibleCheckboxes().forEach((checkbox) => {
+          checkbox.checked = shouldCheck;
+        });
+        syncSelectAllState();
+      });
+
+      if (beneficiaryTypeFilter) {
+        beneficiaryTypeFilter.addEventListener('change', function() {
+          window.localStorage.setItem(beneficiaryStorageKey, beneficiaryTypeFilter.value || '');
+          applyFilters();
+          syncSelectAllState();
+        });
+      }
+
+      if (itemTypeFilter) {
+        itemTypeFilter.addEventListener('change', function() {
+          window.localStorage.setItem(itemTypeStorageKey, itemTypeFilter.value || '');
+          applyFilters();
+          syncSelectAllState();
+        });
+      }
+
+      document.addEventListener('change', function(event) {
+        if (event.target && event.target.classList && event.target.classList.contains('waiting-hall-ignore-checkbox')) {
+          const group = event.target.closest('.waiting-hall-group');
+          if (group) syncGroupState(group);
+          syncSelectAllState();
+          return;
+        }
+        if (event.target && event.target.classList && event.target.classList.contains('waiting-hall-group-toggle')) {
+          const group = event.target.closest('.waiting-hall-group');
+          if (!group) return;
+          const shouldCheck = event.target.checked;
+          Array.from(group.querySelectorAll('.waiting-hall-ignore-checkbox'))
+            .filter((checkbox) => checkbox.closest('.waiting-hall-item-label')?.style.display !== 'none')
+            .forEach((checkbox) => {
+              checkbox.checked = shouldCheck;
+            });
+          syncGroupState(group);
+          syncSelectAllState();
+        }
+      });
+
+      if (beneficiaryTypeFilter) {
+        const savedBeneficiaryFilter = window.localStorage.getItem(beneficiaryStorageKey);
+        if (savedBeneficiaryFilter !== null) {
+          beneficiaryTypeFilter.value = savedBeneficiaryFilter;
+        }
+      }
+      if (itemTypeFilter) {
+        const savedItemTypeFilter = window.localStorage.getItem(itemTypeStorageKey);
+        if (savedItemTypeFilter !== null) {
+          itemTypeFilter.value = savedItemTypeFilter;
+        }
+      }
+
+      applyFilters();
+      syncAllGroupStates();
+      syncSelectAllState();
+    })();
+  </script>
+{% endblock %}

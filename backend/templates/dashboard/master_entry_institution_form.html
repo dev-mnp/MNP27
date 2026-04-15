@@ -311,11 +311,11 @@
               {% for attachment in application_attachments %}
                 <tr>
                   <td>{{ attachment.file_name }}</td>
-                  <td>{{ attachment.uploaded_by.first_name|default:attachment.uploaded_by.email }}</td>
+                  <td>{% if attachment.uploaded_by %}{{ attachment.uploaded_by.first_name|default:attachment.uploaded_by.email }}{% elif attachment.drive_file_id %}Google Drive{% else %}-{% endif %}</td>
                   <td>{{ attachment.created_at|date:"d/m/Y H:i" }}</td>
                   <td>
                     <div class="actions-inline">
-                      <button class="btn icon-btn js-attachment-preview" type="button" onclick="return window.openAttachmentPreviewFromButton(this);" data-preview-url="{% url 'ui:application-attachment-download' attachment.id %}" data-preview-title="{{ attachment.file_name }}" data-preview-source="{{ attachment.file.name|lower }}" data-download-url="{% url 'ui:application-attachment-download' attachment.id %}?download=1" title="Preview file" aria-label="Preview file">
+                      <button class="btn icon-btn js-attachment-preview" type="button" onclick="return window.openAttachmentPreviewFromButton(this);" data-preview-url="{% url 'ui:application-attachment-download' attachment.id %}" data-preview-title="{{ attachment.file_name }}" data-preview-source="{% if attachment.file %}{{ attachment.file.name|lower }}{% else %}{{ attachment.file_name|lower }}{% endif %}" data-download-url="{% url 'ui:application-attachment-download' attachment.id %}?download=1" title="Preview file" aria-label="Preview file">
                         <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/></svg>
                       </button>
                       <a class="btn icon-btn" href="{% url 'ui:application-attachment-download' attachment.id %}" target="_blank" rel="noopener" title="Open file in new tab" aria-label="Open file in new tab">

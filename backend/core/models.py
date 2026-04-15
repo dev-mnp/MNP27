@@ -61,6 +61,7 @@ class ModuleKeyChoices(models.TextChoices):
     SEQUENCE_LIST = "sequence_list", "Sequence List"
     TOKEN_GENERATION = "token_generation", "Token Generation"
     LABELS = "labels", "Labels"
+    REPORTS = "reports", "Reports"
     ORDER_FUND_REQUEST = "order_fund_request", "Order & Fund Request"
     PURCHASE_ORDER = "purchase_order", "Purchase Order"
     AUDIT_LOGS = "audit_logs", "Audit Logs"
@@ -122,6 +123,11 @@ MODULE_PERMISSION_DEFINITIONS = [
         "actions": ("view", "create_edit", "export", "upload_replace"),
     },
     {
+        "key": ModuleKeyChoices.REPORTS,
+        "label": "Reports",
+        "actions": ("view", "create_edit", "export", "upload_replace"),
+    },
+    {
         "key": ModuleKeyChoices.ORDER_FUND_REQUEST,
         "label": "Order & Fund Request",
         "actions": ("view", "create_edit", "delete", "submit", "reopen"),
@@ -157,6 +163,7 @@ ROLE_MODULE_PERMISSION_DEFAULTS = {
         ModuleKeyChoices.SEQUENCE_LIST: {"view", "create_edit", "export"},
         ModuleKeyChoices.TOKEN_GENERATION: {"view", "create_edit", "export", "upload_replace"},
         ModuleKeyChoices.LABELS: {"view", "create_edit", "export", "upload_replace"},
+        ModuleKeyChoices.REPORTS: {"view", "create_edit", "export", "upload_replace"},
         ModuleKeyChoices.ORDER_FUND_REQUEST: {"view", "create_edit", "submit", "reopen"},
         ModuleKeyChoices.PURCHASE_ORDER: {"view", "create_edit", "submit", "reopen"},
         ModuleKeyChoices.AUDIT_LOGS: set(),
@@ -171,6 +178,7 @@ ROLE_MODULE_PERMISSION_DEFAULTS = {
         ModuleKeyChoices.SEQUENCE_LIST: {"view"},
         ModuleKeyChoices.TOKEN_GENERATION: {"view"},
         ModuleKeyChoices.LABELS: {"view"},
+        ModuleKeyChoices.REPORTS: {"view"},
         ModuleKeyChoices.ORDER_FUND_REQUEST: {"view"},
         ModuleKeyChoices.PURCHASE_ORDER: {"view"},
         ModuleKeyChoices.AUDIT_LOGS: set(),
@@ -1126,8 +1134,11 @@ class ApplicationAttachment(BaseTimestampedModel):
         related_name="application_attachments",
     )
     institution_application_number = models.CharField(max_length=120, blank=True, null=True)
-    file = models.FileField(upload_to="application_attachments/%Y/%m/%d")
+    file = models.FileField(upload_to="application_attachments/%Y/%m/%d", blank=True)
     file_name = models.CharField(max_length=255)
+    drive_file_id = models.CharField(max_length=255, blank=True)
+    drive_mime_type = models.CharField(max_length=255, blank=True)
+    drive_view_url = models.URLField(blank=True)
     uploaded_by = models.ForeignKey(
         AppUser,
         on_delete=models.SET_NULL,

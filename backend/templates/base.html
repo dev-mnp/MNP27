@@ -980,7 +980,7 @@
               </div>
             </div>
           {% endif %}
-          {% if module_perms.seat_allocation.can_view or module_perms.sequence_list.can_view or module_perms.token_generation.can_view or module_perms.labels.can_view %}
+          {% if module_perms.seat_allocation.can_view or module_perms.sequence_list.can_view or module_perms.token_generation.can_view or module_perms.labels.can_view or module_perms.reports.can_view %}
             <div class="menu-divider"></div>
             {% if module_perms.seat_allocation.can_view %}
               <a href="{% url 'ui:seat-allocation-list' %}" class="menu-item {% if '/ui/seat-allocation/' in request.path %}active{% endif %}">
@@ -1000,6 +1000,11 @@
             {% if module_perms.labels.can_view %}
               <a href="{% url 'ui:labels' %}" class="menu-item {% if '/ui/labels/' in request.path %}active{% endif %}">
                 <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M11 4H5v6l7 7 6-6-7-7Z"/><path d="M7.5 7.5h.01"/><path d="M13 7h6v6l-7 7"/></svg></span><span class="menu-label">Labels</span>
+              </a>
+            {% endif %}
+            {% if module_perms.reports.can_view %}
+              <a href="{% url 'ui:reports' %}" class="menu-item {% if '/ui/reports/' in request.path %}active{% endif %}">
+                <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M7 4h10l3 3v13H7z"/><path d="M17 4v4h4"/><path d="M9 12h8"/><path d="M9 16h8"/><path d="M9 8h4"/></svg></span><span class="menu-label">Reports</span>
               </a>
             {% endif %}
           {% endif %}
