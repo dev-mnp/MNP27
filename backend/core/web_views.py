@@ -3201,6 +3201,8 @@ def _attachment_application_reference(attachment):
 
 
 def _save_application_attachment(*, uploaded, display_name, application_type, uploaded_by, district=None, public_entry=None, institution_application_number=None):
+    from django.conf import settings
+
     attachment_kwargs = {
         "application_type": application_type,
         "district": district,
@@ -3231,7 +3233,12 @@ def _save_application_attachment(*, uploaded, display_name, application_type, up
             }
         )
     else:
-        attachment_kwargs["file"] = uploaded
+        # In production (Cloud Run), local filesystem uploads are ephemeral and will be lost.
+        # Require Google Drive configuration in non-debug environments to avoid false success.
+        if settings.DEBUG:
+            attachment_kwargs["file"] = uploaded
+        else:
+            raise RuntimeError("Google Drive is not configured for attachments in this environment.")
     return models.ApplicationAttachment.objects.create(**attachment_kwargs)
 
 
@@ -5738,7 +5745,15 @@ class DistrictApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin
             )
         except Exception:
             logger.exception("Attachment upload failed for district=%s", district.id)
-            messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
+            if not google_drive.is_configured():
+                messages.error(
+                    request,
+                    "Google Drive is not configured for uploads in this environment. "
+                    "Set GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID, GOOGLE_DRIVE_CLIENT_ID, "
+                    "GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_DRIVE_REFRESH_TOKEN."
+                )
+            else:
+                messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
             return HttpResponseRedirect(reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}))
         messages.success(request, "Attachment uploaded.")
         return HttpResponseRedirect(reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}))
@@ -5796,7 +5811,15 @@ class PublicApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin, 
             )
         except Exception:
             logger.exception("Attachment upload failed for public_entry=%s", entry.pk)
-            messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
+            if not google_drive.is_configured():
+                messages.error(
+                    request,
+                    "Google Drive is not configured for uploads in this environment. "
+                    "Set GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID, GOOGLE_DRIVE_CLIENT_ID, "
+                    "GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_DRIVE_REFRESH_TOKEN."
+                )
+            else:
+                messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
             return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": entry.pk}))
         messages.success(request, "Attachment uploaded.")
         return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": entry.pk}))
@@ -5855,7 +5878,15 @@ class InstitutionApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMi
             )
         except Exception:
             logger.exception("Attachment upload failed for institution=%s", application_number)
-            messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
+            if not google_drive.is_configured():
+                messages.error(
+                    request,
+                    "Google Drive is not configured for uploads in this environment. "
+                    "Set GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID, GOOGLE_DRIVE_CLIENT_ID, "
+                    "GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_DRIVE_REFRESH_TOKEN."
+                )
+            else:
+                messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
             return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": application_number}))
         messages.success(request, "Attachment uploaded.")
         return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": application_number}))

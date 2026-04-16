@@ -1,0 +1,25 @@
+.git
+.github
+.idea
+.DS_Store
+
+**/.env
+**/.venv
+.local/
+
+**/__pycache__/
+**/*.pyc
+
+backend/db.sqlite3
+backend/db.sqlite3.*
+backend/media/
+backend/staticfiles/
+
+**/*.log
+
+# Not needed in runtime container
+backend/db/
+backend/core/tests/
+backend/CHANGE_MAP.md
+backend/CODEBASE_GUIDE.md
+

@@ -90,6 +90,17 @@ def _db_config():
             continue
         # Allow Postgres connection options like sslmode/options/etc in DATABASE_URL.
         options[str(key)] = str(values[-1])
+
+    # Docker Desktop on macOS often has unreliable/no IPv6 routing. If your DB hostname resolves to
+    # an IPv6 address first, connections can fail with "Network is unreachable".
+    # Set DJANGO_DB_HOSTADDR to an IPv4 address to force IPv4 while keeping the hostname for TLS/SNI.
+    hostaddr = (os.getenv("DJANGO_DB_HOSTADDR") or "").strip()
+    if hostaddr:
+        options.setdefault("hostaddr", hostaddr)
+
+    connect_timeout = (os.getenv("DJANGO_DB_CONNECT_TIMEOUT") or "").strip()
+    if connect_timeout:
+        options.setdefault("connect_timeout", connect_timeout)
     if options:
         config['OPTIONS'] = options
     return {'default': config}
@@ -120,12 +131,20 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-if not DEBUG:
-    STORAGES = {
-        "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-        }
-    }
+STORAGES = {
+    # Uploaded files (only used when we explicitly store files locally).
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    # Collected static files.
+    "staticfiles": {
+        "BACKEND": (
+            "django.contrib.staticfiles.storage.StaticFilesStorage"
+            if DEBUG
+            else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        ),
+    },
+}
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 MEDIA_URL = '/media/'
