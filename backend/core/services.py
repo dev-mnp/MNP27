@@ -14,6 +14,7 @@ import zipfile
 from decimal import Decimal
 from pathlib import Path
 from typing import Optional
+import logging
 
 from django.db import transaction
 from django.db.models import Sum
@@ -33,6 +34,8 @@ from django.utils.html import escape
 from pypdf import PdfReader, PdfWriter
 
 from . import models
+
+logger = logging.getLogger(__name__)
 
 try:
     from PIL import Image as PILImage
@@ -1011,15 +1014,25 @@ def log_audit(
     ip_address: str | None = None,
     user_agent: str | None = None,
 ) -> None:
-    models.AuditLog.objects.create(
-        user=user,
-        action_type=action_type,
-        entity_type=entity_type,
-        entity_id=entity_id,
-        details=details,
-        ip_address=ip_address,
-        user_agent=user_agent,
-    )
+    # Audit logs should never block core workflows (edit/delete/reopen/submit etc).
+    # If the audit table is missing or DB policies deny writes, we log and continue.
+    try:
+        models.AuditLog.objects.create(
+            user=user,
+            action_type=action_type,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            details=details,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to write audit log (action=%s entity=%s id=%s). Continuing without audit row.",
+            action_type,
+            entity_type,
+            entity_id,
+        )
 
 
 def mark_fund_request_status(
@@ -2187,9 +2200,19 @@ def generate_public_signature_pdf(rows: list[dict]) -> io.BytesIO:
         leading=11,
         textColor=colors.black,
     )
+    body_center_style = ParagraphStyle(
+        "public_signature_body_center",
+        parent=body_style,
+        alignment=1,
+    )
     body_bold_style = ParagraphStyle(
         "public_signature_body_bold",
         parent=body_style,
+        fontName="Helvetica-Bold",
+    )
+    body_center_bold_style = ParagraphStyle(
+        "public_signature_body_center_bold",
+        parent=body_center_style,
         fontName="Helvetica-Bold",
     )
 
@@ -2210,11 +2233,11 @@ def generate_public_signature_pdf(rows: list[dict]) -> io.BytesIO:
         token_text = str(token_start) if token_end <= token_start else f"{token_start} - {token_end}"
         table_rows.append(
             [
-                Paragraph(str(index), body_bold_style),
+                Paragraph(str(index), body_center_bold_style),
                 Paragraph(str(row.get("application_number") or ""), body_style),
                 Paragraph(str(row.get("beneficiary_name") or ""), body_style),
                 Paragraph(str(row.get("item_name") or ""), body_style),
-                Paragraph(token_text, body_bold_style),
+                Paragraph(token_text, body_center_bold_style),
                 Paragraph("", body_style),
             ]
         )
@@ -2722,3 +2745,331 @@ def generate_district_signature_pdf(
     doc.build(story, canvasmaker=_DistrictSignatureNumberedCanvas)
     buffer.seek(0)
     return buffer
+
+
+def _segregation_pdf_styles():
+    styles = getSampleStyleSheet()
+    return {
+        "title": ParagraphStyle(
+            "segregation_title",
+            parent=styles["Heading2"],
+            fontName="Helvetica-Bold",
+            fontSize=13,
+            leading=16,
+            alignment=1,
+            textColor=colors.black,
+            spaceAfter=6,
+        ),
+        "section": ParagraphStyle(
+            "segregation_section",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=10.5,
+            leading=13,
+            textColor=colors.black,
+            spaceBefore=4,
+            spaceAfter=4,
+        ),
+        "header": ParagraphStyle(
+            "segregation_header",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=9.6,
+            leading=11,
+            alignment=1,
+            textColor=colors.black,
+        ),
+        "body": ParagraphStyle(
+            "segregation_body",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=9.2,
+            leading=11,
+            textColor=colors.black,
+        ),
+        "body_bold": ParagraphStyle(
+            "segregation_body_bold",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=9.2,
+            leading=11,
+            textColor=colors.black,
+        ),
+        "body_center": ParagraphStyle(
+            "segregation_body_center",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=9.2,
+            leading=11,
+            alignment=1,
+            textColor=colors.black,
+        ),
+        "body_center_bold": ParagraphStyle(
+            "segregation_body_center_bold",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=9.2,
+            leading=11,
+            alignment=1,
+            textColor=colors.black,
+        ),
+        "empty": ParagraphStyle(
+            "segregation_empty",
+            parent=styles["Normal"],
+            fontName="Helvetica-Oblique",
+            fontSize=9.6,
+            leading=12,
+            alignment=1,
+            textColor=colors.HexColor("#475569"),
+        ),
+    }
+
+
+def _segregation_pdf_table(table_rows, *, col_widths):
+    table = LongTable(table_rows, colWidths=col_widths, repeatRows=1, splitByRow=1)
+    table.hAlign = "CENTER"
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#dbeafe")),
+                ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
+                ("GRID", (0, 0), (-1, -1), 0.55, colors.black),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, 0), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
+                ("TOPPADDING", (0, 1), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 1), (-1, -1), 5),
+            ]
+        )
+    )
+    return table
+
+
+def generate_segregation_file1_pdf(groups: list[dict]) -> io.BytesIO:
+    styles = _segregation_pdf_styles()
+    body_style = styles["body"]
+    body_center_style = styles["body_center"]
+    body_bold_style = styles["body_bold"]
+    body_center_bold_style = styles["body_center_bold"]
+    header_style = styles["header"]
+    story = [Paragraph("File 1: Beneficiary-wise Article List with Signature", styles["title"])]
+
+    if not groups:
+        story.append(Paragraph("No rows available for this report.", styles["empty"]))
+    else:
+        for index, group in enumerate(list(groups or []), start=1):
+            story.append(Paragraph(f"{index}. {escape(str(group.get('beneficiary_label') or ''))}", styles["section"]))
+            table_rows = [[
+                Paragraph("Sl No", header_style),
+                Paragraph("Article", header_style),
+                Paragraph("Qty", header_style),
+                Paragraph("Signature", header_style),
+            ]]
+            for item_index, item in enumerate(list(group.get("items") or []), start=1):
+                table_rows.append(
+                    [
+                        Paragraph(str(item_index), body_center_bold_style),
+                        Paragraph(escape(str(item.get("article_name") or "")), body_style),
+                        Paragraph(str(int(item.get("quantity") or 0)), body_center_bold_style),
+                        Paragraph("", body_style),
+                    ]
+                )
+            table_rows.append(
+                [
+                    Paragraph("", body_center_style),
+                    Paragraph("Total", body_bold_style),
+                    Paragraph(str(int(group.get("total_quantity") or 0)), body_center_bold_style),
+                    Paragraph("", body_style),
+                ]
+            )
+            table = _segregation_pdf_table(table_rows, col_widths=[14 * mm, 112 * mm, 18 * mm, 44 * mm])
+            table.setStyle(
+                TableStyle(
+                    [
+                        ("ALIGN", (0, 0), (0, -1), "CENTER"),
+                        ("ALIGN", (2, 0), (2, -1), "CENTER"),
+                        ("BACKGROUND", (0, len(table_rows) - 1), (-1, len(table_rows) - 1), colors.HexColor("#eff6ff")),
+                    ]
+                )
+            )
+            story.extend([table, Spacer(1, 5 * mm)])
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=portrait(A4),
+        leftMargin=9 * mm,
+        rightMargin=9 * mm,
+        topMargin=10 * mm,
+        bottomMargin=10 * mm,
+    )
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+
+def generate_segregation_file2_pdf(groups: list[dict]) -> io.BytesIO:
+    styles = _segregation_pdf_styles()
+    body_style = styles["body"]
+    body_center_bold_style = styles["body_center_bold"]
+    header_style = styles["header"]
+    story = [Paragraph("File 2: Article-wise Beneficiaries", styles["title"])]
+
+    if not groups:
+        story.append(Paragraph("No rows available for this report.", styles["empty"]))
+    else:
+        for index, group in enumerate(list(groups or []), start=1):
+            story.append(Paragraph(f"{index}. {escape(str(group.get('article_name') or ''))}", styles["section"]))
+            table_rows = [[
+                Paragraph("Sl No", header_style),
+                Paragraph("Beneficiary", header_style),
+                Paragraph("Waiting Hall Qty", header_style),
+            ]]
+            for item_index, item in enumerate(list(group.get("beneficiaries") or []), start=1):
+                table_rows.append(
+                    [
+                        Paragraph(str(item_index), body_center_bold_style),
+                        Paragraph(escape(str(item.get("beneficiary_label") or "")), body_style),
+                        Paragraph(str(int(item.get("quantity") or 0)), body_center_bold_style),
+                    ]
+                )
+            table_rows.append(
+                [
+                    Paragraph("", styles["body_center"]),
+                    Paragraph("Total", styles["body_bold"]),
+                    Paragraph(str(int(group.get("total_quantity") or 0)), body_center_bold_style),
+                ]
+            )
+            table = _segregation_pdf_table(table_rows, col_widths=[14 * mm, 128 * mm, 34 * mm])
+            table.setStyle(
+                TableStyle(
+                    [
+                        ("ALIGN", (0, 0), (0, -1), "CENTER"),
+                        ("ALIGN", (2, 0), (2, -1), "CENTER"),
+                        ("BACKGROUND", (0, len(table_rows) - 1), (-1, len(table_rows) - 1), colors.HexColor("#eff6ff")),
+                    ]
+                )
+            )
+            story.extend([table, Spacer(1, 5 * mm)])
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=portrait(A4),
+        leftMargin=9 * mm,
+        rightMargin=9 * mm,
+        topMargin=10 * mm,
+        bottomMargin=10 * mm,
+    )
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+
+def generate_segregation_file3_pdf(rows: list[dict]) -> io.BytesIO:
+    styles = _segregation_pdf_styles()
+    body_style = styles["body"]
+    body_center_bold_style = styles["body_center_bold"]
+    header_style = styles["header"]
+    story = [Paragraph("File 3: Stage Moving List", styles["title"])]
+
+    if not rows:
+        story.append(Paragraph("No rows available for this report.", styles["empty"]))
+    else:
+        table_rows = [[
+            Paragraph("Seq No", header_style),
+            Paragraph("Item", header_style),
+            Paragraph("Token Qty", header_style),
+            Paragraph("Start Token", header_style),
+            Paragraph("End Token", header_style),
+        ]]
+        for row in list(rows or []):
+            table_rows.append(
+                [
+                    Paragraph(str(row.get("sequence_no") or ""), body_center_bold_style),
+                    Paragraph(escape(str(row.get("item_name") or "")), body_style),
+                    Paragraph(str(int(row.get("token_quantity") or 0)), body_center_bold_style),
+                    Paragraph(str(row.get("start_token_no") or ""), body_center_bold_style),
+                    Paragraph(str(row.get("end_token_no") or ""), body_center_bold_style),
+                ]
+            )
+        table = _segregation_pdf_table(table_rows, col_widths=[18 * mm, 92 * mm, 22 * mm, 24 * mm, 24 * mm])
+        table.setStyle(
+            TableStyle(
+                [
+                    ("ALIGN", (0, 0), (0, -1), "CENTER"),
+                    ("ALIGN", (2, 0), (4, -1), "CENTER"),
+                ]
+            )
+        )
+        story.append(table)
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=portrait(A4),
+        leftMargin=9 * mm,
+        rightMargin=9 * mm,
+        topMargin=10 * mm,
+        bottomMargin=10 * mm,
+    )
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+
+def _segregation_write_sheet(worksheet, title: str, rows: list[dict]):
+    worksheet.title = title
+    thin = Side(style="thin", color="000000")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    header_fill = PatternFill("solid", fgColor="DBEAFE")
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+
+    headers = list(rows[0].keys()) if rows else []
+    if not headers:
+        worksheet.append(["No data"])
+        worksheet["A1"].font = Font(size=11, bold=True)
+        worksheet["A1"].alignment = center
+        worksheet.column_dimensions["A"].width = 24
+        return
+
+    worksheet.append(headers)
+    for cell in worksheet[1]:
+        cell.font = Font(size=11, bold=True)
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = center
+
+    for row in rows:
+        worksheet.append([row.get(header, "") for header in headers])
+
+    for row in worksheet.iter_rows(min_row=2, max_row=worksheet.max_row, min_col=1, max_col=len(headers)):
+        for cell in row:
+            cell.border = border
+            cell.alignment = center if isinstance(cell.value, (int, float)) else left
+            cell.font = Font(size=10.5)
+
+    for column_index, header in enumerate(headers, start=1):
+        max_length = max(len(str(header or "")), *(len(str(worksheet.cell(row_idx, column_index).value or "")) for row_idx in range(2, worksheet.max_row + 1)))
+        worksheet.column_dimensions[get_column_letter(column_index)].width = min(max(max_length + 2, 12), 36)
+
+    worksheet.freeze_panes = "A2"
+    worksheet.auto_filter.ref = worksheet.dimensions
+
+
+def generate_segregation_xlsx(*, master_rows: list[dict], file1_rows: list[dict], file2_rows: list[dict], file3_rows: list[dict]) -> io.BytesIO:
+    workbook = Workbook()
+    worksheet = workbook.active
+    _segregation_write_sheet(worksheet, "Master Data", master_rows)
+
+    _segregation_write_sheet(workbook.create_sheet(), "File 1", file1_rows)
+    _segregation_write_sheet(workbook.create_sheet(), "File 2", file2_rows)
+    _segregation_write_sheet(workbook.create_sheet(), "File 3", file3_rows)
+
+    stream = io.BytesIO()
+    workbook.save(stream)
+    stream.seek(0)
+    return stream

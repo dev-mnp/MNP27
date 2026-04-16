@@ -23,19 +23,26 @@
       border: 1px solid #fdba74;
       color: #9a3412;
     }
-    input[aria-invalid="true"],
+    input[aria-invalid="true"]:not([type="checkbox"]):not([type="radio"]),
     select[aria-invalid="true"],
     textarea[aria-invalid="true"] {
       border-color: #dc2626 !important;
       box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
       background: #fffafa;
     }
-    .field-error input,
+    .field-error input:not([type="checkbox"]):not([type="radio"]),
     .field-error select,
     .field-error textarea {
       border-color: #dc2626 !important;
       box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
       background: #fffafa;
+    }
+    .request-type-radios input[type="radio"] {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      flex: 0 0 auto;
+      accent-color: var(--accent-primary);
     }
     .field-group-error {
       border-color: #fca5a5 !important;

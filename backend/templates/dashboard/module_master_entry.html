@@ -168,57 +168,24 @@
                   onclick="return window.openAttachmentPreviewFromButton(this);"
                   title="Preview attachment{% if row.attachment_count > 1 %}s{% endif %}"
                   aria-label="Preview attachment{% if row.attachment_count > 1 %}s{% endif %}"
-                  data-preview-url="{{ row.attachment_preview_url }}"
-                  data-preview-title="{{ row.attachment_title }}"
-                  data-preview-source="{{ row.attachment_source }}"
-                  data-download-url="{{ row.attachment_preview_url }}?download=1"
-                  data-preview-items-b64="{{ row.attachment_items_b64 }}"
-                >
-                  <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.5 3.5 0 1 1 4.95 4.95l-9.2 9.19a1.5 1.5 0 0 1-2.12-2.12l8.49-8.48"/></svg>
-                </button>
+	                  data-preview-url="{{ row.attachment_preview_url }}"
+	                  data-preview-title="{{ row.attachment_title }}"
+	                  data-preview-source="{{ row.attachment_source }}"
+	                  data-download-url="{{ row.attachment_preview_url }}?download=1"
+	                >
+	                  <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.5 3.5 0 1 1 4.95 4.95l-9.2 9.19a1.5 1.5 0 0 1-2.12-2.12l8.49-8.48"/></svg>
+	                </button>
                 {% endif %}
                 </div>
               </td>
             </tr>
-            <tr id="district-{{ row.district_id }}" class="summary-row" hidden>
-              <td colspan="9">
-                <div class="summary-card">
-                  <div style="margin-bottom: 12px;"><strong>Internal Notes:</strong> {{ row.internal_notes|default:"-" }}</div>
-                  <table class="summary-detail-table summary-detail-table-entries">
-                    <colgroup>
-                      <col style="width: 28%;">
-                      <col style="width: 8%;">
-                      <col style="width: 13%;">
-                      <col style="width: 15%;">
-                      <col style="width: 22%;">
-                      <col style="width: 14%;">
-                    </colgroup>
-                    <thead>
-                      <tr>
-                        <th>Article</th>
-                        <th>Qty</th>
-                        <th>Unit Cost</th>
-                        <th>Total</th>
-                        <th>Details / Comments</th>
-                        <th>Added / Modified On</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for item in row.detail_items %}
-                        <tr>
-                          <td>{{ item.article_name }}</td>
-                          <td>{{ item.quantity }}</td>
-                          <td>Rs.{{ item.unit_cost|rupees }}</td>
-                          <td>Rs.{{ item.total_amount|rupees }}</td>
-                          <td>{{ item.notes|default:"-" }}</td>
-                          <td>{{ item.changed_at|date:"d/m/Y H:i" }}</td>
-                        </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              </td>
-            </tr>
+	            <tr id="district-{{ row.district_id }}" class="summary-row" hidden data-load-url="{% url 'ui:master-entry-district-summary' row.district_id %}">
+	              <td colspan="9">
+	                <div class="summary-card js-lazy-summary">
+	                  <div class="small" style="color: var(--text-secondary);">Loading...</div>
+	                </div>
+	              </td>
+	            </tr>
           {% empty %}
             <tr><td colspan="9">No district entries created yet.</td></tr>
           {% endfor %}
@@ -301,40 +268,24 @@
                   onclick="return window.openAttachmentPreviewFromButton(this);"
                   title="Preview attachment{% if entry.attachment_count > 1 %}s{% endif %}"
                   aria-label="Preview attachment{% if entry.attachment_count > 1 %}s{% endif %}"
-                  data-preview-url="{{ entry.attachment_preview_url }}"
-                  data-preview-title="{{ entry.attachment_title }}"
-                  data-preview-source="{{ entry.attachment_source }}"
-                  data-download-url="{{ entry.attachment_preview_url }}?download=1"
-                  data-preview-items-b64="{{ entry.attachment_items_b64 }}"
-                >
-                  <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.5 3.5 0 1 1 4.95 4.95l-9.2 9.19a1.5 1.5 0 0 1-2.12-2.12l8.49-8.48"/></svg>
-                </button>
+	                  data-preview-url="{{ entry.attachment_preview_url }}"
+	                  data-preview-title="{{ entry.attachment_title }}"
+	                  data-preview-source="{{ entry.attachment_source }}"
+	                  data-download-url="{{ entry.attachment_preview_url }}?download=1"
+	                >
+	                  <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.5 3.5 0 1 1 4.95 4.95l-9.2 9.19a1.5 1.5 0 0 1-2.12-2.12l8.49-8.48"/></svg>
+	                </button>
                 {% endif %}
                 </div>
               </td>
             </tr>
-            <tr id="public-{{ entry.id }}" class="summary-row" hidden>
-              <td colspan="8">
-                <div class="summary-card">
-                  <div style="display:flex; flex-wrap:wrap; gap:16px 24px; margin-bottom:10px;">
-                    <div><strong>Mobile:</strong> {{ entry.mobile|default:"-" }}</div>
-                    <div><strong>Gender:</strong> {{ entry.gender|default:"-" }}</div>
-                    {% if entry.female_status %}<div><strong>Female Status:</strong> {{ entry.get_female_status_display }}</div>{% endif %}
-                    <div><strong>Handicapped Status:</strong> {% if entry.is_handicapped and entry.is_handicapped != "No" %}{{ entry.get_is_handicapped_display }}{% else %}No{% endif %}</div>
-                    <div><strong>Address:</strong> {{ entry.address|default:"-" }}</div>
-                    <div><strong>Aadhaar Number:</strong> {{ entry.aadhar_number|default:"-" }}</div>
-                    {% if entry.article.item_type == "Aid" or entry.name_of_institution %}<div><strong>Name of Institution:</strong> {{ entry.name_of_institution|default:"-" }}</div>{% endif %}
-                    <div><strong>Added On:</strong> {{ entry.created_at|date:"d/m/Y H:i" }}</div>
-                    <div><strong>Modified On:</strong> {{ entry.updated_at|date:"d/m/Y H:i" }}</div>
-                  </div>
-                  <div style="margin-bottom:10px;"><strong>Details:</strong> {{ entry.notes|default:"-" }}</div>
-                  {% if entry.article.item_type == "Aid" or entry.cheque_rtgs_in_favour %}<div style="margin-bottom:10px;"><strong>Cheque / RTGS in Favour:</strong> {{ entry.cheque_rtgs_in_favour|default:"-" }}</div>{% endif %}
-                  {% if entry.public_history_summary %}
-                    <div><strong>Previous beneficiary history:</strong> {{ entry.public_history_summary }}</div>
-                  {% endif %}
-                </div>
-              </td>
-            </tr>
+	            <tr id="public-{{ entry.id }}" class="summary-row" hidden data-load-url="{% url 'ui:master-entry-public-summary' entry.id %}">
+	              <td colspan="8">
+	                <div class="summary-card js-lazy-summary">
+	                  <div class="small" style="color: var(--text-secondary);">Loading...</div>
+	                </div>
+	              </td>
+	            </tr>
           {% empty %}
             <tr><td colspan="8">No public entries created yet.</td></tr>
           {% endfor %}
@@ -417,61 +368,24 @@
                   onclick="return window.openAttachmentPreviewFromButton(this);"
                   title="Preview attachment{% if row.attachment_count > 1 %}s{% endif %}"
                   aria-label="Preview attachment{% if row.attachment_count > 1 %}s{% endif %}"
-                  data-preview-url="{{ row.attachment_preview_url }}"
-                  data-preview-title="{{ row.attachment_title }}"
-                  data-preview-source="{{ row.attachment_source }}"
-                  data-download-url="{{ row.attachment_preview_url }}?download=1"
-                  data-preview-items-b64="{{ row.attachment_items_b64 }}"
-                >
-                  <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.5 3.5 0 1 1 4.95 4.95l-9.2 9.19a1.5 1.5 0 0 1-2.12-2.12l8.49-8.48"/></svg>
-                </button>
+	                  data-preview-url="{{ row.attachment_preview_url }}"
+	                  data-preview-title="{{ row.attachment_title }}"
+	                  data-preview-source="{{ row.attachment_source }}"
+	                  data-download-url="{{ row.attachment_preview_url }}?download=1"
+	                >
+	                  <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.5 3.5 0 1 1 4.95 4.95l-9.2 9.19a1.5 1.5 0 0 1-2.12-2.12l8.49-8.48"/></svg>
+	                </button>
                 {% endif %}
                 </div>
               </td>
             </tr>
-            <tr id="institution-{{ row.application_number }}" class="summary-row" hidden>
-              <td colspan="8">
-                <div class="summary-card">
-                  <div class="grid2" style="margin-bottom: 14px;">
-                    <div><strong>Mobile:</strong> {{ row.mobile|default:"-" }}</div>
-                    <div><strong>Address:</strong> {{ row.address|default:"-" }}</div>
-                  </div>
-                  <div style="margin-bottom: 12px;"><strong>Internal Notes:</strong> {{ row.internal_notes|default:"-" }}</div>
-                  <table class="summary-detail-table summary-detail-table-entries">
-                    <colgroup>
-                      <col style="width: 28%;">
-                      <col style="width: 8%;">
-                      <col style="width: 13%;">
-                      <col style="width: 15%;">
-                      <col style="width: 22%;">
-                      <col style="width: 14%;">
-                    </colgroup>
-                    <thead>
-                      <tr>
-                        <th>Article</th>
-                        <th>Qty</th>
-                        <th>Unit Cost</th>
-                        <th>Total</th>
-                        <th>Details / Comments</th>
-                        <th>Added / Modified On</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for item in row.detail_items %}
-                        <tr>
-                          <td>{{ item.article_name }}</td>
-                          <td>{{ item.quantity }}</td>
-                          <td>Rs.{{ item.unit_cost|rupees }}</td>
-                          <td>Rs.{{ item.total_amount|rupees }}</td>
-                          <td>{{ item.notes|default:"-" }}</td>
-                          <td>{{ item.changed_at|date:"d/m/Y H:i" }}</td>
-                        </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              </td>
-            </tr>
+	            <tr id="institution-{{ row.application_number }}" class="summary-row" hidden data-load-url="{% url 'ui:master-entry-institution-summary' row.application_number %}">
+	              <td colspan="8">
+	                <div class="summary-card js-lazy-summary">
+	                  <div class="small" style="color: var(--text-secondary);">Loading...</div>
+	                </div>
+	              </td>
+	            </tr>
           {% empty %}
             <tr><td colspan="8">No institution entries created yet.</td></tr>
           {% endfor %}
@@ -970,18 +884,51 @@
         }, 3000);
       });
 
-      var toggles = Array.from(document.querySelectorAll(".summary-toggle"));
-      var parentRows = Array.from(document.querySelectorAll(".summary-parent-row"));
+	      var toggles = Array.from(document.querySelectorAll(".summary-toggle"));
+	      var parentRows = Array.from(document.querySelectorAll(".summary-parent-row"));
 
-      function setExpanded(button, expanded) {
-        var target = document.getElementById(button.dataset.target);
-        if (!target) return;
-        if (expanded) {
-          target.removeAttribute("hidden");
-          button.setAttribute("aria-expanded", "true");
-        } else {
-          target.setAttribute("hidden", "");
-          button.setAttribute("aria-expanded", "false");
+	      function loadSummaryRow(row) {
+	        try {
+	          if (!row) return;
+	          if (row.getAttribute("data-loaded") === "true") return;
+	          var url = row.getAttribute("data-load-url") || "";
+	          if (!url) return;
+	          row.setAttribute("data-loaded", "loading");
+	          var container = row.querySelector(".js-lazy-summary");
+	          if (container) {
+	            container.innerHTML = '<div class="small" style="color: var(--text-secondary);">Loading...</div>';
+	          }
+	          fetch(url, {
+	            method: "GET",
+	            credentials: "same-origin",
+	            headers: {"X-Requested-With": "XMLHttpRequest"},
+	          }).then(function(response) {
+	            if (!response.ok) throw new Error("Failed to load summary");
+	            return response.text();
+	          }).then(function(html) {
+	            if (container) {
+	              container.innerHTML = html;
+	            }
+	            row.setAttribute("data-loaded", "true");
+	          }).catch(function() {
+	            if (container) {
+	              container.innerHTML = '<div class="small" style="color: #b91c1c;">Failed to load details. Please try again.</div>';
+	            }
+	            row.setAttribute("data-loaded", "error");
+	          });
+	        } catch (error) {}
+	      }
+
+	      function setExpanded(button, expanded) {
+	        var target = document.getElementById(button.dataset.target);
+	        if (!target) return;
+	        if (expanded) {
+	          loadSummaryRow(target);
+	          target.removeAttribute("hidden");
+	          button.setAttribute("aria-expanded", "true");
+	        } else {
+	          target.setAttribute("hidden", "");
+	          button.setAttribute("aria-expanded", "false");
         }
       }
 

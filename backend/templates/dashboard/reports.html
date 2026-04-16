@@ -22,6 +22,101 @@
       margin: 0;
       accent-color: var(--accent-primary);
     }
+    .public-signature-list {
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 14px;
+      max-height: 260px;
+      overflow: auto;
+      background: #ffffff;
+    }
+    .public-signature-list-inner {
+      display: grid;
+      gap: 8px;
+    }
+    .public-signature-item-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      color: var(--text-primary);
+      font-size: 0.95rem;
+      line-height: 1.45;
+      padding: 2px 0;
+    }
+    .public-signature-item-row input,
+    .waiting-hall-group-toggle,
+    .waiting-hall-ignore-checkbox {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      flex: 0 0 auto;
+      accent-color: var(--accent-primary);
+    }
+    .public-signature-item-number {
+      min-width: 26px;
+      color: var(--text-secondary);
+      font-weight: 600;
+      flex: 0 0 auto;
+    }
+    .public-signature-item-text {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+    .waiting-hall-selection-list {
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 12px 14px;
+      max-height: 260px;
+      overflow: auto;
+      padding-right: 10px;
+      background: #ffffff;
+    }
+    .waiting-hall-group {
+      padding: 6px 0 10px;
+      background: transparent;
+      border-bottom: 1px solid #edf2f7;
+    }
+    .waiting-hall-group:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+    .waiting-hall-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .waiting-hall-group-label {
+      display: inline-flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      color: var(--text-primary);
+      line-height: 1.35;
+    }
+    .waiting-hall-group-items {
+      display: grid;
+      gap: 6px;
+      padding-left: 24px;
+    }
+    .waiting-hall-item-label {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 2px 0;
+      color: var(--text-primary);
+      font-size: 0.95rem;
+      line-height: 1.45;
+      cursor: pointer;
+    }
+    .waiting-hall-item-text {
+      flex: 1;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
     .report-download-menu {
       position: relative;
     }
@@ -47,6 +142,16 @@
       align-items: center;
       gap: 8px;
       cursor: pointer;
+    }
+    .report-preview-btn {
+      background: #ffffff;
+      color: var(--text-primary);
+      border: 1px solid rgba(37, 99, 235, 0.14);
+      box-shadow: none;
+    }
+    .report-preview-btn:hover {
+      background: rgba(37, 99, 235, 0.08);
+      color: var(--text-primary);
     }
     .report-download-panel {
       position: absolute;
@@ -77,6 +182,224 @@
     }
     .report-download-option:hover {
       background: #f8fafc;
+    }
+    .segregation-shell {
+      display: grid;
+      gap: 16px;
+    }
+    .segregation-filter-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(180px, 1fr)) auto;
+      gap: 12px;
+      align-items: end;
+    }
+    .segregation-filter-actions {
+      display: flex;
+      justify-content: flex-end;
+      align-items: end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    @media (max-width: 860px) {
+      .segregation-filter-grid {
+        grid-template-columns: 1fr;
+      }
+      .segregation-filter-actions {
+        justify-content: flex-start;
+      }
+    }
+    .segregation-card-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    .segregation-summary-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+    }
+    .segregation-summary-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .segregation-preview {
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      background: #ffffff;
+      padding: 12px;
+      max-height: 360px;
+      overflow: auto;
+    }
+    .segregation-group {
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      background: #f8fafc;
+    }
+    .segregation-group:last-child {
+      margin-bottom: 0;
+    }
+    .segregation-group-title {
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    .segregation-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+    .segregation-table th,
+    .segregation-table td {
+      padding: 7px 8px;
+      border-bottom: 1px solid #e2e8f0;
+      color: var(--text-primary);
+      vertical-align: top;
+    }
+    .segregation-table th {
+      position: sticky;
+      top: 0;
+      background: #eff6ff;
+      font-weight: 700;
+      z-index: 1;
+    }
+    .segregation-table tr:last-child td {
+      border-bottom: 0;
+    }
+    .segregation-empty {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      text-align: center;
+      padding: 24px 12px;
+    }
+    .reports-collapsible {
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      background: #f8fafc;
+      overflow: hidden;
+    }
+    .reports-collapsible summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      user-select: none;
+    }
+    .reports-collapsible summary::-webkit-details-marker {
+      display: none;
+    }
+    .reports-collapsible-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .reports-collapsible-title::before {
+      content: "▾";
+      font-size: 0.95rem;
+      color: var(--text-secondary);
+      transition: transform 0.18s ease;
+    }
+    .reports-collapsible:not([open]) .reports-collapsible-title::before {
+      transform: rotate(-90deg);
+    }
+    .reports-collapsible-meta {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      text-align: right;
+    }
+    .reports-collapsible-body {
+      padding: 0 14px 14px;
+      border-top: 1px solid #e2e8f0;
+    }
+    .reports-layout {
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .reports-nav {
+      display: grid;
+      gap: 10px;
+      position: sticky;
+      top: 72px;
+    }
+    .reports-nav-card {
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      background: #f8fbff;
+      padding: 14px;
+    }
+    .reports-nav-title {
+      margin: 0 0 10px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .reports-nav-links {
+      display: grid;
+      gap: 8px;
+    }
+    .reports-nav-link {
+      display: block;
+      padding: 10px 12px;
+      border: 1px solid #dbe3ef;
+      border-radius: 12px;
+      background: #ffffff;
+      color: var(--text-primary);
+      font-weight: 600;
+      text-decoration: none;
+      line-height: 1.35;
+    }
+    .reports-nav-link:hover {
+      background: #eff6ff;
+      border-color: #bfdbfe;
+      color: #1d4ed8;
+      text-decoration: none;
+    }
+    .reports-nav-link.active {
+      background: #eff6ff;
+      border-color: #93c5fd;
+      color: #1d4ed8;
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.08);
+    }
+    .reports-nav-link-label {
+      display: block;
+    }
+    .reports-nav-link-copy {
+      display: block;
+      margin-top: 2px;
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    .reports-content {
+      min-width: 0;
+    }
+    @media (max-width: 1100px) {
+      .reports-layout {
+        grid-template-columns: 1fr;
+      }
+      .reports-nav {
+        position: static;
+      }
+      .segregation-card-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 720px) {
+      .segregation-filter-grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
   <script>
@@ -130,6 +453,83 @@
 
       syncSelectAllState();
     });
+
+    document.addEventListener("DOMContentLoaded", function () {
+      const previewButtons = Array.from(document.querySelectorAll(".js-segregation-pdf-preview, .js-report-pdf-preview"));
+      if (!previewButtons.length || typeof window.openAttachmentPreviewFromButton !== "function") {
+        return;
+      }
+
+      const csrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+      const csrfToken = csrfInput ? csrfInput.value : "";
+
+      previewButtons.forEach((button) => {
+        button.addEventListener("click", async function () {
+          const action = button.getAttribute("data-preview-action") || "";
+          if (!action) return;
+          const form = button.closest("form");
+          const formData = form ? new FormData(form) : new FormData();
+          if (!formData.get("csrfmiddlewaretoken") && csrfToken) {
+            formData.append("csrfmiddlewaretoken", csrfToken);
+          }
+          if (!formData.get("tab")) {
+            formData.append("tab", button.getAttribute("data-tab") || "reports-home");
+          }
+          formData.set("action", action);
+          if (button.classList.contains("js-segregation-pdf-preview")) {
+            formData.set("segregation_beneficiary_type", button.getAttribute("data-beneficiary-type") || "");
+            formData.set("segregation_item_type", button.getAttribute("data-item-type") || "");
+          }
+
+          const originalText = button.textContent;
+          button.disabled = true;
+          button.textContent = "Opening...";
+
+          try {
+            const response = await fetch(window.location.pathname + window.location.search, {
+              method: "POST",
+              body: formData,
+              credentials: "same-origin",
+              headers: csrfToken ? { "X-CSRFToken": csrfToken } : {},
+            });
+            if (!response.ok) {
+              throw new Error("Preview request failed");
+            }
+            const blob = await response.blob();
+            const previewUrl = URL.createObjectURL(blob);
+            const proxyButton = document.createElement("button");
+            proxyButton.setAttribute("data-preview-url", previewUrl);
+            proxyButton.setAttribute("data-preview-title", button.getAttribute("data-preview-title") || "PDF Preview");
+            proxyButton.setAttribute("data-preview-source", button.getAttribute("data-preview-source") || "preview.pdf");
+            const explicitDownloadUrl = button.getAttribute("data-download-url") || "";
+            proxyButton.setAttribute("data-download-url", explicitDownloadUrl && explicitDownloadUrl !== "#" ? explicitDownloadUrl : previewUrl);
+            window.openAttachmentPreviewFromButton(proxyButton);
+          } catch (error) {
+            window.alert("Could not open the PDF preview right now.");
+          } finally {
+            button.disabled = false;
+            button.textContent = originalText;
+          }
+        });
+      });
+    });
+
+    document.addEventListener("DOMContentLoaded", function () {
+      const form = document.getElementById("segregation-filter-form");
+      if (!form) return;
+      const beneficiarySelect = document.getElementById("seg-beneficiary-type");
+      const itemSelect = document.getElementById("seg-item-type");
+      const submit = () => {
+        if (typeof form.requestSubmit === "function") {
+          form.requestSubmit();
+        } else {
+          form.submit();
+        }
+      };
+      [beneficiarySelect, itemSelect].filter(Boolean).forEach((select) => {
+        select.addEventListener("change", submit);
+      });
+    });
   </script>
   <section class="card">
     <div class="toolbar" style="justify-content: space-between; margin-bottom: 20px;">
@@ -151,89 +551,252 @@
       </form>
     </div>
 
-    <div class="toolbar" style="margin-bottom: 20px;">
-      {% for tab in report_tabs %}
-        <a
-          class="btn report-download-trigger"
-          {% if active_report_tab == tab.key %}style="background: #eff6ff; border-color: #93c5fd; color: #1d4ed8;"{% endif %}
-          href="{% url 'ui:reports' %}?tab={{ tab.key }}"
-        >
-          {{ tab.label }}
-        </a>
-      {% endfor %}
-    </div>
-
     {% if active_report_tab == "reports-home" %}
-      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
-        <section class="card" style="background: #f8fafc; margin: 0;">
-          <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-            <div>
-              <h3 style="margin: 0 0 8px;">Segregation</h3>
-              <p style="margin: 0; color: var(--text-secondary); max-width: 520px;">
-                Sync the final token data or upload a CSV / Excel file to stage segregation report rows.
-              </p>
+      <div class="segregation-shell">
+        <details class="reports-collapsible" open>
+          <summary>
+            <div class="reports-collapsible-title">Segregation</div>
+            <div class="reports-collapsible-meta">
+              {% if segregation_state.loaded %}
+                Rows: {{ segregation_row_count }} | Filtered: {{ segregation_filtered_row_count }}
+              {% else %}
+                Not loaded
+              {% endif %}
             </div>
-            <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
-              <form method="post" style="margin: 0;">
-                {% csrf_token %}
-                <input type="hidden" name="tab" value="reports-home">
-                <button class="btn report-download-trigger" type="submit" name="action" value="sync_reports_segregation">Sync Data</button>
-              </form>
-              <form method="post" enctype="multipart/form-data" style="margin: 0;">
-                {% csrf_token %}
-                <input type="hidden" name="tab" value="reports-home">
-                <input id="reports-segregation-upload-input" type="file" name="file" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="this.form.submit();" />
-                <input type="hidden" name="action" value="upload_reports_segregation" />
-                <button class="btn report-download-trigger" type="button" onclick="document.getElementById('reports-segregation-upload-input').click();">Upload CSV / Excel</button>
-              </form>
+          </summary>
+          <div class="reports-collapsible-body">
+            <div class="toolbar" style="justify-content: flex-end; align-items: flex-start; margin: 14px 0 12px;">
+              <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
+                <form method="post" style="margin: 0;">
+                  {% csrf_token %}
+                  <input type="hidden" name="tab" value="reports-home">
+                  <input type="hidden" name="segregation_beneficiary_type" value="{{ segregation_filter_values.beneficiary_type }}">
+                  <input type="hidden" name="segregation_item_type" value="{{ segregation_filter_values.item_type }}">
+                  <button class="btn report-download-trigger" type="submit" name="action" value="sync_reports_segregation">Sync Data</button>
+                </form>
+                <form method="post" enctype="multipart/form-data" style="margin: 0;">
+                  {% csrf_token %}
+                  <input type="hidden" name="tab" value="reports-home">
+                  <input type="hidden" name="segregation_beneficiary_type" value="{{ segregation_filter_values.beneficiary_type }}">
+                  <input type="hidden" name="segregation_item_type" value="{{ segregation_filter_values.item_type }}">
+                  <input id="reports-segregation-upload-input" type="file" name="file" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="this.form.submit();" />
+                  <input type="hidden" name="action" value="upload_reports_segregation" />
+                  <button class="btn report-download-trigger" type="button" onclick="document.getElementById('reports-segregation-upload-input').click();">Upload CSV / Excel</button>
+                </form>
+                <form method="post" style="margin: 0;">
+                  {% csrf_token %}
+                  <input type="hidden" name="tab" value="reports-home">
+                  <input type="hidden" name="segregation_beneficiary_type" value="{{ segregation_filter_values.beneficiary_type }}">
+                  <input type="hidden" name="segregation_item_type" value="{{ segregation_filter_values.item_type }}">
+                  <button class="btn report-download-trigger" type="submit" name="action" value="download_reports_segregation_excel">Download Excel</button>
+                </form>
+              </div>
             </div>
-          </div>
-          <div style="margin: 12px 0 0; color: var(--text-secondary); font-size: 0.96rem;">
-            {% if segregation_state.loaded %}
-              <span style="color: #b91c1c; font-weight: 600;">{{ segregation_state.source }}</span>
-              <span style="margin-left: 12px;">Rows: <strong style="color: var(--text-primary);">{{ segregation_row_count }}</strong></span>
-              <span style="margin-left: 12px;">Columns: <strong style="color: var(--text-primary);">{{ segregation_state.headers|length }}</strong></span>
-              <span style="margin-left: 12px;">Loaded: <strong style="color: var(--text-primary);">{{ segregation_state.synced_at }}</strong></span>
-            {% else %}
-              <span style="color: var(--text-secondary);">Use Sync Data to pull the current token file or upload CSV / Excel to stage segregation data.</span>
-            {% endif %}
-          </div>
-        </section>
 
-        <section class="card" style="background: #f8fafc; margin: 0;">
-          <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-            <div>
-              <h3 style="margin: 0 0 8px;">Distribution</h3>
-              <p style="margin: 0; color: var(--text-secondary); max-width: 520px;">
-                Sync the final token data or upload a CSV / Excel file to stage distribution report rows.
-              </p>
+            <div style="margin: 12px 0 16px; color: var(--text-secondary); font-size: 0.96rem;">
+              {% if segregation_state.loaded %}
+                <span style="color: #b91c1c; font-weight: 600;">{{ segregation_state.source }}</span>
+                <span style="margin-left: 12px;">Rows: <strong style="color: var(--text-primary);">{{ segregation_row_count }}</strong></span>
+                <span style="margin-left: 12px;">Columns: <strong style="color: var(--text-primary);">{{ segregation_state.headers|length }}</strong></span>
+                <span style="margin-left: 12px;">Filtered: <strong style="color: var(--text-primary);">{{ segregation_filtered_row_count }}</strong></span>
+                <span style="margin-left: 12px;">Loaded: <strong style="color: var(--text-primary);">{{ segregation_state.synced_at }}</strong></span>
+              {% else %}
+                <span>Use Sync Data to pull the current token file or upload CSV / Excel to stage segregation data.</span>
+              {% endif %}
             </div>
-            <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
-              <form method="post" style="margin: 0;">
-                {% csrf_token %}
-                <input type="hidden" name="tab" value="reports-home">
-                <button class="btn report-download-trigger" type="submit" name="action" value="sync_reports_distribution">Sync Data</button>
-              </form>
-              <form method="post" enctype="multipart/form-data" style="margin: 0;">
-                {% csrf_token %}
-                <input type="hidden" name="tab" value="reports-home">
-                <input id="reports-distribution-upload-input" type="file" name="file" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="this.form.submit();" />
-                <input type="hidden" name="action" value="upload_reports_distribution" />
-                <button class="btn report-download-trigger" type="button" onclick="document.getElementById('reports-distribution-upload-input').click();">Upload CSV / Excel</button>
-              </form>
+
+            <form method="get" class="segregation-filter-grid" id="segregation-filter-form" style="margin-bottom: 18px;">
+              <input type="hidden" name="tab" value="reports-home">
+              <div>
+                <label for="seg-beneficiary-type" style="display:block; margin-bottom: 6px; font-weight: 600;">Beneficiary Type</label>
+                <select id="seg-beneficiary-type" name="seg_beneficiary_type">
+                  {% for value, label in segregation_beneficiary_type_choices %}
+                    <option value="{{ value }}" {% if segregation_filter_values.beneficiary_type == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label for="seg-item-type" style="display:block; margin-bottom: 6px; font-weight: 600;">Item Type</label>
+                <select id="seg-item-type" name="seg_item_type">
+                  {% for value, label in segregation_item_type_choices %}
+                    <option value="{{ value }}" {% if segregation_filter_values.item_type == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="segregation-filter-actions">
+                <a class="btn" href="{% url 'ui:reports' %}?tab=reports-home" style="text-decoration:none;">Reset</a>
+                <noscript>
+                  <button class="btn report-download-trigger" type="submit">Apply</button>
+                </noscript>
+              </div>
+            </form>
+
+            <div class="segregation-card-grid">
+              <section class="card" style="margin: 0;">
+              <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                <div>
+                  <h4 style="margin: 0 0 6px;">1. Beneficiary-wise Article List</h4>
+                  <p style="margin: 0; color: var(--text-secondary);">Grouped by beneficiary/district with waiting hall quantity and signature space.</p>
+                </div>
+              </div>
+              <div style="margin-bottom: 10px; color: var(--text-secondary); font-size: 0.92rem;">
+                Beneficiaries: <strong style="color: var(--text-primary);">{{ segregation_file1.beneficiary_count }}</strong>
+                <span style="margin-left: 10px;">Rows: <strong style="color: var(--text-primary);">{{ segregation_file1.row_count }}</strong></span>
+                <span style="margin-left: 10px;">Waiting Hall Qty: <strong style="color: var(--text-primary);">{{ segregation_file1.total_quantity }}</strong></span>
+              </div>
+              <div class="segregation-summary-row">
+                <div style="color: var(--text-secondary); font-size: 0.94rem;">{% if not segregation_file1.groups %}No waiting hall rows available for File 1 with the current filters.{% endif %}</div>
+                <div class="segregation-summary-actions">
+                  <button
+                    class="btn report-preview-btn report-download-trigger js-segregation-pdf-preview"
+                    type="button"
+                    data-preview-action="preview_reports_segregation_file1_pdf"
+                    data-preview-title="File 1 Preview"
+                    data-preview-source="segregation_file_1_preview.pdf"
+                    data-beneficiary-type="{{ segregation_filter_values.beneficiary_type }}"
+                    data-item-type="{{ segregation_filter_values.item_type }}"
+                    {% if not segregation_file1.groups %}disabled{% endif %}
+                  >
+                    Preview
+                  </button>
+                  <form method="post" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="tab" value="reports-home">
+                    <input type="hidden" name="segregation_beneficiary_type" value="{{ segregation_filter_values.beneficiary_type }}">
+                    <input type="hidden" name="segregation_item_type" value="{{ segregation_filter_values.item_type }}">
+                    <button class="btn report-download-trigger" type="submit" name="action" value="download_reports_segregation_file1_pdf">Download PDF</button>
+                  </form>
+                </div>
+              </div>
+              </section>
+
+              <section class="card" style="margin: 0;">
+              <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                <div>
+                  <h4 style="margin: 0 0 6px;">2. Article-wise Beneficiaries</h4>
+                  <p style="margin: 0; color: var(--text-secondary);">Pivot-style article grouping with beneficiary names and waiting hall quantity.</p>
+                </div>
+              </div>
+              <div style="margin-bottom: 10px; color: var(--text-secondary); font-size: 0.92rem;">
+                Articles: <strong style="color: var(--text-primary);">{{ segregation_file2.article_count }}</strong>
+                <span style="margin-left: 10px;">Rows: <strong style="color: var(--text-primary);">{{ segregation_file2.row_count }}</strong></span>
+                <span style="margin-left: 10px;">Waiting Hall Qty: <strong style="color: var(--text-primary);">{{ segregation_file2.total_quantity }}</strong></span>
+              </div>
+              <div class="segregation-summary-row">
+                <div style="color: var(--text-secondary); font-size: 0.94rem;">{% if not segregation_file2.groups %}No waiting hall rows available for File 2 with the current filters.{% endif %}</div>
+                <div class="segregation-summary-actions">
+                  <button
+                    class="btn report-preview-btn report-download-trigger js-segregation-pdf-preview"
+                    type="button"
+                    data-preview-action="preview_reports_segregation_file2_pdf"
+                    data-preview-title="File 2 Preview"
+                    data-preview-source="segregation_file_2_preview.pdf"
+                    data-beneficiary-type="{{ segregation_filter_values.beneficiary_type }}"
+                    data-item-type="{{ segregation_filter_values.item_type }}"
+                    {% if not segregation_file2.groups %}disabled{% endif %}
+                  >
+                    Preview
+                  </button>
+                  <form method="post" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="tab" value="reports-home">
+                    <input type="hidden" name="segregation_beneficiary_type" value="{{ segregation_filter_values.beneficiary_type }}">
+                    <input type="hidden" name="segregation_item_type" value="{{ segregation_filter_values.item_type }}">
+                    <button class="btn report-download-trigger" type="submit" name="action" value="download_reports_segregation_file2_pdf">Download PDF</button>
+                  </form>
+                </div>
+              </div>
+              </section>
+
+              <section class="card" style="margin: 0;">
+              <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                <div>
+                  <h4 style="margin: 0 0 6px;">3. MASM Hall Moving List</h4>
+                  <p style="margin: 0; color: var(--text-secondary);">Sequence-ordered list of tokened items to move from waiting hall to stage.</p>
+                </div>
+              </div>
+              <div style="margin-bottom: 10px; color: var(--text-secondary); font-size: 0.92rem;">
+                Rows: <strong style="color: var(--text-primary);">{{ segregation_file3.row_count }}</strong>
+                <span style="margin-left: 10px;">Token Qty: <strong style="color: var(--text-primary);">{{ segregation_file3.total_token_quantity }}</strong></span>
+              </div>
+              <div class="segregation-summary-row">
+                <div style="color: var(--text-secondary); font-size: 0.94rem;">{% if not segregation_file3.rows %}No token rows available for File 3 with the current filters.{% endif %}</div>
+                <div class="segregation-summary-actions">
+                  <button
+                    class="btn report-preview-btn report-download-trigger js-segregation-pdf-preview"
+                    type="button"
+                    data-preview-action="preview_reports_segregation_file3_pdf"
+                    data-preview-title="File 3 Preview"
+                    data-preview-source="segregation_file_3_preview.pdf"
+                    data-beneficiary-type="{{ segregation_filter_values.beneficiary_type }}"
+                    data-item-type="{{ segregation_filter_values.item_type }}"
+                    {% if not segregation_file3.rows %}disabled{% endif %}
+                  >
+                    Preview
+                  </button>
+                  <form method="post" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="tab" value="reports-home">
+                    <input type="hidden" name="segregation_beneficiary_type" value="{{ segregation_filter_values.beneficiary_type }}">
+                    <input type="hidden" name="segregation_item_type" value="{{ segregation_filter_values.item_type }}">
+                    <button class="btn report-download-trigger" type="submit" name="action" value="download_reports_segregation_file3_pdf">Download PDF</button>
+                  </form>
+                </div>
+              </div>
+              </section>
             </div>
           </div>
-          <div style="margin: 12px 0 0; color: var(--text-secondary); font-size: 0.96rem;">
-            {% if distribution_state.loaded %}
-              <span style="color: #b91c1c; font-weight: 600;">{{ distribution_state.source }}</span>
-              <span style="margin-left: 12px;">Rows: <strong style="color: var(--text-primary);">{{ distribution_row_count }}</strong></span>
-              <span style="margin-left: 12px;">Columns: <strong style="color: var(--text-primary);">{{ distribution_state.headers|length }}</strong></span>
-              <span style="margin-left: 12px;">Loaded: <strong style="color: var(--text-primary);">{{ distribution_state.synced_at }}</strong></span>
-            {% else %}
-              <span style="color: var(--text-secondary);">Use Sync Data to pull the current token file or upload CSV / Excel to stage distribution data.</span>
-            {% endif %}
+        </details>
+
+        <details class="reports-collapsible" open>
+          <summary>
+            <div class="reports-collapsible-title">Distribution</div>
+            <div class="reports-collapsible-meta">
+              {% if distribution_state.loaded %}
+                Rows: {{ distribution_row_count }} | Columns: {{ distribution_state.headers|length }}
+              {% else %}
+                Not loaded
+              {% endif %}
+            </div>
+          </summary>
+          <div class="reports-collapsible-body">
+            <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin: 14px 0 12px;">
+              <div>
+                <p style="margin: 0; color: var(--text-secondary); max-width: 520px;">
+                  Sync the final token data or upload a CSV / Excel file to stage distribution report rows.
+                </p>
+              </div>
+              <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
+                <form method="post" style="margin: 0;">
+                  {% csrf_token %}
+                  <input type="hidden" name="tab" value="reports-home">
+                  <input type="hidden" name="segregation_beneficiary_type" value="{{ segregation_filter_values.beneficiary_type }}">
+                  <input type="hidden" name="segregation_item_type" value="{{ segregation_filter_values.item_type }}">
+                  <button class="btn report-download-trigger" type="submit" name="action" value="sync_reports_distribution">Sync Data</button>
+                </form>
+                <form method="post" enctype="multipart/form-data" style="margin: 0;">
+                  {% csrf_token %}
+                  <input type="hidden" name="tab" value="reports-home">
+                  <input type="hidden" name="segregation_beneficiary_type" value="{{ segregation_filter_values.beneficiary_type }}">
+                  <input type="hidden" name="segregation_item_type" value="{{ segregation_filter_values.item_type }}">
+                  <input id="reports-distribution-upload-input" type="file" name="file" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="this.form.submit();" />
+                  <input type="hidden" name="action" value="upload_reports_distribution" />
+                  <button class="btn report-download-trigger" type="button" onclick="document.getElementById('reports-distribution-upload-input').click();">Upload CSV / Excel</button>
+                </form>
+              </div>
+            </div>
+            <div style="margin: 12px 0 0; color: var(--text-secondary); font-size: 0.96rem;">
+              {% if distribution_state.loaded %}
+                <span style="color: #b91c1c; font-weight: 600;">{{ distribution_state.source }}</span>
+                <span style="margin-left: 12px;">Rows: <strong style="color: var(--text-primary);">{{ distribution_row_count }}</strong></span>
+                <span style="margin-left: 12px;">Columns: <strong style="color: var(--text-primary);">{{ distribution_state.headers|length }}</strong></span>
+                <span style="margin-left: 12px;">Loaded: <strong style="color: var(--text-primary);">{{ distribution_state.synced_at }}</strong></span>
+              {% else %}
+                <span style="color: var(--text-secondary);">Use Sync Data to pull the current token file or upload CSV / Excel to stage distribution data.</span>
+              {% endif %}
+            </div>
           </div>
-        </section>
+        </details>
       </div>
     {% elif active_report_tab == "token-lookup" %}
       <div class="card" style="background: #f8fafc;">
@@ -582,13 +1145,13 @@
               </div>
 
               {% if public_signature_state.loaded and public_signature_item_options %}
-                <div style="border: 1px solid var(--border-color); border-radius: 14px; padding: 14px; max-height: 260px; overflow: auto;">
-                  <div style="display: grid; gap: 8px;">
+                <div class="public-signature-list">
+                  <div class="public-signature-list-inner">
                     {% for option in public_signature_item_options %}
-                      <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                        <span style="min-width: 26px; color: var(--text-secondary); font-weight: 600;">{{ forloop.counter }}.</span>
+                      <label class="public-signature-item-row">
+                        <span class="public-signature-item-number">{{ forloop.counter }}.</span>
                         <input type="checkbox" name="selected_items" value="{{ option.item_name }}" class="public-signature-item-checkbox" {% if option.item_name in public_signature_state.selected_items %}checked{% endif %}>
-                        <span>{{ option.item_name }} ({{ option.row_count }})</span>
+                        <span class="public-signature-item-text">{{ option.item_name }} ({{ option.row_count }})</span>
                       </label>
                     {% endfor %}
                   </div>
@@ -604,6 +1167,17 @@
               {% endif %}
 
               <div class="toolbar" style="justify-content: flex-end; margin-top: 16px; margin-bottom: 0; gap: 8px;">
+                <button
+                  class="btn report-preview-btn report-download-trigger js-report-pdf-preview"
+                  type="button"
+                  data-preview-action="preview_public_signature"
+                  data-preview-title="Public Signature Preview"
+                  data-preview-source="public_signature_preview.pdf"
+                  data-download-url="#"
+                  {% if not public_signature_state.loaded %}disabled{% endif %}
+                >
+                  Preview
+                </button>
                 <details class="report-download-menu">
                   <summary class="btn report-download-trigger" {% if not public_signature_state.loaded %}style="pointer-events:none; opacity:0.55;"{% endif %}>Download ▾</summary>
                   <div class="report-download-panel">
@@ -654,6 +1228,17 @@
             <input type="hidden" name="tab" value="public-signature">
             <input type="hidden" name="action" value="download_district_signature">
             <div class="toolbar" style="justify-content: flex-end; margin-top: 16px; margin-bottom: 0; gap: 8px;">
+              <button
+                class="btn report-preview-btn report-download-trigger js-report-pdf-preview"
+                type="button"
+                data-preview-action="preview_district_signature"
+                data-preview-title="District Signature Preview"
+                data-preview-source="district_signature_preview.pdf"
+                data-download-url="#"
+                {% if not district_signature_state.loaded %}disabled{% endif %}
+              >
+                Preview
+              </button>
               <details class="report-download-menu">
                 <summary class="btn report-download-trigger" {% if not district_signature_state.loaded %}style="pointer-events:none; opacity:0.55;"{% endif %}>Download ▾</summary>
                 <div class="report-download-panel">
@@ -741,22 +1326,22 @@
             </div>
 
             {% if waiting_hall_state.loaded and waiting_hall_grouped.districts %}
-              <div id="waiting-hall-selection-list" style="border: 1px solid var(--border-color); border-radius: 14px; padding: 12px 14px; max-height: 260px; overflow: auto; padding-right: 10px;">
+              <div id="waiting-hall-selection-list" class="waiting-hall-selection-list">
                 {% for district_group in waiting_hall_grouped.districts %}
-                  <div class="waiting-hall-group" data-beneficiary-type="{{ district_group.entity_kind|lower }}" style="padding: 6px 0 10px; background: transparent;">
-                    <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">
+                  <div class="waiting-hall-group" data-beneficiary-type="{{ district_group.entity_kind|lower }}">
+                    <div class="waiting-hall-group-header">
                       <div>
-                        <label style="display: inline-flex; align-items: center; gap: 10px; font-weight: 700; cursor: pointer;">
+                        <label class="waiting-hall-group-label">
                           <input class="waiting-hall-group-toggle" type="checkbox">
                           <span>{{ district_group.label_prefix }}: {{ district_group.entity_name }}</span>
                         </label>
                       </div>
                     </div>
-                    <div style="display: grid; gap: 6px; padding-left: 24px;">
+                    <div class="waiting-hall-group-items">
                       {% for item in district_group.raw_items %}
-                        <label class="waiting-hall-item-label" style="display: flex; align-items: center; gap: 10px; padding: 2px 0;">
+                        <label class="waiting-hall-item-label">
                           <input class="waiting-hall-ignore-checkbox" data-item-type="{{ item.item_type|default:''|lower }}" type="checkbox" name="ignored_keys" value="{{ item.key }}" {% if item.key in waiting_hall_state.ignored_keys %}checked{% endif %} />
-                          <span style="flex: 1;">{{ district_group.entity_name }} - {{ item.requested_item }} ({{ item.quantity }})</span>
+                          <span class="waiting-hall-item-text">{{ district_group.entity_name }} - {{ item.requested_item }} ({{ item.quantity }})</span>
                         </label>
                       {% endfor %}
                     </div>
@@ -773,6 +1358,17 @@
             {% endif %}
 
             <div class="toolbar" style="justify-content: flex-end; margin-top: 16px; margin-bottom: 0; gap: 8px;">
+              <button
+                class="btn report-preview-btn report-download-trigger js-report-pdf-preview"
+                type="button"
+                data-preview-action="preview_waiting_hall"
+                data-preview-title="Waiting Hall Acknowledgment Preview"
+                data-preview-source="waiting_hall_acknowledgment_preview.pdf"
+                data-download-url="#"
+                {% if not waiting_hall_state.loaded %}disabled{% endif %}
+              >
+                Preview
+              </button>
               <button class="btn report-download-trigger" type="submit" onclick="document.getElementById('waiting-hall-report-action').value='save_waiting_hall';" {% if not waiting_hall_state.loaded %}disabled{% endif %}>Save</button>
               <details class="report-download-menu" {% if not waiting_hall_state.loaded %}style="pointer-events:none; opacity:0.6;"{% endif %}>
                 <summary class="btn report-download-trigger">Download</summary>
@@ -893,6 +1489,17 @@
             <input type="hidden" name="tab" value="public-acknowledgment-form">
             <input type="hidden" name="action" value="download_public_ack">
             <div class="toolbar" style="justify-content: flex-end; margin-top: 16px; margin-bottom: 0; gap: 8px;">
+              <button
+                class="btn report-preview-btn report-download-trigger js-report-pdf-preview"
+                type="button"
+                data-preview-action="preview_public_ack"
+                data-preview-title="Public Acknowledgment Preview"
+                data-preview-source="public_acknowledgment_preview.pdf"
+                data-download-url="#"
+                {% if not public_ack_state.loaded or not public_ack_state.template_base64 %}disabled{% endif %}
+              >
+                Preview
+              </button>
               <button class="btn report-download-trigger" type="submit" {% if not public_ack_state.loaded or not public_ack_state.template_base64 %}disabled{% endif %}>Download</button>
             </div>
           </form>
@@ -978,6 +1585,7 @@
         getVisibleCheckboxes().forEach((checkbox) => {
           checkbox.checked = shouldCheck;
         });
+        syncAllGroupStates();
         syncSelectAllState();
       });
 

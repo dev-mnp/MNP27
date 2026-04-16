@@ -62,6 +62,21 @@
       align-items: center;
       gap: 12px;
       font-size: 14px;
+      color: var(--text-primary);
+      line-height: 1.45;
+      cursor: pointer;
+      padding: 2px 0;
+    }
+    .labels-check input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      flex: 0 0 auto;
+      accent-color: var(--accent-primary);
+    }
+    .labels-check span {
+      color: var(--text-primary);
+      font-weight: 500;
     }
     .labels-download {
       position: relative;
@@ -78,7 +93,7 @@
       position: absolute;
       right: 0;
       top: calc(100% + 8px);
-      min-width: 210px;
+      min-width: 290px;
       background: #fff;
       border: 1px solid var(--border-color);
       border-radius: 14px;
@@ -88,20 +103,69 @@
       gap: 6px;
       z-index: 5;
     }
-    .labels-menu a {
-      display: block;
-      padding: 10px 12px;
+    .labels-menu-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 8px;
+      align-items: center;
+      padding: 6px;
       border-radius: 10px;
+    }
+    .labels-menu-item:hover {
+      background: rgba(37, 99, 235, 0.04);
+    }
+    .labels-menu-label {
+      color: var(--text-primary);
+      font-size: 14px;
+      font-weight: 600;
+      padding: 0 6px;
+    }
+    .labels-menu-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 82px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(37, 99, 235, 0.14);
+      background: #fff;
       color: var(--text-primary);
       text-decoration: none;
-      font-size: 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
     }
-    .labels-menu a:hover {
+    .labels-menu-action:hover {
       background: rgba(37, 99, 235, 0.08);
     }
-    .labels-menu a[aria-disabled="true"] {
+    .labels-download-btn {
+      background: #2563eb;
+      border-color: #2563eb;
+      color: #fff;
+    }
+    .labels-download-btn:hover {
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+      color: #fff;
+    }
+    .labels-menu-action[aria-disabled="true"],
+    .labels-menu-action:disabled {
       pointer-events: none;
       opacity: 0.5;
+    }
+    .labels-action-pair {
+      display: inline-flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-self: end;
+    }
+    .labels-preview-btn {
+      background: #fff;
+      color: var(--text-primary);
+      border: 1px solid rgba(37, 99, 235, 0.14);
+    }
+    .labels-preview-btn:hover {
+      background: rgba(37, 99, 235, 0.08);
     }
     .labels-save-row {
       display: flex;
@@ -135,6 +199,9 @@
     .labels-row-actions {
       display: flex;
       justify-content: flex-end;
+    }
+    .labels-row-actions .btn {
+      min-width: 116px;
     }
     .labels-custom-bulk {
       display: grid;
@@ -218,6 +285,13 @@
     .labels-audit-reason {
       font-size: 12px;
       color: var(--text-secondary);
+    }
+    .labels-audit-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      margin-top: 4px;
     }
     @media (max-width: 980px) {
       .labels-row-main {
@@ -306,14 +380,6 @@
               <button class="labels-mini-btn" type="submit" {% if not label_row_count %}disabled{% endif %}>Save 2L Items</button>
               <span class="labels-mini-meta">{{ label_selected_large_items|length }} selected</span>
             </div>
-            <details class="labels-download labels-row-actions">
-              <summary><span class="btn" {% if not label_has_generated_tokens or label_sync_required or not label_large_items_saved %}aria-disabled="true"{% endif %}>Download</span></summary>
-              <div class="labels-menu">
-                <a href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=article_12l_continuous" {% if not label_has_generated_tokens or label_sync_required or not label_large_items_saved or not label_audits.article_12l_continuous.ready %}aria-disabled="true"{% endif %}>12L Continuous</a>
-                <a href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=article_12l_separate" {% if not label_has_generated_tokens or label_sync_required or not label_large_items_saved or not label_audits.article_12l_separate.ready %}aria-disabled="true"{% endif %}>12L Separate</a>
-                <a href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=article_2l_continuous" {% if not label_has_generated_tokens or label_sync_required or not label_large_items_saved or not label_audits.article_2l_continuous.ready %}aria-disabled="true"{% endif %}>2L Continuous</a>
-              </div>
-            </details>
           </div>
         </form>
         <div class="labels-audit-grid cols-3">
@@ -334,6 +400,10 @@
               <span>Pages: {{ label_audits.article_12l_continuous.page_count|default:0 }}</span>
             </div>
             {% if label_audits.article_12l_continuous.reason %}<div class="labels-audit-reason">{{ label_audits.article_12l_continuous.reason }}</div>{% endif %}
+            <div class="labels-audit-actions">
+              <button class="labels-menu-action labels-preview-btn js-label-pdf-preview" type="button" data-preview-request-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=article_12l_continuous" data-preview-title="Article Labels - 12L Continuous" data-preview-source="article_labels_12l_continuous.pdf" data-download-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=article_12l_continuous" {% if not label_has_generated_tokens or label_sync_required or not label_large_items_saved or not label_audits.article_12l_continuous.ready %}disabled{% endif %}>Preview</button>
+              <a class="labels-menu-action labels-download-btn" href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=article_12l_continuous" {% if not label_has_generated_tokens or label_sync_required or not label_large_items_saved or not label_audits.article_12l_continuous.ready %}aria-disabled="true"{% endif %}>Download</a>
+            </div>
           </div>
           <div class="labels-audit-card">
             <div class="labels-audit-title">
@@ -352,6 +422,10 @@
               <span>Pages: {{ label_audits.article_12l_separate.page_count|default:0 }}</span>
             </div>
             {% if label_audits.article_12l_separate.reason %}<div class="labels-audit-reason">{{ label_audits.article_12l_separate.reason }}</div>{% endif %}
+            <div class="labels-audit-actions">
+              <button class="labels-menu-action labels-preview-btn js-label-pdf-preview" type="button" data-preview-request-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=article_12l_separate" data-preview-title="Article Labels - 12L Separate" data-preview-source="article_labels_12l_separate.pdf" data-download-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=article_12l_separate" {% if not label_has_generated_tokens or label_sync_required or not label_large_items_saved or not label_audits.article_12l_separate.ready %}disabled{% endif %}>Preview</button>
+              <a class="labels-menu-action labels-download-btn" href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=article_12l_separate" {% if not label_has_generated_tokens or label_sync_required or not label_large_items_saved or not label_audits.article_12l_separate.ready %}aria-disabled="true"{% endif %}>Download</a>
+            </div>
           </div>
           <div class="labels-audit-card">
             <div class="labels-audit-title">
@@ -370,6 +444,10 @@
               <span>Pages: {{ label_audits.article_2l_continuous.page_count|default:0 }}</span>
             </div>
             {% if label_audits.article_2l_continuous.reason %}<div class="labels-audit-reason">{{ label_audits.article_2l_continuous.reason }}</div>{% endif %}
+            <div class="labels-audit-actions">
+              <button class="labels-menu-action labels-preview-btn js-label-pdf-preview" type="button" data-preview-request-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=article_2l_continuous" data-preview-title="Article Labels - 2L Continuous" data-preview-source="article_labels_2l_continuous.pdf" data-download-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=article_2l_continuous" {% if not label_has_generated_tokens or label_sync_required or not label_large_items_saved or not label_audits.article_2l_continuous.ready %}disabled{% endif %}>Preview</button>
+              <a class="labels-menu-action labels-download-btn" href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=article_2l_continuous" {% if not label_has_generated_tokens or label_sync_required or not label_large_items_saved or not label_audits.article_2l_continuous.ready %}aria-disabled="true"{% endif %}>Download</a>
+            </div>
           </div>
         </div>
       </section>
@@ -381,13 +459,6 @@
           </div>
           <div></div>
           <div class="labels-row-description">Badges given to districts for token-based article collection.</div>
-          <details class="labels-download">
-            <summary><span class="btn" {% if not label_has_generated_tokens or label_sync_required %}aria-disabled="true"{% endif %}>Download</span></summary>
-            <div class="labels-menu">
-              <a href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=district_continuous" {% if not label_has_generated_tokens or label_sync_required or not label_audits.district_continuous.ready %}aria-disabled="true"{% endif %}>Continuous</a>
-              <a href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=district_separate" {% if not label_has_generated_tokens or label_sync_required or not label_audits.district_separate.ready %}aria-disabled="true"{% endif %}>Separate</a>
-            </div>
-          </details>
         </div>
         <div class="labels-audit-grid cols-2">
           <div class="labels-audit-card">
@@ -407,6 +478,10 @@
               <span>Pages: {{ label_audits.district_continuous.page_count|default:0 }}</span>
             </div>
             {% if label_audits.district_continuous.reason %}<div class="labels-audit-reason">{{ label_audits.district_continuous.reason }}</div>{% endif %}
+            <div class="labels-audit-actions">
+              <button class="labels-menu-action labels-preview-btn js-label-pdf-preview" type="button" data-preview-request-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=district_continuous" data-preview-title="District Labels - Continuous" data-preview-source="district_labels_continuous.pdf" data-download-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=district_continuous" {% if not label_has_generated_tokens or label_sync_required or not label_audits.district_continuous.ready %}disabled{% endif %}>Preview</button>
+              <a class="labels-menu-action labels-download-btn" href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=district_continuous" {% if not label_has_generated_tokens or label_sync_required or not label_audits.district_continuous.ready %}aria-disabled="true"{% endif %}>Download</a>
+            </div>
           </div>
           <div class="labels-audit-card">
             <div class="labels-audit-title">
@@ -425,6 +500,10 @@
               <span>Pages: {{ label_audits.district_separate.page_count|default:0 }}</span>
             </div>
             {% if label_audits.district_separate.reason %}<div class="labels-audit-reason">{{ label_audits.district_separate.reason }}</div>{% endif %}
+            <div class="labels-audit-actions">
+              <button class="labels-menu-action labels-preview-btn js-label-pdf-preview" type="button" data-preview-request-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=district_separate" data-preview-title="District Labels - Separate" data-preview-source="district_labels_separate.pdf" data-download-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=district_separate" {% if not label_has_generated_tokens or label_sync_required or not label_audits.district_separate.ready %}disabled{% endif %}>Preview</button>
+              <a class="labels-menu-action labels-download-btn" href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=district_separate" {% if not label_has_generated_tokens or label_sync_required or not label_audits.district_separate.ready %}aria-disabled="true"{% endif %}>Download</a>
+            </div>
           </div>
         </div>
       </section>
@@ -436,11 +515,6 @@
           </div>
           <div></div>
           <div class="labels-row-description">Badges to be given to institution beneficiaries.</div>
-          <form method="get" class="labels-inline" style="justify-self:end;">
-            {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
-            <input type="hidden" name="download" value="institution">
-            <button class="btn" type="submit" {% if not label_has_generated_tokens or label_sync_required or not label_audits.institution.ready %}disabled{% endif %}>Download</button>
-          </form>
         </div>
         <div class="labels-audit-grid">
           <div class="labels-audit-card">
@@ -460,6 +534,10 @@
               <span>Pages: {{ label_audits.institution.page_count|default:0 }}</span>
             </div>
             {% if label_audits.institution.reason %}<div class="labels-audit-reason">{{ label_audits.institution.reason }}</div>{% endif %}
+            <div class="labels-audit-actions">
+              <button class="labels-menu-action labels-preview-btn js-label-pdf-preview" type="button" data-preview-request-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=institution" data-preview-title="Institution Labels" data-preview-source="institution_labels.pdf" data-download-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=institution" {% if not label_has_generated_tokens or label_sync_required or not label_audits.institution.ready %}disabled{% endif %}>Preview</button>
+              <a class="labels-menu-action labels-download-btn" href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=institution" {% if not label_has_generated_tokens or label_sync_required or not label_audits.institution.ready %}aria-disabled="true"{% endif %}>Download</a>
+            </div>
           </div>
         </div>
       </section>
@@ -471,11 +549,6 @@
           </div>
           <div></div>
           <div class="labels-row-description">Badges to be given to public beneficiaries.</div>
-          <form method="get" class="labels-inline" style="justify-self:end;">
-            {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
-            <input type="hidden" name="download" value="public">
-            <button class="btn" type="submit" {% if not label_has_generated_tokens or label_sync_required or not label_audits.public.ready %}disabled{% endif %}>Download</button>
-          </form>
         </div>
         <div class="labels-audit-grid">
           <div class="labels-audit-card">
@@ -495,6 +568,10 @@
               <span>Pages: {{ label_audits.public.page_count|default:0 }}</span>
             </div>
             {% if label_audits.public.reason %}<div class="labels-audit-reason">{{ label_audits.public.reason }}</div>{% endif %}
+            <div class="labels-audit-actions">
+              <button class="labels-menu-action labels-preview-btn js-label-pdf-preview" type="button" data-preview-request-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=public" data-preview-title="Public Labels" data-preview-source="public_labels.pdf" data-download-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=public" {% if not label_has_generated_tokens or label_sync_required or not label_audits.public.ready %}disabled{% endif %}>Preview</button>
+              <a class="labels-menu-action labels-download-btn" href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=public" {% if not label_has_generated_tokens or label_sync_required or not label_audits.public.ready %}aria-disabled="true"{% endif %}>Download</a>
+            </div>
           </div>
         </div>
       </section>
@@ -506,13 +583,6 @@
           </div>
           <div></div>
           <div class="labels-row-description">Chair or seat labels for arranged token distribution.</div>
-          <details class="labels-download">
-            <summary><span class="btn" {% if not label_has_generated_tokens or label_sync_required %}aria-disabled="true"{% endif %}>Download</span></summary>
-            <div class="labels-menu">
-              <a href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=chair_continuous" {% if not label_has_generated_tokens or label_sync_required or not label_audits.chair_continuous.ready %}aria-disabled="true"{% endif %}>Continuous</a>
-              <a href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=chair_separate" {% if not label_has_generated_tokens or label_sync_required or not label_audits.chair_separate.ready %}aria-disabled="true"{% endif %}>Separate</a>
-            </div>
-          </details>
         </div>
         <div class="labels-audit-grid cols-2">
           <div class="labels-audit-card">
@@ -532,6 +602,10 @@
               <span>Pages: {{ label_audits.chair_continuous.page_count|default:0 }}</span>
             </div>
             {% if label_audits.chair_continuous.reason %}<div class="labels-audit-reason">{{ label_audits.chair_continuous.reason }}</div>{% endif %}
+            <div class="labels-audit-actions">
+              <button class="labels-menu-action labels-preview-btn js-label-pdf-preview" type="button" data-preview-request-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=chair_continuous" data-preview-title="Chair Labels - Continuous" data-preview-source="chair_labels_continuous.pdf" data-download-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=chair_continuous" {% if not label_has_generated_tokens or label_sync_required or not label_audits.chair_continuous.ready %}disabled{% endif %}>Preview</button>
+              <a class="labels-menu-action labels-download-btn" href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=chair_continuous" {% if not label_has_generated_tokens or label_sync_required or not label_audits.chair_continuous.ready %}aria-disabled="true"{% endif %}>Download</a>
+            </div>
           </div>
           <div class="labels-audit-card">
             <div class="labels-audit-title">
@@ -550,6 +624,10 @@
               <span>Pages: {{ label_audits.chair_separate.page_count|default:0 }}</span>
             </div>
             {% if label_audits.chair_separate.reason %}<div class="labels-audit-reason">{{ label_audits.chair_separate.reason }}</div>{% endif %}
+            <div class="labels-audit-actions">
+              <button class="labels-menu-action labels-preview-btn js-label-pdf-preview" type="button" data-preview-request-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=chair_separate" data-preview-title="Chair Labels - Separate" data-preview-source="chair_labels_separate.pdf" data-download-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=chair_separate" {% if not label_has_generated_tokens or label_sync_required or not label_audits.chair_separate.ready %}disabled{% endif %}>Preview</button>
+              <a class="labels-menu-action labels-download-btn" href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=chair_separate" {% if not label_has_generated_tokens or label_sync_required or not label_audits.chair_separate.ready %}aria-disabled="true"{% endif %}>Download</a>
+            </div>
           </div>
         </div>
       </section>
@@ -583,6 +661,7 @@ Mixi,10"></textarea>
             </div>
             <div class="labels-custom-actions">
               <button id="custom-label-add" class="btn btn-subtle" type="button">Add Row</button>
+              <button class="btn labels-preview-btn js-label-pdf-preview" type="button" data-preview-form="closest" data-preview-action="preview_custom_labels" data-preview-title="Custom Labels Preview" data-preview-source="custom_labels_preview.pdf" {% if not can_export %}disabled{% endif %}>Preview</button>
               <button class="btn" type="submit" {% if not can_export %}disabled{% endif %}>Download</button>
             </div>
           </form>
@@ -633,6 +712,71 @@ Mixi,10"></textarea>
           customGroups.appendChild(group);
         });
       }
+
+      document.querySelectorAll('.js-label-pdf-preview').forEach((button) => {
+        button.addEventListener('click', async (event) => {
+          event.preventDefault();
+          if (button.disabled) return;
+
+          const previewTitle = button.getAttribute('data-preview-title') || 'Label preview';
+          const previewSource = button.getAttribute('data-preview-source') || 'labels_preview.pdf';
+          const requestUrl = button.getAttribute('data-preview-request-url') || '';
+          const formMode = button.getAttribute('data-preview-form') || '';
+          const actionOverride = button.getAttribute('data-preview-action') || '';
+          const explicitDownloadUrl = button.getAttribute('data-download-url') || '';
+
+          let response;
+          try {
+            if (formMode === 'closest') {
+              const form = button.closest('form');
+              if (!form) return;
+              const formData = new FormData();
+              const sourceData = new FormData(form);
+              for (const [key, value] of sourceData.entries()) {
+                if (key === 'action') continue;
+                formData.append(key, value);
+              }
+              if (actionOverride) {
+                formData.append('action', actionOverride);
+              }
+              response = await fetch(form.action || window.location.href, {
+                method: (form.method || 'POST').toUpperCase(),
+                body: formData,
+                credentials: 'same-origin',
+              });
+            } else {
+              response = await fetch(requestUrl, {
+                method: 'GET',
+                credentials: 'same-origin',
+              });
+            }
+
+            if (!response || !response.ok) {
+              throw new Error(`Preview request failed with status ${response ? response.status : 'unknown'}`);
+            }
+
+            const responseType = (response.headers.get('content-type') || '').toLowerCase();
+            const arrayBuffer = await response.arrayBuffer();
+            const blob = new Blob([arrayBuffer], {
+              type: responseType.includes('pdf') ? 'application/pdf' : (responseType || 'application/octet-stream'),
+            });
+            const previewUrl = URL.createObjectURL(blob);
+            const proxyButton = document.createElement('button');
+            proxyButton.type = 'button';
+            proxyButton.setAttribute('data-preview-url', previewUrl);
+            proxyButton.setAttribute('data-preview-title', previewTitle);
+            proxyButton.setAttribute('data-preview-source', previewSource);
+            proxyButton.setAttribute('data-download-url', explicitDownloadUrl || requestUrl || previewUrl);
+
+            if (window.openAttachmentPreviewFromButton) {
+              window.openAttachmentPreviewFromButton(proxyButton);
+            }
+          } catch (error) {
+            console.error(error);
+            window.alert('Could not open label preview right now. Please try download instead.');
+          }
+        });
+      });
     })();
   </script>
 {% endblock %}

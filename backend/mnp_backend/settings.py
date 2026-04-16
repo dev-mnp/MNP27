@@ -5,6 +5,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 import os
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -33,6 +34,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -67,12 +69,10 @@ ASGI_APPLICATION = 'mnp_backend.asgi.application'
 def _db_config():
     database_url = os.getenv('DATABASE_URL')
     if not database_url:
-        return {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
-        }
+        raise ImproperlyConfigured(
+            "DATABASE_URL is required (Postgres-only). "
+            "Set it in backend/.env, e.g. postgresql://user:pass@localhost:5432/dbname"
+        )
 
     parsed = urlparse(database_url)
     query = parse_qs(parsed.query)
@@ -85,13 +85,25 @@ def _db_config():
         'PORT': parsed.port or '5432',
     }
     options = {}
-    if query.get('sslmode'):
-        options['sslmode'] = query['sslmode'][-1]
+    for key, values in (query or {}).items():
+        if not key or not values:
+            continue
+        # Allow Postgres connection options like sslmode/options/etc in DATABASE_URL.
+        options[str(key)] = str(values[-1])
     if options:
         config['OPTIONS'] = options
     return {'default': config}
 
 DATABASES = _db_config()
+
+# Remote Postgres (e.g., Neon) can feel sluggish if we reconnect on every request.
+# Reuse connections for a bit and health-check before reusing to avoid stale sockets.
+CONN_HEALTH_CHECKS = os.getenv("DJANGO_DB_CONN_HEALTH_CHECKS", "True").lower() in {"1", "true", "yes", "on"}
+if DATABASES.get("default", {}).get("ENGINE") == "django.db.backends.postgresql":
+    try:
+        DATABASES["default"]["CONN_MAX_AGE"] = int(os.getenv("DJANGO_DB_CONN_MAX_AGE", "60"))
+    except (TypeError, ValueError):
+        DATABASES["default"]["CONN_MAX_AGE"] = 60
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
@@ -107,6 +119,15 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+if not DEBUG:
+    STORAGES = {
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        }
+    }
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

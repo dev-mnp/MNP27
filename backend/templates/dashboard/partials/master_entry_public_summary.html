@@ -1,0 +1,21 @@
+{% if entry %}
+  <div style="display:flex; flex-wrap:wrap; gap:16px 24px; margin-bottom:10px;">
+    <div><strong>Mobile:</strong> {{ entry.mobile|default:"-" }}</div>
+    <div><strong>Gender:</strong> {{ entry.gender|default:"-" }}</div>
+    {% if entry.female_status %}<div><strong>Female Status:</strong> {{ entry.get_female_status_display }}</div>{% endif %}
+    <div><strong>Handicapped Status:</strong> {% if entry.is_handicapped and entry.is_handicapped != "No" %}{{ entry.get_is_handicapped_display }}{% else %}No{% endif %}</div>
+    <div><strong>Address:</strong> {{ entry.address|default:"-" }}</div>
+    <div><strong>Aadhaar Number:</strong> {{ entry.aadhar_number|default:"-" }}</div>
+    {% if entry.article.item_type == "Aid" or entry.name_of_institution %}<div><strong>Name of Institution:</strong> {{ entry.name_of_institution|default:"-" }}</div>{% endif %}
+    <div><strong>Added On:</strong> {{ entry.created_at|date:"d/m/Y H:i" }}</div>
+    <div><strong>Modified On:</strong> {{ entry.updated_at|date:"d/m/Y H:i" }}</div>
+  </div>
+  <div style="margin-bottom:10px;"><strong>Details:</strong> {{ entry.notes|default:"-" }}</div>
+  {% if entry.article.item_type == "Aid" or entry.cheque_rtgs_in_favour %}<div style="margin-bottom:10px;"><strong>Cheque / RTGS in Favour:</strong> {{ entry.cheque_rtgs_in_favour|default:"-" }}</div>{% endif %}
+  {% if history_summary %}
+    <div><strong>Previous beneficiary history:</strong> {{ history_summary }}</div>
+  {% endif %}
+{% else %}
+  <div class="small" style="color: var(--text-secondary);">No details found.</div>
+{% endif %}
+

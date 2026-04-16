@@ -18,12 +18,15 @@ import re
 import mimetypes
 import subprocess
 import sys
+import logging
 from datetime import date
 from collections import Counter
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlencode
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from pypdf import PdfReader, PdfWriter
 
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
@@ -88,6 +91,8 @@ FEMALE_STATUS_DESCRIPTIONS = {
     "Unemployed": "A woman currently without paid work and seeking or needing livelihood support.",
     "Student": "A woman currently pursuing school, college, or vocational education.",
 }
+
+logger = logging.getLogger(__name__)
 
 
 class RoleRequiredMixin(UserPassesTestMixin):
@@ -558,6 +563,385 @@ def _reports_simple_report_session_state(request, state_key: str):
 def _reports_set_simple_report_state(request, state_key: str, state):
     request.session[state_key] = state
     request.session.modified = True
+
+
+SEGREGATION_BENEFICIARY_FILTER_CHOICES = [
+    ("", "All"),
+    (models.RecipientTypeChoices.DISTRICT, "District"),
+    (models.RecipientTypeChoices.PUBLIC, "Public"),
+    (models.RecipientTypeChoices.INSTITUTIONS, "Institutions"),
+]
+
+SEGREGATION_ITEM_FILTER_CHOICES = [
+    (models.ItemTypeChoices.ARTICLE, "Article"),
+    (models.ItemTypeChoices.AID, "Aid"),
+    ("", "All"),
+]
+
+
+def _segregation_pick_value(row: dict, aliases: list[str], default=""):
+    item = dict(row or {})
+    normalized = {
+        _phase2_normalize_text(key): value
+        for key, value in item.items()
+        if str(key or "").strip()
+    }
+    for alias in aliases:
+        normalized_alias = _phase2_normalize_text(alias)
+        if normalized_alias not in normalized:
+            continue
+        value = normalized.get(normalized_alias)
+        if value == 0:
+            return value
+        if str(value or "").strip():
+            return value
+    return default
+
+
+def _segregation_display_text(*values):
+    for value in values:
+        if value == 0:
+            return "0"
+        text = str(value or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _segregation_resolved_item_type(raw_value: str | None, *, default=models.ItemTypeChoices.ARTICLE) -> str:
+    value = str(raw_value or "").strip()
+    if not value and raw_value == "":
+        return ""
+    allowed_item_types = {choice[0] for choice in SEGREGATION_ITEM_FILTER_CHOICES}
+    if value in allowed_item_types:
+        return value
+    normalized_value = _phase2_normalize_text(value)
+    if normalized_value == _phase2_normalize_text(models.ItemTypeChoices.ARTICLE):
+        return models.ItemTypeChoices.ARTICLE
+    if normalized_value == _phase2_normalize_text(models.ItemTypeChoices.AID):
+        return models.ItemTypeChoices.AID
+    if normalized_value == "all":
+        return ""
+    return default
+
+
+def _segregation_type_order(value: str) -> int:
+    order = {
+        models.RecipientTypeChoices.DISTRICT: 0,
+        models.RecipientTypeChoices.PUBLIC: 1,
+        models.RecipientTypeChoices.INSTITUTIONS: 2,
+        models.RecipientTypeChoices.OTHERS: 3,
+    }
+    return order.get(str(value or "").strip(), 99)
+
+
+def _segregation_normalize_row(row: dict) -> dict:
+    item = dict(row or {})
+    application_number = _segregation_display_text(
+        _segregation_pick_value(item, ["Application Number", "App No", "application_number"]),
+    )
+    beneficiary_type = _segregation_display_text(
+        _segregation_pick_value(item, ["Beneficiary Type", "beneficiary_type"]),
+    )
+    item_type = _segregation_display_text(
+        _segregation_pick_value(item, ["Item Type", "item_type"]),
+    )
+    district_name = _segregation_display_text(
+        _segregation_pick_value(item, ["District", "district"]),
+    )
+    beneficiary_name = _segregation_display_text(
+        _segregation_pick_value(item, ["Beneficiary Name", "beneficiary_name", "Name"]),
+    )
+    names_value = _segregation_display_text(
+        _segregation_pick_value(item, ["Names", "Beneficiary Name", "Name"]),
+    )
+    item_name = _segregation_display_text(
+        _segregation_pick_value(
+            item,
+            ["Token Name", "Requested Item", "Article Name", "Article", "Item"],
+        ),
+    )
+    waiting_hall_quantity = _phase2_parse_number(
+        _segregation_pick_value(item, ["Waiting Hall Quantity", "waiting_hall_quantity"], 0)
+    )
+    token_quantity = _phase2_parse_number(
+        _segregation_pick_value(item, ["Token Quantity", "Token Qty", "token_quantity"], 0)
+    )
+    sequence_no = _phase2_parse_number(
+        _segregation_pick_value(item, ["Sequence No", "Sequence List", "sequence_no"], 0)
+    )
+    start_token_no = _phase2_parse_number(
+        _segregation_pick_value(item, ["Start Token No", "Start Token No.", "token_start"], 0)
+    )
+    end_token_no = _phase2_parse_number(
+        _segregation_pick_value(item, ["End Token No", "End Token No.", "token_end"], 0)
+    )
+    if token_quantity <= 0 and start_token_no > 0 and end_token_no >= start_token_no:
+        token_quantity = end_token_no - start_token_no + 1
+
+    if beneficiary_type == models.RecipientTypeChoices.DISTRICT:
+        beneficiary_label = _segregation_display_text(district_name, beneficiary_name, names_value, application_number)
+    else:
+        if application_number and beneficiary_name:
+            beneficiary_label = f"{application_number} - {beneficiary_name}"
+        else:
+            beneficiary_label = _segregation_display_text(names_value, beneficiary_name, application_number)
+
+    return {
+        "application_number": application_number,
+        "beneficiary_type": beneficiary_type,
+        "item_type": item_type,
+        "district_name": district_name,
+        "beneficiary_name": beneficiary_name,
+        "beneficiary_label": beneficiary_label,
+        "item_name": item_name,
+        "waiting_hall_quantity": waiting_hall_quantity,
+        "token_quantity": token_quantity,
+        "sequence_no": sequence_no,
+        "start_token_no": start_token_no,
+        "end_token_no": end_token_no,
+    }
+
+
+def _segregation_normalize_dataset(dataset: dict) -> dict:
+    rows = []
+    for row in list(dataset.get("rows") or []):
+        normalized = _segregation_normalize_row(row)
+        if not (
+            normalized["beneficiary_label"]
+            or normalized["item_name"]
+            or normalized["waiting_hall_quantity"]
+            or normalized["token_quantity"]
+        ):
+            continue
+        rows.append(normalized)
+    return {
+        "rows": rows,
+        "headers": list(dataset.get("headers") or []),
+    }
+
+
+def _segregation_filter_rows(rows: list[dict], *, beneficiary_type: str, item_type: str) -> list[dict]:
+    filtered_rows = []
+    for row in list(rows or []):
+        row_beneficiary_type = str(row.get("beneficiary_type") or "").strip()
+        row_item_type = str(row.get("item_type") or "").strip()
+        if beneficiary_type and row_beneficiary_type != beneficiary_type:
+            continue
+        if item_type and row_item_type != item_type:
+            continue
+        filtered_rows.append(dict(row))
+    return filtered_rows
+
+
+def _segregation_build_file1(rows: list[dict]) -> dict:
+    grouped_map: dict[tuple[str, str], dict] = {}
+    for row in list(rows or []):
+        waiting_hall_quantity = int(row.get("waiting_hall_quantity") or 0)
+        item_name = str(row.get("item_name") or "").strip()
+        beneficiary_label = str(row.get("beneficiary_label") or "").strip()
+        if waiting_hall_quantity <= 0 or not item_name or not beneficiary_label:
+            continue
+        group_key = (
+            str(row.get("beneficiary_type") or "").strip(),
+            beneficiary_label,
+        )
+        group = grouped_map.setdefault(
+            group_key,
+            {
+                "beneficiary_type": group_key[0],
+                "beneficiary_label": beneficiary_label,
+                "sort_sequence": _segregation_type_order(group_key[0]),
+                "items": {},
+                "total_quantity": 0,
+            },
+        )
+        group["items"][item_name] = int(group["items"].get(item_name) or 0) + waiting_hall_quantity
+        group["total_quantity"] += waiting_hall_quantity
+
+    groups = []
+    row_count = 0
+    total_quantity = 0
+    for _, group in sorted(
+        grouped_map.items(),
+        key=lambda item: (
+            item[1]["sort_sequence"],
+            str(item[1]["beneficiary_label"]).casefold(),
+        ),
+    ):
+        items = [
+            {"article_name": item_name, "quantity": quantity}
+            for item_name, quantity in sorted(group["items"].items(), key=lambda entry: entry[0].casefold())
+        ]
+        row_count += len(items)
+        total_quantity += int(group["total_quantity"] or 0)
+        groups.append(
+            {
+                "beneficiary_type": group["beneficiary_type"],
+                "beneficiary_label": group["beneficiary_label"],
+                "items": items,
+                "total_quantity": int(group["total_quantity"] or 0),
+            }
+        )
+    return {
+        "groups": groups,
+        "beneficiary_count": len(groups),
+        "row_count": row_count,
+        "total_quantity": total_quantity,
+    }
+
+
+def _segregation_build_file2(rows: list[dict]) -> dict:
+    grouped_map: dict[str, dict] = {}
+    for row in list(rows or []):
+        waiting_hall_quantity = int(row.get("waiting_hall_quantity") or 0)
+        item_name = str(row.get("item_name") or "").strip()
+        beneficiary_label = str(row.get("beneficiary_label") or "").strip()
+        if waiting_hall_quantity <= 0 or not item_name or not beneficiary_label:
+            continue
+        article_group = grouped_map.setdefault(
+            item_name,
+            {
+                "article_name": item_name,
+                "beneficiaries": {},
+                "total_quantity": 0,
+            },
+        )
+        article_group["beneficiaries"][beneficiary_label] = int(article_group["beneficiaries"].get(beneficiary_label) or 0) + waiting_hall_quantity
+        article_group["total_quantity"] += waiting_hall_quantity
+
+    groups = []
+    beneficiary_row_count = 0
+    total_quantity = 0
+    for article_name, group in sorted(grouped_map.items(), key=lambda item: item[0].casefold()):
+        beneficiaries = [
+            {"beneficiary_label": beneficiary_label, "quantity": quantity}
+            for beneficiary_label, quantity in sorted(group["beneficiaries"].items(), key=lambda entry: entry[0].casefold())
+        ]
+        beneficiary_row_count += len(beneficiaries)
+        total_quantity += int(group["total_quantity"] or 0)
+        groups.append(
+            {
+                "article_name": article_name,
+                "beneficiaries": beneficiaries,
+                "total_quantity": int(group["total_quantity"] or 0),
+            }
+        )
+    return {
+        "groups": groups,
+        "article_count": len(groups),
+        "row_count": beneficiary_row_count,
+        "total_quantity": total_quantity,
+    }
+
+
+def _segregation_build_file3(rows: list[dict]) -> dict:
+    stage_map: dict[tuple[int, str], dict] = {}
+    for row in list(rows or []):
+        token_quantity = int(row.get("token_quantity") or 0)
+        item_name = str(row.get("item_name") or "").strip()
+        if token_quantity <= 0 or not item_name:
+            continue
+        sequence_no = int(row.get("sequence_no") or 0)
+        key = (sequence_no, item_name)
+        stage_row = stage_map.setdefault(
+            key,
+            {
+                "sequence_no": sequence_no,
+                "item_name": item_name,
+                "token_quantity": 0,
+                "start_token_no": 0,
+                "end_token_no": 0,
+            },
+        )
+        stage_row["token_quantity"] += token_quantity
+        start_token_no = int(row.get("start_token_no") or 0)
+        end_token_no = int(row.get("end_token_no") or 0)
+        if start_token_no > 0:
+            if stage_row["start_token_no"] <= 0:
+                stage_row["start_token_no"] = start_token_no
+            else:
+                stage_row["start_token_no"] = min(stage_row["start_token_no"], start_token_no)
+        if end_token_no > 0:
+            stage_row["end_token_no"] = max(stage_row["end_token_no"], end_token_no)
+
+    rows_list = [
+        dict(value)
+        for _, value in sorted(
+            stage_map.items(),
+            key=lambda item: (
+                item[0][0] <= 0,
+                item[0][0] if item[0][0] > 0 else 10**9,
+                item[0][1].casefold(),
+            ),
+        )
+    ]
+    return {
+        "rows": rows_list,
+        "row_count": len(rows_list),
+        "total_token_quantity": sum(int(row.get("token_quantity") or 0) for row in rows_list),
+    }
+
+
+def _segregation_master_sheet_rows(rows: list[dict]) -> list[dict]:
+    return [
+        {
+            "Seq No": int(row.get("sequence_no") or 0) if int(row.get("sequence_no") or 0) > 0 else "",
+            "Beneficiary Type": str(row.get("beneficiary_type") or ""),
+            "Beneficiary": str(row.get("beneficiary_label") or ""),
+            "Application No": str(row.get("application_number") or ""),
+            "Item Type": str(row.get("item_type") or ""),
+            "Item": str(row.get("item_name") or ""),
+            "Waiting Hall Qty": int(row.get("waiting_hall_quantity") or 0),
+            "Token Qty": int(row.get("token_quantity") or 0),
+            "Start Token": int(row.get("start_token_no") or 0) if int(row.get("start_token_no") or 0) > 0 else "",
+            "End Token": int(row.get("end_token_no") or 0) if int(row.get("end_token_no") or 0) > 0 else "",
+            "District": str(row.get("district_name") or ""),
+        }
+        for row in list(rows or [])
+    ]
+
+
+def _segregation_file1_sheet_rows(groups: list[dict]) -> list[dict]:
+    rows = []
+    for group in list(groups or []):
+        for item in list(group.get("items") or []):
+            rows.append(
+                {
+                    "Beneficiary": str(group.get("beneficiary_label") or ""),
+                    "Article": str(item.get("article_name") or ""),
+                    "Quantity": int(item.get("quantity") or 0),
+                    "Signature": "",
+                }
+            )
+    return rows
+
+
+def _segregation_file2_sheet_rows(groups: list[dict]) -> list[dict]:
+    rows = []
+    for group in list(groups or []):
+        for beneficiary in list(group.get("beneficiaries") or []):
+            rows.append(
+                {
+                    "Article": str(group.get("article_name") or ""),
+                    "Beneficiary": str(beneficiary.get("beneficiary_label") or ""),
+                    "Waiting Hall Quantity": int(beneficiary.get("quantity") or 0),
+                }
+            )
+    return rows
+
+
+def _segregation_file3_sheet_rows(rows: list[dict]) -> list[dict]:
+    return [
+        {
+            "Seq No": int(row.get("sequence_no") or 0) if int(row.get("sequence_no") or 0) > 0 else "",
+            "Item": str(row.get("item_name") or ""),
+            "Token Qty": int(row.get("token_quantity") or 0),
+            "Start Token": int(row.get("start_token_no") or 0) if int(row.get("start_token_no") or 0) > 0 else "",
+            "End Token": int(row.get("end_token_no") or 0) if int(row.get("end_token_no") or 0) > 0 else "",
+        }
+        for row in list(rows or [])
+    ]
 
 
 def _reports_token_lookup_default_state():
@@ -1238,6 +1622,23 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         if active_tab == "reports-home":
             segregation_state = _reports_simple_report_session_state(request, REPORTS_SEGREGATION_STATE_KEY)
             distribution_state = _reports_simple_report_session_state(request, REPORTS_DISTRIBUTION_STATE_KEY)
+            segregation_beneficiary_type = str(request.POST.get("segregation_beneficiary_type") or "").strip()
+            allowed_beneficiary_types = {choice[0] for choice in SEGREGATION_BENEFICIARY_FILTER_CHOICES}
+            if segregation_beneficiary_type not in allowed_beneficiary_types:
+                segregation_beneficiary_type = ""
+            segregation_item_type = _segregation_resolved_item_type(
+                request.POST.get("segregation_item_type"),
+                default=models.ItemTypeChoices.ARTICLE,
+            )
+
+            def _reports_home_redirect():
+                params = {
+                    "tab": "reports-home",
+                    "seg_item_type": segregation_item_type or models.ItemTypeChoices.ARTICLE,
+                }
+                if segregation_beneficiary_type:
+                    params["seg_beneficiary_type"] = segregation_beneficiary_type
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?{urlencode(params)}")
 
             def _simple_report_sync(state, label: str):
                 session = _reports_active_session()
@@ -1276,38 +1677,110 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             if action == "sync_reports_segregation":
                 rows_count = _simple_report_sync(segregation_state, REPORTS_SEGREGATION_STATE_KEY)
                 messages.success(request, f"Segregation synced. Rows: {rows_count}.")
-                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+                return _reports_home_redirect()
 
             if action == "upload_reports_segregation":
                 uploaded_file = request.FILES.get("file")
                 if not uploaded_file:
                     messages.error(request, "Choose a CSV or Excel file to upload.")
-                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+                    return _reports_home_redirect()
                 rows_count, source_headers = _simple_report_upload(segregation_state, REPORTS_SEGREGATION_STATE_KEY, uploaded_file)
                 if rows_count is None:
                     messages.error(request, "Uploaded file is empty.")
-                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+                    return _reports_home_redirect()
                 messages.success(request, f"Uploaded {rows_count} segregation row(s).")
-                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+                return _reports_home_redirect()
+
+            if action in {
+                "download_reports_segregation_excel",
+                "download_reports_segregation_file1_pdf",
+                "download_reports_segregation_file2_pdf",
+                "download_reports_segregation_file3_pdf",
+                "preview_reports_segregation_file1_pdf",
+                "preview_reports_segregation_file2_pdf",
+                "preview_reports_segregation_file3_pdf",
+            }:
+                normalized_dataset = _segregation_normalize_dataset(segregation_state)
+                filtered_rows = _segregation_filter_rows(
+                    normalized_dataset.get("rows") or [],
+                    beneficiary_type=segregation_beneficiary_type,
+                    item_type=segregation_item_type,
+                )
+                file1_data = _segregation_build_file1(filtered_rows)
+                file2_data = _segregation_build_file2(filtered_rows)
+                file3_data = _segregation_build_file3(filtered_rows)
+                if action == "download_reports_segregation_excel":
+                    workbook_stream = services.generate_segregation_xlsx(
+                        master_rows=_segregation_master_sheet_rows(normalized_dataset.get("rows") or []),
+                        file1_rows=_segregation_file1_sheet_rows(file1_data["groups"]),
+                        file2_rows=_segregation_file2_sheet_rows(file2_data["groups"]),
+                        file3_rows=_segregation_file3_sheet_rows(file3_data["rows"]),
+                    )
+                    return FileResponse(
+                        workbook_stream,
+                        as_attachment=True,
+                        filename=f"segregation_reports_{timezone.localtime().strftime('%d_%b_%Y_%H_%M')}.xlsx",
+                    )
+                if action == "download_reports_segregation_file1_pdf":
+                    pdf_stream = services.generate_segregation_file1_pdf(file1_data["groups"])
+                    return FileResponse(
+                        pdf_stream,
+                        as_attachment=True,
+                        filename=f"segregation_file_1_{timezone.localtime().strftime('%d_%b_%Y_%H_%M')}.pdf",
+                    )
+                if action == "preview_reports_segregation_file1_pdf":
+                    pdf_stream = services.generate_segregation_file1_pdf(file1_data["groups"])
+                    return FileResponse(
+                        pdf_stream,
+                        as_attachment=False,
+                        filename="segregation_file_1_preview.pdf",
+                    )
+                if action == "download_reports_segregation_file2_pdf":
+                    pdf_stream = services.generate_segregation_file2_pdf(file2_data["groups"])
+                    return FileResponse(
+                        pdf_stream,
+                        as_attachment=True,
+                        filename=f"segregation_file_2_{timezone.localtime().strftime('%d_%b_%Y_%H_%M')}.pdf",
+                    )
+                if action == "preview_reports_segregation_file2_pdf":
+                    pdf_stream = services.generate_segregation_file2_pdf(file2_data["groups"])
+                    return FileResponse(
+                        pdf_stream,
+                        as_attachment=False,
+                        filename="segregation_file_2_preview.pdf",
+                    )
+                if action == "preview_reports_segregation_file3_pdf":
+                    pdf_stream = services.generate_segregation_file3_pdf(file3_data["rows"])
+                    return FileResponse(
+                        pdf_stream,
+                        as_attachment=False,
+                        filename="segregation_file_3_preview.pdf",
+                    )
+                pdf_stream = services.generate_segregation_file3_pdf(file3_data["rows"])
+                return FileResponse(
+                    pdf_stream,
+                    as_attachment=True,
+                    filename=f"segregation_file_3_{timezone.localtime().strftime('%d_%b_%Y_%H_%M')}.pdf",
+                )
 
             if action == "sync_reports_distribution":
                 rows_count = _simple_report_sync(distribution_state, REPORTS_DISTRIBUTION_STATE_KEY)
                 messages.success(request, f"Distribution synced. Rows: {rows_count}.")
-                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+                return _reports_home_redirect()
 
             if action == "upload_reports_distribution":
                 uploaded_file = request.FILES.get("file")
                 if not uploaded_file:
                     messages.error(request, "Choose a CSV or Excel file to upload.")
-                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+                    return _reports_home_redirect()
                 rows_count, source_headers = _simple_report_upload(distribution_state, REPORTS_DISTRIBUTION_STATE_KEY, uploaded_file)
                 if rows_count is None:
                     messages.error(request, "Uploaded file is empty.")
-                    return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+                    return _reports_home_redirect()
                 messages.success(request, f"Uploaded {rows_count} distribution row(s).")
-                return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+                return _reports_home_redirect()
 
-            return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=reports-home")
+            return _reports_home_redirect()
 
         if active_tab == "token-lookup":
             state = _reports_token_lookup_session_state(request)
@@ -1452,7 +1925,7 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 messages.success(request, f"Template loaded with {len(template_fields)} fillable field(s).")
                 return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-acknowledgment-form")
 
-            if action == "download_public_ack":
+            if action in {"download_public_ack", "preview_public_ack"}:
                 if not state.get("loaded"):
                     messages.error(request, "Sync Data or Upload a file first before downloading this report.")
                     return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-acknowledgment-form")
@@ -1491,7 +1964,8 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 )
                 filename = f"public_acknowledgment_{timezone.localtime().strftime('%d_%b_%y_%H_%M')}.pdf"
                 response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
-                response["Content-Disposition"] = f'attachment; filename="{filename}"'
+                disposition = "inline" if action == "preview_public_ack" else "attachment"
+                response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
                 return response
 
             return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-acknowledgment-form")
@@ -1566,11 +2040,11 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 messages.success(request, "Public Signature sort updated.")
                 return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
 
-            if action == "download_public_signature":
+            if action in {"download_public_signature", "preview_public_signature"}:
                 if not state.get("loaded"):
                     messages.error(request, "Sync Data or Upload a file first before downloading this report.")
                     return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
-                download_format = (request.POST.get("download_format") or "pdf").strip().lower()
+                download_format = "pdf" if action == "preview_public_signature" else (request.POST.get("download_format") or "pdf").strip().lower()
                 selected_items = [
                     str(item or "").strip()
                     for item in request.POST.getlist("selected_items")
@@ -1599,7 +2073,8 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                     filename = f"public_signature_{stamp}.pdf"
                     content_type = "application/pdf"
                 response = HttpResponse(buffer.getvalue(), content_type=content_type)
-                response["Content-Disposition"] = f'attachment; filename="{filename}"'
+                disposition = "inline" if action == "preview_public_signature" and content_type == "application/pdf" else "attachment"
+                response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
                 return response
 
             if action == "sync_district_signature":
@@ -1644,11 +2119,11 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 messages.success(request, f"Uploaded {len(rows)} district signature row(s).")
                 return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
 
-            if action == "download_district_signature":
+            if action in {"download_district_signature", "preview_district_signature"}:
                 if not district_state.get("loaded"):
                     messages.error(request, "Sync Data or Upload a file first before downloading this report.")
                     return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
-                download_format = (request.POST.get("download_format") or "pdf").strip().lower()
+                download_format = "pdf" if action == "preview_district_signature" else (request.POST.get("download_format") or "pdf").strip().lower()
                 grouped = _reports_district_signature_grouped(district_state.get("rows") or [])
                 if not grouped.get("districts"):
                     messages.error(request, "No district rows are available for this report.")
@@ -1680,7 +2155,8 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                     filename = f"district_signature_{stamp}.pdf"
                     content_type = "application/pdf"
                 response = HttpResponse(buffer.getvalue(), content_type=content_type)
-                response["Content-Disposition"] = f'attachment; filename="{filename}"'
+                disposition = "inline" if action == "preview_district_signature" and content_type == "application/pdf" else "attachment"
+                response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
                 return response
 
             return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=public-signature")
@@ -1760,7 +2236,7 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             messages.success(request, "Waiting Hall Acknowledgment selections saved.")
             return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=waiting-hall-acknowledgment")
 
-        if action == "download_waiting_hall":
+        if action in {"download_waiting_hall", "preview_waiting_hall"}:
             if not state.get("loaded"):
                 messages.error(request, "Sync Data or Upload a file first before downloading this report.")
                 return HttpResponseRedirect(f"{reverse('ui:reports')}?tab=waiting-hall-acknowledgment")
@@ -1778,7 +2254,7 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             event_date = date(event_year, 3, 3)
             age_label = services._ordinal(max(event_date.year - 1940, 1))
             logo_bytes = base64.b64decode(shared_logo["logo_base64"]) if shared_logo.get("logo_base64") else None
-            output_format = (request.POST.get("download_format") or "pdf").strip().lower()
+            output_format = "pdf" if action == "preview_waiting_hall" else (request.POST.get("download_format") or "pdf").strip().lower()
             if output_format == "pdf":
                 buffer = services.generate_waiting_hall_acknowledgment_pdf(
                     report_groups,
@@ -1788,7 +2264,8 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 )
                 filename = f"district_waiting_hall_acknowledgment_{timezone.localtime().strftime('%d_%b_%y_%H_%M')}.pdf"
                 response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
-                response["Content-Disposition"] = f'attachment; filename="{filename}"'
+                disposition = "inline" if action == "preview_waiting_hall" else "attachment"
+                response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
                 return response
             document_bytes = services.generate_waiting_hall_acknowledgment_doc(
                 report_groups,
@@ -1847,6 +2324,23 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         public_ack_rows = list(public_ack_state.get("rows") or [])
         segregation_state = _reports_simple_report_session_state(self.request, REPORTS_SEGREGATION_STATE_KEY)
         segregation_rows = list(segregation_state.get("rows") or [])
+        segregation_beneficiary_type = str(self.request.GET.get("seg_beneficiary_type") or "").strip()
+        allowed_beneficiary_types = {choice[0] for choice in SEGREGATION_BENEFICIARY_FILTER_CHOICES}
+        if segregation_beneficiary_type not in allowed_beneficiary_types:
+            segregation_beneficiary_type = ""
+        segregation_item_type = _segregation_resolved_item_type(
+            self.request.GET.get("seg_item_type"),
+            default=models.ItemTypeChoices.ARTICLE,
+        )
+        segregation_dataset = _segregation_normalize_dataset(segregation_state)
+        segregation_filtered_rows = _segregation_filter_rows(
+            segregation_dataset.get("rows") or [],
+            beneficiary_type=segregation_beneficiary_type,
+            item_type=segregation_item_type,
+        )
+        segregation_file1 = _segregation_build_file1(segregation_filtered_rows)
+        segregation_file2 = _segregation_build_file2(segregation_filtered_rows)
+        segregation_file3 = _segregation_build_file3(segregation_filtered_rows)
         distribution_state = _reports_simple_report_session_state(self.request, REPORTS_DISTRIBUTION_STATE_KEY)
         distribution_rows = list(distribution_state.get("rows") or [])
         context.update(
@@ -1877,6 +2371,16 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 "public_ack_template_fields": public_ack_template_fields,
                 "segregation_state": segregation_state,
                 "segregation_row_count": len(segregation_rows),
+                "segregation_filter_values": {
+                    "beneficiary_type": segregation_beneficiary_type,
+                    "item_type": segregation_item_type,
+                },
+                "segregation_beneficiary_type_choices": SEGREGATION_BENEFICIARY_FILTER_CHOICES,
+                "segregation_item_type_choices": SEGREGATION_ITEM_FILTER_CHOICES,
+                "segregation_filtered_row_count": len(segregation_filtered_rows),
+                "segregation_file1": segregation_file1,
+                "segregation_file2": segregation_file2,
+                "segregation_file3": segregation_file3,
                 "distribution_state": distribution_state,
                 "distribution_row_count": len(distribution_rows),
                 "public_ack_field_rows": [
@@ -2289,48 +2793,11 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         sort_by = (self.request.GET.get("sort") or "").strip()
         sort_dir = "asc" if (self.request.GET.get("dir") or "desc").lower() == "asc" else "desc"
 
-        district_groups = _filter_sort_district_summaries(
-            _build_district_entry_summaries(),
-            search_query=search_query,
-            date_from=date_from,
-            date_to=date_to,
-            status_filter=status_filter,
-            sort_by=sort_by,
-            sort_dir=sort_dir,
-        )
-        public_entries = _filter_sort_public_entries(
-            models.PublicBeneficiaryEntry.objects.select_related("article").all(),
-            search_query=search_query,
-            date_from=date_from,
-            date_to=date_to,
-            status_filter=status_filter,
-            sort_by=sort_by,
-            sort_dir=sort_dir,
-        )
-        public_entries = list(public_entries)
-        public_attachment_map, public_attachment_lists = _public_attachment_preview_data([entry.id for entry in public_entries])
-        for entry in public_entries:
-            entry_history_matches = _public_history_matches(entry.aadhar_number)
-            entry.public_history_summary = _public_history_summary(entry_history_matches)
-            attachment = public_attachment_map.get(entry.id)
-            attachment_items = [_attachment_preview_payload(item) for item in public_attachment_lists.get(entry.id, [])]
-            attachment_items = [item for item in attachment_items if item]
-            entry.attachment_id = attachment.id if attachment else None
-            entry.attachment_preview_url = reverse("ui:application-attachment-download", kwargs={"attachment_id": attachment.id}) if attachment else ""
-            entry.attachment_source = _attachment_preview_source(attachment)
-            entry.attachment_title = _attachment_preview_title(attachment)
-            entry.attachment_count = len(attachment_items)
-            entry.attachment_items_json = json.dumps(attachment_items)
-            entry.attachment_items_b64 = _attachment_items_b64(attachment_items)
-        institution_groups = _filter_sort_institution_summaries(
-            _build_institution_entry_summaries(),
-            search_query=search_query,
-            date_from=date_from,
-            date_to=date_to,
-            status_filter=status_filter,
-            sort_by=sort_by,
-            sort_dir=sort_dir,
-        )
+        # IMPORTANT: This page can get very large (lots of rows + attachment metadata + hidden detail tables).
+        # Only build the dataset that is currently selected, and lazy-load expanded row details.
+        district_groups = []
+        public_entries = []
+        institution_groups = []
 
         context["beneficiary_type"] = beneficiary_type
         context["search_query"] = search_query
@@ -2344,28 +2811,181 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         ]
         context["sort_by"] = sort_by
         context["sort_dir"] = sort_dir
+
+        district_count = models.DistrictBeneficiaryEntry.objects.values("district_id").distinct().count()
+        public_count = models.PublicBeneficiaryEntry.objects.count()
+        institution_count = models.InstitutionsBeneficiaryEntry.objects.values("application_number").distinct().count()
+        district_row_count = models.DistrictBeneficiaryEntry.objects.count()
+        public_row_count = models.PublicBeneficiaryEntry.objects.count()
+        institution_row_count = models.InstitutionsBeneficiaryEntry.objects.count()
+
+        context["district_count"] = district_count
+        context["public_count"] = public_count
+        context["institution_count"] = institution_count
+        context["total_material_rows"] = district_row_count + public_row_count + institution_row_count
+
+        if beneficiary_type == "district":
+            district_groups = _filter_sort_district_summaries(
+                _build_district_entry_summaries(),
+                search_query=search_query,
+                date_from=date_from,
+                date_to=date_to,
+                status_filter=status_filter,
+                sort_by=sort_by,
+                sort_dir=sort_dir,
+            )
+        elif beneficiary_type == "public":
+            public_entries = _filter_sort_public_entries(
+                models.PublicBeneficiaryEntry.objects.select_related("article").all(),
+                search_query=search_query,
+                date_from=date_from,
+                date_to=date_to,
+                status_filter=status_filter,
+                sort_by=sort_by,
+                sort_dir=sort_dir,
+            )
+            public_entries = list(public_entries)
+            public_attachment_latest, public_attachment_counts = _public_attachment_latest_and_counts(
+                [entry.id for entry in public_entries]
+            )
+            for entry in public_entries:
+                attachment = public_attachment_latest.get(entry.id)
+                entry.attachment_id = attachment.id if attachment else None
+                entry.attachment_preview_url = reverse("ui:application-attachment-download", kwargs={"attachment_id": attachment.id}) if attachment else ""
+                entry.attachment_source = _attachment_preview_source(attachment)
+                entry.attachment_title = _attachment_preview_title(attachment)
+                entry.attachment_count = public_attachment_counts.get(entry.id, 0)
+        elif beneficiary_type == "institutions":
+            institution_groups = _filter_sort_institution_summaries(
+                _build_institution_entry_summaries(),
+                search_query=search_query,
+                date_from=date_from,
+                date_to=date_to,
+                status_filter=status_filter,
+                sort_by=sort_by,
+                sort_dir=sort_dir,
+            )
+
         context["district_groups"] = district_groups
-        context["district_count"] = models.DistrictBeneficiaryEntry.objects.values("district_id").distinct().count()
-        context["public_count"] = models.PublicBeneficiaryEntry.objects.count()
-        context["institution_count"] = models.InstitutionsBeneficiaryEntry.objects.values("application_number").distinct().count()
-        context["total_material_rows"] = (
-            models.DistrictBeneficiaryEntry.objects.count()
-            + models.PublicBeneficiaryEntry.objects.count()
-            + models.InstitutionsBeneficiaryEntry.objects.count()
-        )
-        phase2_preview = _phase2_build_rows_from_master_export_rows(
-            _phase2_master_export_rows(),
-            source_file_name="master-entry-db",
-        )
-        context["grouped_material_rows"] = len(phase2_preview["rows"])
         context["public_entries"] = public_entries
         context["institution_groups"] = institution_groups
-        context["district_total_accrued"] = sum((row["total_accrued"] or 0) for row in district_groups)
+        context["district_total_accrued"] = sum((row.get("total_accrued") or 0) for row in district_groups)
         context["public_total_accrued"] = sum((entry.total_amount or 0) for entry in public_entries)
-        context["institution_total_accrued"] = sum((row["total_value"] or 0) for row in institution_groups)
+        context["institution_total_accrued"] = sum((row.get("total_value") or 0) for row in institution_groups)
         context["public_submit_popup"] = self.request.session.pop("public_submit_popup", None)
         context["institution_submit_popup"] = self.request.session.pop("institution_submit_popup", None)
         return context
+
+
+class DistrictMasterEntryInlineSummaryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
+    module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
+    permission_action = "view"
+    template_name = "dashboard/partials/master_entry_district_summary.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        district = models.DistrictMaster.objects.get(pk=self.kwargs["district_id"], is_active=True)
+        entries = list(
+            models.DistrictBeneficiaryEntry.objects.filter(district=district).select_related("article").order_by("id")
+        )
+        context["district"] = district
+        context["entries"] = entries
+        context["internal_notes"] = entries[0].internal_notes if entries else ""
+        return context
+
+
+class PublicMasterEntryInlineSummaryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
+    module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
+    permission_action = "view"
+    template_name = "dashboard/partials/master_entry_public_summary.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        entry = models.PublicBeneficiaryEntry.objects.select_related("article").get(pk=self.kwargs["pk"])
+        history_summary = _public_history_summary(_public_history_matches(entry.aadhar_number))
+        context["entry"] = entry
+        context["history_summary"] = history_summary
+        return context
+
+
+class InstitutionsMasterEntryInlineSummaryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
+    module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
+    permission_action = "view"
+    template_name = "dashboard/partials/master_entry_institution_summary.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        application_number = self.kwargs["application_number"]
+        entries = list(
+            models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).select_related("article").order_by("id")
+        )
+        context["application_number"] = application_number
+        context["entries"] = entries
+        context["entry_header"] = entries[0] if entries else None
+        context["internal_notes"] = entries[0].internal_notes if entries else ""
+        return context
+
+
+def _public_attachment_latest_and_counts(entry_ids):
+    if not entry_ids:
+        return {}, {}
+    attachments = (
+        models.ApplicationAttachment.objects.filter(
+            application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
+            public_entry_id__in=entry_ids,
+        )
+        .order_by("public_entry_id", "-created_at", "-id")
+    )
+    latest_map = {}
+    count_map = {}
+    for attachment in attachments:
+        entry_id = attachment.public_entry_id
+        count_map[entry_id] = count_map.get(entry_id, 0) + 1
+        if entry_id not in latest_map:
+            latest_map[entry_id] = attachment
+    return latest_map, count_map
+
+
+def _district_attachment_latest_and_counts(district_ids):
+    if not district_ids:
+        return {}, {}
+    attachments = (
+        models.ApplicationAttachment.objects.filter(
+            application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
+            district_id__in=district_ids,
+        )
+        .order_by("district_id", "-created_at", "-id")
+    )
+    latest_map = {}
+    count_map = {}
+    for attachment in attachments:
+        district_id = attachment.district_id
+        count_map[district_id] = count_map.get(district_id, 0) + 1
+        if district_id not in latest_map:
+            latest_map[district_id] = attachment
+    return latest_map, count_map
+
+
+def _institution_attachment_latest_and_counts(application_numbers):
+    if not application_numbers:
+        return {}, {}
+    attachments = (
+        models.ApplicationAttachment.objects.filter(
+            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+            institution_application_number__in=application_numbers,
+        )
+        .order_by("institution_application_number", "-created_at", "-id")
+    )
+    latest_map = {}
+    count_map = {}
+    for attachment in attachments:
+        key = attachment.institution_application_number
+        if not key:
+            continue
+        count_map[key] = count_map.get(key, 0) + 1
+        if key not in latest_map:
+            latest_map[key] = attachment
+    return latest_map, count_map
 
 
 class ApplicationAuditLogListView(LoginRequiredMixin, AdminRequiredMixin, ListView):
@@ -2616,10 +3236,13 @@ def _save_application_attachment(*, uploaded, display_name, application_type, up
 
 
 def _delete_application_attachment_file(attachment):
-    if attachment.drive_file_id:
-        google_drive.delete_file(attachment.drive_file_id)
-    elif attachment.file:
-        attachment.file.delete(save=False)
+    try:
+        if attachment.drive_file_id:
+            google_drive.delete_file(attachment.drive_file_id)
+        elif attachment.file:
+            attachment.file.delete(save=False)
+    except Exception:
+        logger.exception("Failed to delete attachment file (id=%s). Continuing.", getattr(attachment, "id", None))
 
 
 def _sync_drive_attachments_for_application(
@@ -2645,10 +3268,16 @@ def _sync_drive_attachments_for_application(
     attachments = list(
         models.ApplicationAttachment.objects.filter(**filters).select_related("uploaded_by").order_by("-created_at", "-id")
     )
-    drive_files = google_drive.list_application_attachments(
-        application_type=application_type,
-        application_reference=reference,
-    )
+    try:
+        drive_files = google_drive.list_application_attachments(
+            application_type=application_type,
+            application_reference=reference,
+        )
+    except Exception:
+        # Google Drive sync should never break data entry pages.
+        # Return current DB attachments without syncing.
+        logger.exception("Failed to sync Drive attachments for %s:%s", application_type, reference)
+        return attachments
     if not drive_files:
         stale_drive_only_ids = [
             attachment.id
@@ -3375,16 +4004,14 @@ def _build_district_entry_summaries():
         key = entry.district_id
         grouped.setdefault(key, []).append(entry)
 
-    attachment_map, attachment_lists = _district_attachment_preview_data(list(grouped.keys()))
+    attachment_latest, attachment_counts = _district_attachment_latest_and_counts(list(grouped.keys()))
     summaries = []
     for district_id, district_entries in grouped.items():
         first = district_entries[0]
         total_accrued = sum((entry.total_amount or 0) for entry in district_entries)
         total_quantity = sum((entry.quantity or 0) for entry in district_entries)
         remaining = (first.district.allotted_budget or 0) - total_accrued
-        attachment = attachment_map.get(district_id)
-        attachment_items = [_attachment_preview_payload(item) for item in attachment_lists.get(district_id, [])]
-        attachment_items = [item for item in attachment_items if item]
+        attachment = attachment_latest.get(district_id)
         summaries.append(
             {
                 "district_id": district_id,
@@ -3403,24 +4030,7 @@ def _build_district_entry_summaries():
                 "attachment_preview_url": reverse("ui:application-attachment-download", kwargs={"attachment_id": attachment.id}) if attachment else "",
                 "attachment_source": _attachment_preview_source(attachment),
                 "attachment_title": _attachment_preview_title(attachment),
-                "attachment_count": len(attachment_items),
-                "attachment_items_json": json.dumps(attachment_items),
-                "attachment_items_b64": _attachment_items_b64(attachment_items),
-                "detail_items": [
-                    {
-                        "article_name": entry.article.article_name,
-                        "quantity": entry.quantity,
-                        "unit_cost": entry.article_cost_per_unit,
-                        "total_amount": entry.total_amount,
-                        "name_of_beneficiary": entry.name_of_beneficiary,
-                        "name_of_institution": entry.name_of_institution,
-                        "aadhar_number": entry.aadhar_number,
-                        "notes": entry.notes,
-                        "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour,
-                        "changed_at": entry.updated_at,
-                    }
-                    for entry in district_entries
-                ],
+                "attachment_count": attachment_counts.get(district_id, 0),
             }
         )
     summaries.sort(key=lambda row: row["application_number"])
@@ -4047,13 +4657,11 @@ def _build_institution_entry_summaries():
         key = entry.application_number or str(entry.pk)
         grouped.setdefault(key, []).append(entry)
 
-    attachment_map, attachment_lists = _institution_attachment_preview_data(list(grouped.keys()))
+    attachment_latest, attachment_counts = _institution_attachment_latest_and_counts(list(grouped.keys()))
     summaries = []
     for application_number, group_entries in grouped.items():
         first = group_entries[0]
-        attachment = attachment_map.get(application_number)
-        attachment_items = [_attachment_preview_payload(item) for item in attachment_lists.get(application_number, [])]
-        attachment_items = [item for item in attachment_items if item]
+        attachment = attachment_latest.get(application_number)
         summaries.append(
             {
                 "application_number": application_number,
@@ -4072,24 +4680,7 @@ def _build_institution_entry_summaries():
                 "attachment_preview_url": reverse("ui:application-attachment-download", kwargs={"attachment_id": attachment.id}) if attachment else "",
                 "attachment_source": _attachment_preview_source(attachment),
                 "attachment_title": _attachment_preview_title(attachment),
-                "attachment_count": len(attachment_items),
-                "attachment_items_json": json.dumps(attachment_items),
-                "attachment_items_b64": _attachment_items_b64(attachment_items),
-                "detail_items": [
-                    {
-                        "article_name": entry.article.article_name,
-                        "quantity": entry.quantity,
-                        "unit_cost": entry.article_cost_per_unit,
-                        "total_amount": entry.total_amount,
-                        "name_of_beneficiary": entry.name_of_beneficiary,
-                        "name_of_institution": entry.name_of_institution,
-                        "aadhar_number": entry.aadhar_number,
-                        "notes": entry.notes,
-                        "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour,
-                        "changed_at": entry.updated_at,
-                    }
-                    for entry in group_entries
-                ],
+                "attachment_count": attachment_counts.get(application_number, 0),
             }
         )
     summaries.sort(key=lambda row: row["application_number"])
@@ -5137,13 +5728,18 @@ class DistrictApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin
         if _attachment_name_exists(attachments_qs, display_name):
             messages.error(request, "A file with this name already exists for this application. Please rename it before uploading.")
             return HttpResponseRedirect(reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}))
-        _save_application_attachment(
-            uploaded=uploaded,
-            display_name=display_name,
-            application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
-            district=district,
-            uploaded_by=request.user,
-        )
+        try:
+            _save_application_attachment(
+                uploaded=uploaded,
+                display_name=display_name,
+                application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
+                district=district,
+                uploaded_by=request.user,
+            )
+        except Exception:
+            logger.exception("Attachment upload failed for district=%s", district.id)
+            messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
+            return HttpResponseRedirect(reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}))
         messages.success(request, "Attachment uploaded.")
         return HttpResponseRedirect(reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}))
 
@@ -5190,13 +5786,18 @@ class PublicApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin, 
         if _attachment_name_exists(attachments_qs, display_name):
             messages.error(request, "A file with this name already exists for this application. Please rename it before uploading.")
             return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": entry.pk}))
-        _save_application_attachment(
-            uploaded=uploaded,
-            display_name=display_name,
-            application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
-            public_entry=entry,
-            uploaded_by=request.user,
-        )
+        try:
+            _save_application_attachment(
+                uploaded=uploaded,
+                display_name=display_name,
+                application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
+                public_entry=entry,
+                uploaded_by=request.user,
+            )
+        except Exception:
+            logger.exception("Attachment upload failed for public_entry=%s", entry.pk)
+            messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
+            return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": entry.pk}))
         messages.success(request, "Attachment uploaded.")
         return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": entry.pk}))
 
@@ -5244,13 +5845,18 @@ class InstitutionApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMi
         if _attachment_name_exists(attachments_qs, display_name):
             messages.error(request, "A file with this name already exists for this application. Please rename it before uploading.")
             return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": application_number}))
-        _save_application_attachment(
-            uploaded=uploaded,
-            display_name=display_name,
-            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
-            institution_application_number=application_number,
-            uploaded_by=request.user,
-        )
+        try:
+            _save_application_attachment(
+                uploaded=uploaded,
+                display_name=display_name,
+                application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+                institution_application_number=application_number,
+                uploaded_by=request.user,
+            )
+        except Exception:
+            logger.exception("Attachment upload failed for institution=%s", application_number)
+            messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
+            return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": application_number}))
         messages.success(request, "Attachment uploaded.")
         return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": application_number}))
 
@@ -8944,9 +9550,27 @@ def _token_generation_saved_dataset(session):
     if not rows:
         return {"headers": [], "rows": [], "source_name": "", "saved_at": None}
     headers = _phase2_unique_headers(rows[0].headers or [])
+    prepared_rows = []
+    for row in rows:
+        row_data = dict(row.row_data or {})
+        row_data["Application Number"] = row.application_number or row_data.get("Application Number") or ""
+        row_data["Beneficiary Name"] = row.beneficiary_name or row_data.get("Beneficiary Name") or ""
+        row_data["Requested Item"] = row.requested_item or row_data.get("Requested Item") or ""
+        row_data["Beneficiary Type"] = row.beneficiary_type or row_data.get("Beneficiary Type") or ""
+        row_data["Sequence No"] = row.sequence_no if row.sequence_no is not None else row_data.get("Sequence No") or ""
+        row_data["Start Token No"] = row.start_token_no if row.start_token_no is not None else row_data.get("Start Token No") or 0
+        row_data["End Token No"] = row.end_token_no if row.end_token_no is not None else row_data.get("End Token No") or 0
+        existing_token_quantity = row_data.get("Token Quantity")
+        if existing_token_quantity in {None, ""}:
+            existing_token_quantity = max(
+                (row.end_token_no or 0) - (row.start_token_no or 0) + 1,
+                0,
+            )
+        row_data["Token Quantity"] = existing_token_quantity
+        prepared_rows.append(row_data)
     return {
         "headers": headers,
-        "rows": [dict(row.row_data or {}) for row in rows],
+        "rows": prepared_rows,
         "source_name": rows[0].source_file_name or "",
         "saved_at": rows[0].updated_at,
     }
@@ -11370,6 +11994,73 @@ class LabelGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             timestamp = timezone.localtime().strftime("%d_%b_%y_%H_%M")
             response = HttpResponse(zip_buffer.getvalue(), content_type="application/zip")
             response["Content-Disposition"] = f'attachment; filename="Custom_Labels_{timestamp}.zip"'
+            return response
+
+        if action == "preview_custom_labels":
+            if not request.user.has_module_permission(self.module_key, "export"):
+                messages.error(request, "You do not have permission to preview labels.")
+                return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+
+            def _parse_custom_bulk(raw_text, layout):
+                default_font_size = 72 if layout == "A4" else 54 if layout == "2L" else 30
+                entries = []
+                for raw_line in str(raw_text or "").splitlines():
+                    line = str(raw_line or "").strip()
+                    if not line:
+                        continue
+                    parts = [part.strip() for part in line.split(",")]
+                    if len(parts) < 2:
+                        continue
+                    text_value = parts[0]
+                    count_value = _phase2_parse_number(parts[1]) or 0
+                    font_size_value = _phase2_parse_number(parts[2]) if len(parts) >= 3 else default_font_size
+                    font_size_value = max(8, min(int(font_size_value or default_font_size), 120))
+                    line_spacing_value = _phase2_parse_number(parts[3]) if len(parts) >= 4 else None
+                    if line_spacing_value is not None:
+                        line_spacing_value = max(0, min(int(line_spacing_value), 120))
+                    if text_value and count_value > 0:
+                        entries.append(
+                            {
+                                "text": text_value,
+                                "count": count_value,
+                                "font_size": font_size_value,
+                                "line_spacing": line_spacing_value,
+                            }
+                        )
+                return entries
+
+            custom_bulks = request.POST.getlist("custom_label_bulk")
+            custom_layouts = request.POST.getlist("custom_label_layout")
+            groups = []
+            for index, raw_bulk in enumerate(custom_bulks):
+                layout_value = str(custom_layouts[index] if index < len(custom_layouts) else "12L" or "12L").strip().upper()
+                if layout_value not in {"12L", "2L", "A4"}:
+                    layout_value = "12L"
+                entries = _parse_custom_bulk(raw_bulk, layout_value)
+                if entries:
+                    groups.append({"layout": layout_value, "entries": entries})
+
+            if not groups:
+                messages.error(request, "Paste at least one custom label row as Label text,count or Label text,count,font size,line spacing.")
+                return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+
+            if len(groups) == 1:
+                label_buffer = services.generate_mnp_custom_labels_pdf(groups[0]["entries"], layout=groups[0]["layout"])
+                response = HttpResponse(label_buffer.getvalue(), content_type="application/pdf")
+                response["Content-Disposition"] = 'inline; filename="Custom_Labels_Preview.pdf"'
+                return response
+
+            merged_writer = PdfWriter()
+            for group in groups:
+                label_buffer = services.generate_mnp_custom_labels_pdf(group["entries"], layout=group["layout"])
+                group_reader = PdfReader(io.BytesIO(label_buffer.getvalue()))
+                for page in group_reader.pages:
+                    merged_writer.add_page(page)
+            merged_output = io.BytesIO()
+            merged_writer.write(merged_output)
+            merged_output.seek(0)
+            response = HttpResponse(merged_output.getvalue(), content_type="application/pdf")
+            response["Content-Disposition"] = 'inline; filename="Custom_Labels_Preview.pdf"'
             return response
 
         return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')

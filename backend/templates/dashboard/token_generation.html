@@ -157,6 +157,18 @@
       padding: 10px 12px;
       background: #fcfdff;
       font-size: 0.86rem;
+      color: var(--text-primary);
+    }
+    .token-toggle-item span {
+      color: inherit;
+    }
+    .token-toggle-item input[type="checkbox"],
+    .token-collapsible-controls input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: var(--accent-primary);
+      flex: 0 0 auto;
     }
     .token-step-actions {
       display: flex;
@@ -191,6 +203,24 @@
     }
     .token-collapsible-body {
       padding: 0 14px 14px;
+    }
+    .token-collapsible-controls {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+      margin-bottom: 4px;
+      color: var(--text-primary);
+    }
+    .token-collapsible-controls label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      color: var(--text-primary);
+      font-weight: 600;
+      cursor: pointer;
     }
     .token-section-compact {
       max-height: 420px;
@@ -240,6 +270,12 @@
     @media (max-width: 960px) {
       .token-two-col {
         grid-template-columns: 1fr;
+      }
+      .token-collapsible summary {
+        align-items: flex-start;
+      }
+      .token-collapsible-controls {
+        justify-content: flex-start;
       }
     }
   </style>
@@ -552,14 +588,16 @@
         <details class="token-collapsible" {% if token_open_section == "step3" and token_article_toggles %}open{% endif %}>
           <summary>
             <span>Article Label Settings</span>
-            {% if token_article_toggles %}
-              <label class="token-muted" style="display:flex; align-items:center; gap:8px; margin:0;" onclick="event.stopPropagation();">
-                <input id="token-toggle-all" type="checkbox">
-                <span>Select All</span>
-              </label>
-            {% endif %}
           </summary>
           <div class="token-collapsible-body">
+            {% if token_article_toggles %}
+              <div class="token-collapsible-controls">
+                <label onclick="event.stopPropagation();">
+                  <input id="token-toggle-all" type="checkbox">
+                  <span>Select All</span>
+                </label>
+              </div>
+            {% endif %}
             <div class="token-toggle-list">
               {% if token_article_toggles %}
                 {% for entry in token_article_toggles %}

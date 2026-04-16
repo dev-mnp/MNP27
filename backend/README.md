@@ -15,6 +15,31 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
+## Database Schema
+
+This project is **Postgres-only**.
+
+The canonical way to create/update tables is:
+
+```bash
+python manage.py migrate
+```
+
+If you want a single schema-only SQL file for Supabase migrations, use:
+
+- `backend/db/schema.sql`
+
+(This file contains **schema only**, no data.)
+
+## Docker
+
+Build and run locally (example):
+
+```bash
+docker build -t mnp-backend:local .
+docker run --rm -p 8080:8080 --env-file .env mnp-backend:local
+```
+
 ## Developer guide
 
 If you are new to this codebase, start with:

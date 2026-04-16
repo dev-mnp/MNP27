@@ -1,0 +1,25 @@
+.DS_Store
+**/.DS_Store
+
+**/__pycache__/
+**/*.py[cod]
+
+# Python envs
+**/.venv/
+
+# Local env files
+**/.env
+
+# Local DB artifacts
+**/db.sqlite3*
+**/*.sqlite3
+
+# Local static/media outputs
+**/staticfiles/
+**/media/
+
+# Local dumps/fixtures
+**/*.dump
+**/data*.json
+/backend/.venv
+.local/

@@ -8,6 +8,20 @@
       font-weight: 600;
       margin-left: 2px;
     }
+    .public-radio-group label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .public-radio-group input[type="radio"] {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      flex: 0 0 auto;
+      accent-color: var(--accent-primary);
+    }
   </style>
   <section class="card">
     <div class="toolbar" style="justify-content: space-between;">
@@ -148,7 +162,7 @@
 
         <div>
           <label>Handicapped<span class="required-star">*</span></label>
-          <div class="toolbar" style="margin-bottom: 0;">
+          <div class="toolbar public-radio-group" style="margin-bottom: 0;">
             <label><input type="radio" name="is_handicapped" value="true" {% if public_form_data.is_handicapped == "true" %}checked{% endif %} data-submit-required="true"> Yes</label>
             <label><input type="radio" name="is_handicapped" value="false" {% if public_form_data.is_handicapped == "false" %}checked{% endif %}> No</label>
           </div>
@@ -156,7 +170,7 @@
 
         <div>
           <label>Gender<span class="required-star">*</span></label>
-          <div class="toolbar" style="margin-bottom: 0;">
+          <div class="toolbar public-radio-group" style="margin-bottom: 0;">
             {% for value, label in gender_choices %}
               <label><input type="radio" name="gender" value="{{ value }}" {% if public_form_data.gender == value %}checked{% endif %} data-submit-required="true"> {{ label }}</label>
             {% endfor %}

@@ -1003,9 +1003,20 @@
               </a>
             {% endif %}
             {% if module_perms.reports.can_view %}
-              <a href="{% url 'ui:reports' %}" class="menu-item {% if '/ui/reports/' in request.path %}active{% endif %}">
-                <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M7 4h10l3 3v13H7z"/><path d="M17 4v4h4"/><path d="M9 12h8"/><path d="M9 16h8"/><path d="M9 8h4"/></svg></span><span class="menu-label">Reports</span>
-              </a>
+              <div class="menu-group {% if '/ui/reports/' in request.path %}open{% endif %}">
+                <div class="menu-group-head">
+                  <button class="menu-item menu-group-trigger {% if '/ui/reports/' in request.path and not request.GET.tab %}active{% endif %}" type="button" aria-label="Toggle Reports submenu" aria-expanded="{% if '/ui/reports/' in request.path %}true{% else %}false{% endif %}">
+                    <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M7 4h10l3 3v13H7z"/><path d="M17 4v4h4"/><path d="M9 12h8"/><path d="M9 16h8"/><path d="M9 8h4"/></svg></span><span class="menu-label">Reports</span>
+                  </button>
+                </div>
+                <div class="menu-subitems">
+                  <a href="{% url 'ui:reports' %}?tab=token-lookup" class="menu-subitem {% if '/ui/reports/' in request.path and request.GET.tab == 'token-lookup' %}active{% endif %}">Token Lookup</a>
+                  <a href="{% url 'ui:reports' %}?tab=waiting-hall-acknowledgment" class="menu-subitem {% if '/ui/reports/' in request.path and request.GET.tab == 'waiting-hall-acknowledgment' %}active{% endif %}">Waiting Hall</a>
+                  <a href="{% url 'ui:reports' %}?tab=public-acknowledgment-form" class="menu-subitem {% if '/ui/reports/' in request.path and request.GET.tab == 'public-acknowledgment-form' %}active{% endif %}">Public Ack Form</a>
+                  <a href="{% url 'ui:reports' %}?tab=public-signature" class="menu-subitem {% if '/ui/reports/' in request.path and request.GET.tab == 'public-signature' %}active{% endif %}">Signatures</a>
+                  <a href="{% url 'ui:reports' %}?tab=reports-home" class="menu-subitem {% if '/ui/reports/' in request.path and request.GET.tab == 'reports-home' %}active{% endif %}">Reports</a>
+                </div>
+              </div>
             {% endif %}
           {% endif %}
           {% if module_perms.user_management.can_view or module_perms.base_files.can_view or module_perms.purchase_order.can_view or module_perms.audit_logs.can_view %}
