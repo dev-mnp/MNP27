@@ -29,12 +29,13 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from pypdf import PdfReader, PdfWriter
 
 from django.conf import settings
+from django.contrib.postgres.aggregates import StringAgg
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib import messages
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
-from django.db.models import CharField, F, Q
-from django.db.models.functions import Cast
+from django.db.models import CharField, Count, F, Max, OuterRef, Q, Subquery, Sum, TextField, Value
+from django.db.models.functions import Cast, Coalesce
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -4021,44 +4022,79 @@ def _export_master_entry_csv(request, *, export_scope):
 
 
 def _build_district_entry_summaries():
-    entries = list(
-        models.DistrictBeneficiaryEntry.objects.select_related("district", "article").order_by("-created_at")
-    )
-    grouped = {}
-    for entry in entries:
-        key = entry.district_id
-        grouped.setdefault(key, []).append(entry)
+    """
+    Return per-district summaries for the master-entry list view.
 
-    attachment_latest, attachment_counts = _district_attachment_latest_and_counts(list(grouped.keys()))
+    The older implementation loaded every DistrictBeneficiaryEntry row into Python and grouped there.
+    That becomes noticeably slow as data grows. This version lets Postgres do the grouping/aggregation,
+    then we enrich with attachment metadata in one shot.
+    """
+
+    latest_entry_qs = (
+        models.DistrictBeneficiaryEntry.objects.filter(district_id=OuterRef("district_id"))
+        .order_by("-created_at", "-id")
+    )
+
+    rows = list(
+        models.DistrictBeneficiaryEntry.objects.values(
+            "district_id",
+            "district__application_number",
+            "district__district_name",
+            "district__allotted_budget",
+        )
+        .annotate(
+            total_accrued=Coalesce(Sum("total_amount"), Value(Decimal("0"))),
+            total_quantity=Coalesce(Sum("quantity"), Value(0)),
+            article_count=Count("article_id", distinct=True),
+            article_names=Coalesce(
+                StringAgg("article__article_name", delimiter=", ", distinct=True, ordering="article__article_name"),
+                Value("", output_field=TextField()),
+            ),
+            created_at=Max("created_at"),
+            status=Subquery(latest_entry_qs.values("status")[:1]),
+            internal_notes=Coalesce(
+                Subquery(latest_entry_qs.values("internal_notes")[:1]),
+                Value("", output_field=TextField()),
+            ),
+        )
+        .order_by("district__application_number")
+    )
+
+    district_ids = [row["district_id"] for row in rows if row.get("district_id")]
+    attachment_latest, attachment_counts = _district_attachment_latest_and_counts(district_ids)
+
     summaries = []
-    for district_id, district_entries in grouped.items():
-        first = district_entries[0]
-        total_accrued = sum((entry.total_amount or 0) for entry in district_entries)
-        total_quantity = sum((entry.quantity or 0) for entry in district_entries)
-        remaining = (first.district.allotted_budget or 0) - total_accrued
+    for row in rows:
+        district_id = row.get("district_id")
+        allotted_budget = row.get("district__allotted_budget") or 0
+        total_accrued = row.get("total_accrued") or 0
         attachment = attachment_latest.get(district_id)
         summaries.append(
             {
                 "district_id": district_id,
-                "application_number": first.district.application_number or first.application_number or "-",
-                "district_name": first.district.district_name,
-                "article_names": ", ".join(sorted({entry.article.article_name for entry in district_entries})),
-                "article_count": len({entry.article_id for entry in district_entries if entry.article_id}),
-                "total_quantity": total_quantity,
-                "allotted_budget": first.district.allotted_budget or 0,
+                "application_number": row.get("district__application_number") or "-",
+                "district_name": row.get("district__district_name") or "-",
+                "article_names": row.get("article_names") or "",
+                "article_count": int(row.get("article_count") or 0),
+                "total_quantity": int(row.get("total_quantity") or 0),
+                "allotted_budget": allotted_budget,
                 "total_accrued": total_accrued,
-                "remaining_fund": remaining,
-                "status": first.status,
-                "internal_notes": first.internal_notes or "",
-                "created_at": max(entry.created_at for entry in district_entries),
+                "remaining_fund": allotted_budget - total_accrued,
+                "status": row.get("status") or "",
+                "internal_notes": row.get("internal_notes") or "",
+                "created_at": row.get("created_at") or timezone.now(),
                 "attachment_id": attachment.id if attachment else None,
-                "attachment_preview_url": reverse("ui:application-attachment-download", kwargs={"attachment_id": attachment.id}) if attachment else "",
+                "attachment_preview_url": (
+                    reverse("ui:application-attachment-download", kwargs={"attachment_id": attachment.id})
+                    if attachment
+                    else ""
+                ),
                 "attachment_source": _attachment_preview_source(attachment),
                 "attachment_title": _attachment_preview_title(attachment),
                 "attachment_count": attachment_counts.get(district_id, 0),
             }
         )
-    summaries.sort(key=lambda row: row["application_number"])
+
     return summaries
 
 
@@ -4674,41 +4710,83 @@ def _validate_public_form(form_data, *, require_complete=True):
 
 
 def _build_institution_entry_summaries():
-    entries = list(
-        models.InstitutionsBeneficiaryEntry.objects.select_related("article").order_by("-created_at")
-    )
-    grouped = {}
-    for entry in entries:
-        key = entry.application_number or str(entry.pk)
-        grouped.setdefault(key, []).append(entry)
+    """
+    Return per-application summaries for Institutions/Others in master-entry list view.
 
-    attachment_latest, attachment_counts = _institution_attachment_latest_and_counts(list(grouped.keys()))
+    Uses Postgres aggregation instead of grouping every row in Python.
+    """
+
+    latest_entry_qs = (
+        models.InstitutionsBeneficiaryEntry.objects.filter(application_number=OuterRef("application_number"))
+        .order_by("-created_at", "-id")
+    )
+
+    rows = list(
+        models.InstitutionsBeneficiaryEntry.objects.exclude(application_number__isnull=True)
+        .exclude(application_number__exact="")
+        .values("application_number")
+        .annotate(
+            institution_name=Coalesce(Subquery(latest_entry_qs.values("institution_name")[:1]), Value("")),
+            institution_type=Coalesce(Subquery(latest_entry_qs.values("institution_type")[:1]), Value("")),
+            address=Coalesce(Subquery(latest_entry_qs.values("address")[:1]), Value("")),
+            mobile=Coalesce(Subquery(latest_entry_qs.values("mobile")[:1]), Value("")),
+            status=Subquery(latest_entry_qs.values("status")[:1]),
+            internal_notes=Coalesce(
+                Subquery(latest_entry_qs.values("internal_notes")[:1]),
+                Value("", output_field=TextField()),
+            ),
+            created_at=Max("created_at"),
+            article_count=Count("article_id", distinct=True),
+            article_names=Coalesce(
+                StringAgg("article__article_name", delimiter=", ", distinct=True, ordering="article__article_name"),
+                Value("", output_field=TextField()),
+            ),
+            total_quantity=Coalesce(Sum("quantity"), Value(0)),
+            total_value=Coalesce(Sum("total_amount"), Value(Decimal("0"))),
+        )
+        .order_by("application_number")
+    )
+
+    application_numbers = [row["application_number"] for row in rows if row.get("application_number")]
+    attachment_latest, attachment_counts = _institution_attachment_latest_and_counts(application_numbers)
+
     summaries = []
-    for application_number, group_entries in grouped.items():
-        first = group_entries[0]
+    for row in rows:
+        application_number = row.get("application_number") or "-"
         attachment = attachment_latest.get(application_number)
+        institution_type_value = row.get("institution_type") or ""
+        institution_type_label = institution_type_value
+        if institution_type_value:
+            try:
+                institution_type_label = models.InstitutionTypeChoices(institution_type_value).label
+            except ValueError:
+                institution_type_label = institution_type_value
         summaries.append(
             {
                 "application_number": application_number,
-                "institution_name": first.institution_name,
-                "institution_type": first.get_institution_type_display(),
-                "article_names": ", ".join(sorted({entry.article.article_name for entry in group_entries})),
-                "article_count": len({entry.article_id for entry in group_entries if entry.article_id}),
-                "total_quantity": sum((row.quantity or 0) for row in group_entries),
-                "total_value": sum((row.total_amount or 0) for row in group_entries),
-                "status": first.status,
-                "internal_notes": first.internal_notes or "",
-                "created_at": max(row.created_at for row in group_entries),
-                "address": first.address,
-                "mobile": first.mobile,
+                "institution_name": row.get("institution_name") or "",
+                "institution_type": institution_type_label,
+                "article_names": row.get("article_names") or "",
+                "article_count": int(row.get("article_count") or 0),
+                "total_quantity": int(row.get("total_quantity") or 0),
+                "total_value": row.get("total_value") or 0,
+                "status": row.get("status") or "",
+                "internal_notes": row.get("internal_notes") or "",
+                "created_at": row.get("created_at") or timezone.now(),
+                "address": row.get("address") or "",
+                "mobile": row.get("mobile") or "",
                 "attachment_id": attachment.id if attachment else None,
-                "attachment_preview_url": reverse("ui:application-attachment-download", kwargs={"attachment_id": attachment.id}) if attachment else "",
+                "attachment_preview_url": (
+                    reverse("ui:application-attachment-download", kwargs={"attachment_id": attachment.id})
+                    if attachment
+                    else ""
+                ),
                 "attachment_source": _attachment_preview_source(attachment),
                 "attachment_title": _attachment_preview_title(attachment),
                 "attachment_count": attachment_counts.get(application_number, 0),
             }
         )
-    summaries.sort(key=lambda row: row["application_number"])
+
     return summaries
 
 

@@ -1984,22 +1984,41 @@
       return "";
     }
 
-    document.querySelectorAll(".btn:not(.icon-btn), .btn-subtle:not(.icon-btn)").forEach(function(button) {
-      if (button.querySelector("svg")) return;
-      var label = (button.textContent || "").trim();
-      var kind = buttonKind(label);
-      if (!kind) return;
-      button.innerHTML = iconMarkup(kind) + '<span>' + label + '</span>';
-    });
+    // Non-critical UI enhancements. On large pages, doing this synchronously can make navigation
+    // feel sluggish even when the server response is fast.
+    function runNonCriticalEnhancements() {
+      try {
+        var buttons = document.querySelectorAll(".btn:not(.icon-btn), .btn-subtle:not(.icon-btn)");
+        // Don't do expensive DOM rewrites on very large pages.
+        if (buttons.length <= 300) {
+          buttons.forEach(function(button) {
+            if (button.querySelector("svg")) return;
+            var label = (button.textContent || "").trim();
+            var kind = buttonKind(label);
+            if (!kind) return;
+            button.innerHTML = iconMarkup(kind) + '<span>' + label + '</span>';
+          });
+        }
 
-    document.querySelectorAll("table").forEach(function(table) {
-      if (table.classList.contains("summary-detail-table")) return;
-      if (table.closest(".table-responsive")) return;
-      var wrapper = document.createElement("div");
-      wrapper.className = "table-responsive";
-      table.parentNode.insertBefore(wrapper, table);
-      wrapper.appendChild(table);
-    });
+        var tables = document.querySelectorAll("table");
+        if (tables.length <= 40) {
+          tables.forEach(function(table) {
+            if (table.classList.contains("summary-detail-table")) return;
+            if (table.closest(".table-responsive")) return;
+            var wrapper = document.createElement("div");
+            wrapper.className = "table-responsive";
+            table.parentNode.insertBefore(wrapper, table);
+            wrapper.appendChild(table);
+          });
+        }
+      } catch (error) {}
+    }
+
+    if (window.requestIdleCallback) {
+      window.requestIdleCallback(runNonCriticalEnhancements, {timeout: 1200});
+    } else {
+      window.setTimeout(runNonCriticalEnhancements, 50);
+    }
   })();
 </script>
 </html>
