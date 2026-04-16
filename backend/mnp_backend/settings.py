@@ -12,7 +12,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-change-this-key')
-DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() in {'1', 'true', 'yes', 'on'}
+# Default to production-safe behavior. Local dev can set DJANGO_DEBUG=True in backend/.env.
+DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() in {'1', 'true', 'yes', 'on'}
 
 ALLOWED_HOSTS = [
     host.strip() for host in os.getenv('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost').split(',') if host.strip()
@@ -34,6 +35,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Compress HTML/JSON responses (static assets are handled by WhiteNoise).
+    # This helps a lot on Cloud Run because many pages are large server-rendered HTML.
+    'django.middleware.gzip.GZipMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -43,6 +47,10 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# Optional request timing headers for debugging perf issues (local + Cloud Run logs).
+if os.getenv("DJANGO_ENABLE_REQUEST_TIMING", "False").lower() in {"1", "true", "yes", "on"}:
+    MIDDLEWARE.insert(0, "core.middleware.RequestTimingMiddleware")
 
 ROOT_URLCONF = 'mnp_backend.urls'
 
@@ -106,6 +114,16 @@ def _db_config():
     return {'default': config}
 
 DATABASES = _db_config()
+
+# Small per-instance cache. Useful on Cloud Run to avoid repeating expensive permission/menu lookups
+# on every request. (Still safe if a user’s permissions change; it will self-correct after TTL.)
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "mnp27-locmem",
+        "TIMEOUT": int(os.getenv("DJANGO_CACHE_DEFAULT_TIMEOUT", "300")),
+    }
+}
 
 # Remote Postgres (e.g., Neon) can feel sluggish if we reconnect on every request.
 # Reuse connections for a bit and health-check before reusing to avoid stale sockets.

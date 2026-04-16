@@ -31,6 +31,7 @@ from pypdf import PdfReader, PdfWriter
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib import messages
+from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.db.models import CharField, F, Q
 from django.db.models.functions import Cast
@@ -2461,20 +2462,29 @@ class ArticleListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        category_choices = (
-            models.Article.objects.exclude(category__isnull=True)
-            .exclude(category__exact="")
-            .order_by("category")
-            .values_list("category", flat=True)
-            .distinct()
-        )
-        master_category_choices = (
-            models.Article.objects.exclude(master_category__isnull=True)
-            .exclude(master_category__exact="")
-            .order_by("master_category")
-            .values_list("master_category", flat=True)
-            .distinct()
-        )
+        # These lists are used for filter dropdowns and do not need to be re-queried on every request.
+        # Cache briefly to keep navigation snappy on remote Postgres while still reflecting changes soon.
+        category_choices = cache.get("mnp27:article:category_choices")
+        if category_choices is None:
+            category_choices = list(
+                models.Article.objects.exclude(category__isnull=True)
+                .exclude(category__exact="")
+                .order_by("category")
+                .values_list("category", flat=True)
+                .distinct()
+            )
+            cache.set("mnp27:article:category_choices", category_choices, timeout=300)
+
+        master_category_choices = cache.get("mnp27:article:master_category_choices")
+        if master_category_choices is None:
+            master_category_choices = list(
+                models.Article.objects.exclude(master_category__isnull=True)
+                .exclude(master_category__exact="")
+                .order_by("master_category")
+                .values_list("master_category", flat=True)
+                .distinct()
+            )
+            cache.set("mnp27:article:master_category_choices", master_category_choices, timeout=300)
         context.update(
             {
                 "item_type_choices": models.ItemTypeChoices.choices,
@@ -2812,17 +2822,25 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         context["sort_by"] = sort_by
         context["sort_dir"] = sort_dir
 
-        district_count = models.DistrictBeneficiaryEntry.objects.values("district_id").distinct().count()
-        public_count = models.PublicBeneficiaryEntry.objects.count()
-        institution_count = models.InstitutionsBeneficiaryEntry.objects.values("application_number").distinct().count()
-        district_row_count = models.DistrictBeneficiaryEntry.objects.count()
-        public_row_count = models.PublicBeneficiaryEntry.objects.count()
-        institution_row_count = models.InstitutionsBeneficiaryEntry.objects.count()
+        # Counts are displayed on the page, but they don't need to be recomputed on every request.
+        # Cache briefly to reduce load and make navigation feel faster.
+        counts = cache.get("mnp27:master_entry:counts")
+        if counts is None:
+            district_count = models.DistrictBeneficiaryEntry.objects.values("district_id").distinct().count()
+            public_count = models.PublicBeneficiaryEntry.objects.count()
+            institution_count = models.InstitutionsBeneficiaryEntry.objects.values("application_number").distinct().count()
+            district_row_count = models.DistrictBeneficiaryEntry.objects.count()
+            public_row_count = models.PublicBeneficiaryEntry.objects.count()
+            institution_row_count = models.InstitutionsBeneficiaryEntry.objects.count()
+            counts = {
+                "district_count": district_count,
+                "public_count": public_count,
+                "institution_count": institution_count,
+                "total_material_rows": district_row_count + public_row_count + institution_row_count,
+            }
+            cache.set("mnp27:master_entry:counts", counts, timeout=10)
 
-        context["district_count"] = district_count
-        context["public_count"] = public_count
-        context["institution_count"] = institution_count
-        context["total_material_rows"] = district_row_count + public_row_count + institution_row_count
+        context.update(counts)
 
         if beneficiary_type == "district":
             district_groups = _filter_sort_district_summaries(
@@ -6295,8 +6313,22 @@ class OrderManagementView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             return self._export_csv()
         return super().get(request, *args, **kwargs)
 
-    def _get_filtered_rows(self):
+    def _get_all_rows(self):
+        """
+        Build the (potentially heavy) inventory-planning dataset once per request.
+
+        Previously we rebuilt it multiple times in get_context_data + filtering/export,
+        which made the page feel sluggish even locally and much worse on remote Postgres.
+        """
+        cache_name = "_order_management_all_rows"
+        if hasattr(self, cache_name):
+            return getattr(self, cache_name)
         rows = _build_order_management_rows()
+        setattr(self, cache_name, rows)
+        return rows
+
+    def _get_filtered_rows(self):
+        rows = self._get_all_rows()
         status_filter = self.request.GET.get("status")
         if status_filter is None:
             status_filter = ""
@@ -6363,7 +6395,7 @@ class OrderManagementView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        all_rows = _build_order_management_rows()
+        all_rows = self._get_all_rows()
         rows = self._get_filtered_rows()
         article_rows = [row for row in all_rows if row["item_type"] == models.ItemTypeChoices.ARTICLE]
         aid_rows = [row for row in all_rows if row["item_type"] == models.ItemTypeChoices.AID]

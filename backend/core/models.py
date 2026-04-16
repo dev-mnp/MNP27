@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
+from django.core.cache import cache
 from django.core.validators import MinLengthValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
@@ -414,6 +415,15 @@ class AppUser(AbstractUser):
         cache_name = "_resolved_module_permission_map"
         if hasattr(self, cache_name):
             return getattr(self, cache_name)
+
+        # This is used by the sidebar on every page. Cache it briefly to avoid a DB hit per request
+        # when running against a remote Postgres (Supabase/Neon).
+        cache_key = f"mnp27:user_module_perms:{self.pk}:{self.role}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            setattr(self, cache_name, cached)
+            return cached
+
         permission_map = build_role_module_permission_map(self.role)
         if hasattr(self, "_prefetched_objects_cache") and "module_permissions" in self._prefetched_objects_cache:
             permission_rows = list(self._prefetched_objects_cache["module_permissions"])
@@ -425,6 +435,7 @@ class AppUser(AbstractUser):
                 f"can_{action}": bool(getattr(permission, f"can_{action}", False))
                 for action in ALL_MODULE_PERMISSION_ACTIONS
             }
+        cache.set(cache_key, permission_map, timeout=300)
         setattr(self, cache_name, permission_map)
         return permission_map
 
