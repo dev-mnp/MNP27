@@ -3,9 +3,9 @@ set -eu
 
 : "${PORT:=8080}"
 
-# Collect static at container start so builds do not require DATABASE_URL.
-# Cloud Run will inject env vars at runtime (DATABASE_URL, DJANGO_DEBUG, etc).
-if [ "${RUN_COLLECTSTATIC:-1}" = "1" ]; then
+# Collect static at container start if explicitly enabled.
+# Recommended: collect at build time (Dockerfile) and leave this off in Cloud Run.
+if [ "${RUN_COLLECTSTATIC:-0}" = "1" ]; then
   python manage.py collectstatic --noinput
 fi
 
@@ -15,7 +15,7 @@ if [ "${RUN_MIGRATIONS:-1}" = "1" ]; then
   python manage.py migrate --noinput
 fi
 
-workers="${GUNICORN_WORKERS:-${WEB_CONCURRENCY:-2}}"
+workers="${GUNICORN_WORKERS:-${WEB_CONCURRENCY:-1}}"
 timeout="${GUNICORN_TIMEOUT:-180}"
 
 exec gunicorn mnp_backend.wsgi:application \
