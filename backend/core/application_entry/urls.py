@@ -14,11 +14,6 @@ urlpatterns = [
         name="master-entry-district-create",
     ),
     path(
-        "master-entry/district/<int:district_id>/",
-        views.DistrictMasterEntryDetailView.as_view(),
-        name="master-entry-district-detail",
-    ),
-    path(
         "master-entry/district/<int:district_id>/summary/",
         views.DistrictMasterEntryInlineSummaryView.as_view(),
         name="master-entry-district-summary",
@@ -54,11 +49,6 @@ urlpatterns = [
         name="master-entry-public-create",
     ),
     path(
-        "master-entry/public/<int:pk>/",
-        views.PublicMasterEntryDetailView.as_view(),
-        name="master-entry-public-detail",
-    ),
-    path(
         "master-entry/public/<int:pk>/summary/",
         views.PublicMasterEntryInlineSummaryView.as_view(),
         name="master-entry-public-summary",
@@ -72,6 +62,16 @@ urlpatterns = [
         "master-entry/public/<int:pk>/delete/",
         views.PublicMasterEntryDeleteView.as_view(),
         name="master-entry-public-delete",
+    ),
+    path(
+        "master-entry/public/<int:pk>/archive/",
+        views.PublicMasterEntryArchiveView.as_view(),
+        name="master-entry-public-archive",
+    ),
+    path(
+        "master-entry/public/<int:pk>/unarchive/",
+        views.PublicMasterEntryUnarchiveView.as_view(),
+        name="master-entry-public-unarchive",
     ),
     path(
         "master-entry/public/<int:pk>/reopen/",
@@ -92,11 +92,6 @@ urlpatterns = [
         "master-entry/institutions/new/",
         views.InstitutionsMasterEntryCreateView.as_view(),
         name="master-entry-institution-create",
-    ),
-    path(
-        "master-entry/institutions/<str:application_number>/",
-        views.InstitutionsMasterEntryDetailView.as_view(),
-        name="master-entry-institution-detail",
     ),
     path(
         "master-entry/institutions/<str:application_number>/summary/",
@@ -134,4 +129,3 @@ urlpatterns = [
         name="application-attachment-download",
     ),
 ]
-

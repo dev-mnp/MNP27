@@ -650,7 +650,7 @@ def _phase2_build_rows_from_master_export_rows(rows, *, source_file_name):
 
 def _phase2_master_export_rows():
     district_rows = _district_export_rows(_build_district_entry_summaries())
-    public_rows = _public_export_rows(models.PublicBeneficiaryEntry.objects.select_related("article").all())
+    public_rows = _public_export_rows(models.PublicBeneficiaryEntry.objects.active().select_related("article").all())
     institution_rows = _institution_export_rows(_build_institution_entry_summaries())
     return district_rows + public_rows + institution_rows
 

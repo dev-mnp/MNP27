@@ -88,7 +88,7 @@ def build_order_management_rows():
             )
 
     public_entries = (
-        models.PublicBeneficiaryEntry.objects.select_related("article")
+        models.PublicBeneficiaryEntry.objects.active().select_related("article")
         .order_by("application_number", "name", "created_at")
     )
     for entry in public_entries:
@@ -233,4 +233,3 @@ def build_order_management_rows():
         row["row_id"] = f"order-row-{index}"
         rows.append(row)
     return rows
-

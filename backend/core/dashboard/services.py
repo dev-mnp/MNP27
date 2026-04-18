@@ -28,7 +28,7 @@ def build_dashboard_metrics() -> dict:
         models.DistrictBeneficiaryEntry.objects.select_related("district", "article").all()
     )
     public_entries = list(
-        models.PublicBeneficiaryEntry.objects.select_related("article").all()
+        models.PublicBeneficiaryEntry.objects.active().select_related("article").all()
     )
     institution_entries = list(
         models.InstitutionsBeneficiaryEntry.objects.select_related("article").all()
@@ -220,4 +220,3 @@ def build_dashboard_metrics() -> dict:
         "total_districts": len(districts),
         "pending_districts": pending_districts,
     }
-

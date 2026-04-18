@@ -224,6 +224,7 @@ class RecipientTypeChoices(models.TextChoices):
 class BeneficiaryStatusChoices(models.TextChoices):
     DRAFT = "draft", "Draft"
     SUBMITTED = "submitted", "Submitted"
+    ARCHIVED = "archived", "Archived"
     PENDING = "pending", "Pending"
     APPROVED = "approved", "Approved"
     REJECTED = "rejected", "Rejected"
@@ -1053,6 +1054,13 @@ class DistrictBeneficiaryEntry(BaseTimestampedModel):
 
 
 class PublicBeneficiaryEntry(BaseTimestampedModel):
+    class QuerySet(models.QuerySet):
+        def active(self):
+            return self.exclude(status=BeneficiaryStatusChoices.ARCHIVED)
+
+        def archived(self):
+            return self.filter(status=BeneficiaryStatusChoices.ARCHIVED)
+
     application_number = models.CharField(max_length=120, unique=True, blank=True, null=True)
     name = models.CharField(max_length=255)
     aadhar_number = models.CharField(max_length=20, validators=[MinLengthValidator(12)])
@@ -1070,6 +1078,15 @@ class PublicBeneficiaryEntry(BaseTimestampedModel):
     cheque_rtgs_in_favour = models.CharField(max_length=255, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=10, choices=BeneficiaryStatusChoices.choices, default=BeneficiaryStatusChoices.PENDING)
+    archived_previous_status = models.CharField(max_length=10, blank=True, null=True)
+    archived_at = models.DateTimeField(blank=True, null=True)
+    archived_by = models.ForeignKey(
+        AppUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="archived_public_entries",
+    )
     created_by = models.ForeignKey(
         AppUser,
         on_delete=models.SET_NULL,
@@ -1084,6 +1101,7 @@ class PublicBeneficiaryEntry(BaseTimestampedModel):
         blank=True,
         related_name="linked_public_beneficiaries",
     )
+    objects = QuerySet.as_manager()
 
     class Meta:
         db_table = "public_beneficiary_entries"

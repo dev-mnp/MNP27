@@ -29,6 +29,7 @@ from core.application_entry import google_drive
 from core.application_entry.forms import ApplicationAttachmentUploadForm
 from core.base_files import services as base_file_services
 from core.shared.permissions import AdminRequiredMixin, RoleRequiredMixin, WriteRoleMixin
+from core.shared.article_suggestions import get_article_text_suggestions
 from core.shared.audit import get_request_audit_meta
 from core.shared.audit import log_audit
 
@@ -55,6 +56,23 @@ FEMALE_STATUS_DESCRIPTIONS = {
     "Unemployed": "A woman currently without paid work and seeking or needing livelihood support.",
     "Student": "A woman currently pursuing school, college, or vocational education.",
 }
+
+
+def _public_active_queryset():
+    return models.PublicBeneficiaryEntry.objects.active()
+
+
+def _public_any_queryset():
+    return models.PublicBeneficiaryEntry.objects.all()
+
+
+def _public_visible_queryset(status_filter: str = ""):
+    normalized = (status_filter or "").strip().lower()
+    if normalized == models.BeneficiaryStatusChoices.ARCHIVED:
+        return models.PublicBeneficiaryEntry.objects.archived()
+    if normalized in {models.BeneficiaryStatusChoices.DRAFT, models.BeneficiaryStatusChoices.SUBMITTED}:
+        return _public_active_queryset()
+    return _public_any_queryset()
 
 class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
@@ -92,15 +110,17 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             ("", "All Statuses"),
             (models.BeneficiaryStatusChoices.DRAFT, "Draft"),
             (models.BeneficiaryStatusChoices.SUBMITTED, "Submitted"),
+            (models.BeneficiaryStatusChoices.ARCHIVED, "Archived"),
         ]
         context["sort_by"] = sort_by
         context["sort_dir"] = sort_dir
 
         district_count = models.DistrictBeneficiaryEntry.objects.values("district_id").distinct().count()
-        public_count = models.PublicBeneficiaryEntry.objects.count()
+        public_count = _public_active_queryset().count()
+        public_archived_count = models.PublicBeneficiaryEntry.objects.archived().count()
         institution_count = models.InstitutionsBeneficiaryEntry.objects.values("application_number").distinct().count()
         district_row_count = models.DistrictBeneficiaryEntry.objects.count()
-        public_row_count = models.PublicBeneficiaryEntry.objects.count()
+        public_row_count = _public_active_queryset().count()
         institution_row_count = models.InstitutionsBeneficiaryEntry.objects.count()
         counts = {
             "district_count": district_count,
@@ -110,6 +130,7 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         }
 
         context.update(counts)
+        context["public_archived_count"] = public_archived_count
         context["grouped_material_rows"] = (
             int(counts.get("district_count") or 0)
             + int(counts.get("public_count") or 0)
@@ -128,7 +149,7 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             )
         elif beneficiary_type == "public":
             public_entries = _filter_sort_public_entries(
-                models.PublicBeneficiaryEntry.objects.select_related("article").all(),
+                _public_visible_queryset(status_filter=status_filter).select_related("article").all(),
                 search_query=search_query,
                 date_from=date_from,
                 date_to=date_to,
@@ -193,7 +214,7 @@ class PublicMasterEntryInlineSummaryView(LoginRequiredMixin, RoleRequiredMixin, 
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        entry = models.PublicBeneficiaryEntry.objects.select_related("article").get(pk=self.kwargs["pk"])
+        entry = _public_any_queryset().select_related("article").get(pk=self.kwargs["pk"])
         history_summary = _public_history_summary(_public_history_matches(entry.aadhar_number))
         context["entry"] = entry
         context["history_summary"] = history_summary
@@ -1650,8 +1671,9 @@ def _export_master_entry_csv(request, *, export_scope):
         district_rows = _district_export_rows(filtered_district_summaries)
 
     if export_scope in {"all", "public"}:
+        status_filter = filters.get("status_filter") or ""
         filtered_public_entries = _filter_sort_public_entries(
-            models.PublicBeneficiaryEntry.objects.select_related("article").all(),
+            _public_visible_queryset(status_filter=status_filter).select_related("article").all(),
             search_query=filters["search_query"],
             date_from=filters["date_from"],
             date_to=filters["date_to"],
@@ -1679,7 +1701,7 @@ def _export_master_entry_csv(request, *, export_scope):
     if export_scope == "all":
         has_non_submitted = (
             models.DistrictBeneficiaryEntry.objects.exclude(status=models.BeneficiaryStatusChoices.SUBMITTED).exists()
-            or models.PublicBeneficiaryEntry.objects.exclude(status=models.BeneficiaryStatusChoices.SUBMITTED).exists()
+            or _public_active_queryset().exclude(status=models.BeneficiaryStatusChoices.SUBMITTED).exists()
             or models.InstitutionsBeneficiaryEntry.objects.exclude(status=models.BeneficiaryStatusChoices.SUBMITTED).exists()
         )
         status_label = "Draft" if has_non_submitted else "Submitted"
@@ -1690,7 +1712,7 @@ def _export_master_entry_csv(request, *, export_scope):
         if export_scope == "district":
             scope_rows = models.DistrictBeneficiaryEntry.objects.all()
         elif export_scope == "public":
-            scope_rows = models.PublicBeneficiaryEntry.objects.all()
+            scope_rows = _public_active_queryset()
         elif export_scope == "institutions":
             scope_rows = models.InstitutionsBeneficiaryEntry.objects.all()
         if scope_rows:
@@ -1861,6 +1883,8 @@ def _district_form_context(district=None, entries=None, errors=None):
     return {
         "district_master_list": districts,
         "articles_master_list": articles,
+        "article_category_suggestions": get_article_text_suggestions("category"),
+        "article_master_category_suggestions": get_article_text_suggestions("master_category"),
         "selected_district": district,
         "entry_rows": entries or [],
         "form_errors": errors or [],
@@ -2201,38 +2225,6 @@ class DistrictMasterEntryUpdateView(DistrictMasterEntryBaseView):
             return HttpResponseRedirect(reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}))
 
 
-class DistrictMasterEntryDetailView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
-    module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
-    permission_action = "view"
-    template_name = "application_entry/master_entry_district_detail.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        district = models.DistrictMaster.objects.get(pk=self.kwargs["district_id"], is_active=True)
-        entries = list(models.DistrictBeneficiaryEntry.objects.filter(district=district).select_related("article").order_by("id"))
-        current_sort = (self.request.GET.get("sort") or "article_name").strip()
-        current_dir = "asc" if (self.request.GET.get("dir") or "asc").lower() == "asc" else "desc"
-        entries = _sort_application_detail_entries(entries, current_sort, current_dir)
-        total_accrued = sum((entry.total_amount or 0) for entry in entries)
-        total_quantity = sum((entry.quantity or 0) for entry in entries)
-        status = entries[0].status if entries else ""
-        context.update(
-            {
-                "district": district,
-                "entries": entries,
-                "total_accrued": total_accrued,
-                "total_quantity": total_quantity,
-                "remaining_fund": (district.allotted_budget or 0) - total_accrued,
-                "application_status": status,
-                "current_sort": current_sort,
-                "current_dir": current_dir,
-                "sort_querystrings": _application_detail_sort_querystrings(current_sort, current_dir),
-            }
-        )
-        context.update(_district_attachment_context(district))
-        return context
-
-
 class DistrictMasterEntryDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "delete"
@@ -2292,7 +2284,7 @@ def _public_history_summary(history_matches):
 def _public_current_match(aadhar_number, *, exclude_pk=None):
     if not aadhar_number:
         return None
-    queryset = models.PublicBeneficiaryEntry.objects.select_related("article").filter(aadhar_number=aadhar_number)
+    queryset = _public_active_queryset().select_related("article").filter(aadhar_number=aadhar_number)
     if exclude_pk:
         queryset = queryset.exclude(pk=exclude_pk)
     return queryset.order_by("-created_at").first()
@@ -2308,9 +2300,11 @@ def _public_form_context(entry=None, form_data=None, history_matches=None, curre
         "current_match": current_match,
         "form_warnings": warnings or [],
         "form_errors": errors or [],
-        "form_successes": [],
+        "form_successes": successes or [],
         "allow_duplicate_save": allow_duplicate_save,
         "articles_master_list": list(models.Article.objects.filter(is_active=True).order_by("article_name")),
+        "article_category_suggestions": get_article_text_suggestions("category"),
+        "article_master_category_suggestions": get_article_text_suggestions("master_category"),
         "gender_choices": models.GenderChoices.choices,
         "female_status_choices": models.FemaleStatusChoices.choices,
         "disability_category_choices": models.DisabilityCategoryChoices.choices,
@@ -2622,54 +2616,14 @@ def _filter_sort_institution_summaries(summaries, *, search_query="", date_from=
     return summaries
 
 
-def _application_detail_sort_querystrings(current_sort: str, current_dir: str):
-    allowed_columns = (
-        "article_name",
-        "item_type",
-        "quantity",
-        "unit_price",
-        "total_amount",
-        "name_of_beneficiary",
-        "name_of_institution",
-        "aadhar_number",
-        "notes",
-        "cheque_rtgs_in_favour",
-        "updated_at",
-    )
-    return {
-        column: f"?sort={column}&dir={'desc' if current_sort == column and current_dir == 'asc' else 'asc'}"
-        for column in allowed_columns
-    }
-
-
-def _sort_application_detail_entries(entries, sort_key: str, sort_dir: str):
-    sort_map = {
-        "article_name": lambda entry: (entry.article.article_name or "").casefold(),
-        "item_type": lambda entry: (entry.article.item_type or "").casefold(),
-        "quantity": lambda entry: entry.quantity or 0,
-        "unit_price": lambda entry: entry.article_cost_per_unit or Decimal("0"),
-        "total_amount": lambda entry: entry.total_amount or Decimal("0"),
-        "name_of_beneficiary": lambda entry: (getattr(entry, "name_of_beneficiary", "") or "").casefold(),
-        "name_of_institution": lambda entry: (getattr(entry, "name_of_institution", "") or "").casefold(),
-        "aadhar_number": lambda entry: (getattr(entry, "aadhar_number", "") or "").casefold(),
-        "notes": lambda entry: (getattr(entry, "notes", "") or "").casefold(),
-        "cheque_rtgs_in_favour": lambda entry: (getattr(entry, "cheque_rtgs_in_favour", "") or "").casefold(),
-        "updated_at": lambda entry: entry.updated_at or timezone.now(),
-    }
-    selected_key = sort_map.get(sort_key, sort_map["article_name"])
-    return sorted(
-        entries,
-        key=lambda entry: (selected_key(entry), (entry.article.article_name or "").casefold(), getattr(entry, "id", 0)),
-        reverse=(sort_dir == "desc"),
-    )
-
-
 def _institution_form_context(form_data=None, rows=None, errors=None, application_number=None):
     return {
         "institution_form_data": form_data or {},
         "institution_rows": rows or [],
         "form_errors": errors or [],
         "articles_master_list": list(models.Article.objects.filter(is_active=True).order_by("article_name")),
+        "article_category_suggestions": get_article_text_suggestions("category"),
+        "article_master_category_suggestions": get_article_text_suggestions("master_category"),
         "institution_type_choices": models.InstitutionTypeChoices.choices,
         "institution_application_number": application_number,
         "application_status": (rows[0]["status"] if rows and isinstance(rows[0], dict) and rows[0].get("status") else ""),
@@ -2925,7 +2879,7 @@ class PublicMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, TemplateView
     def get_entry(self):
         pk = self.kwargs.get("pk")
         if pk:
-            return models.PublicBeneficiaryEntry.objects.select_related("article").get(pk=pk)
+            return _public_any_queryset().select_related("article").get(pk=pk)
         return None
 
     def _render_form(self, *, entry=None, form_data=None, history_matches=None, current_match=None, warnings=None, errors=None, successes=None, allow_duplicate_save=False):
@@ -3069,6 +3023,9 @@ class PublicMasterEntryCreateView(PublicMasterEntryBaseView):
 class PublicMasterEntryUpdateView(PublicMasterEntryBaseView):
     def get(self, request, *args, **kwargs):
         entry = self.get_entry()
+        if entry.status == models.BeneficiaryStatusChoices.ARCHIVED:
+            messages.error(request, "This public application is archived. Unarchive it before editing.")
+            return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public&status=archived")
         if entry.status == models.BeneficiaryStatusChoices.SUBMITTED:
             messages.error(request, "This public application is submitted and locked. Reopen it first.")
             return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public")
@@ -3095,6 +3052,9 @@ class PublicMasterEntryUpdateView(PublicMasterEntryBaseView):
 
     def post(self, request, *args, **kwargs):
         entry = self.get_entry()
+        if entry.status == models.BeneficiaryStatusChoices.ARCHIVED:
+            messages.error(request, "This public application is archived. Unarchive it before editing.")
+            return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public&status=archived")
         if entry.status == models.BeneficiaryStatusChoices.SUBMITTED:
             messages.error(request, "This public application is submitted and locked. Reopen it first.")
             return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public")
@@ -3140,32 +3100,11 @@ class PublicMasterEntryUpdateView(PublicMasterEntryBaseView):
             return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": saved_entry.pk}))
 
 
-class PublicMasterEntryDetailView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
-    module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
-    permission_action = "view"
-    template_name = "application_entry/master_entry_public_detail.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        entry = models.PublicBeneficiaryEntry.objects.select_related("article").get(pk=self.kwargs["pk"])
-        context["entry"] = entry
-        context["history_matches"] = _public_history_matches(entry.aadhar_number)
-        current_sort = (self.request.GET.get("sort") or "article_name").strip()
-        current_dir = "asc" if (self.request.GET.get("dir") or "asc").lower() == "asc" else "desc"
-        detail_entries = _sort_application_detail_entries([entry], current_sort, current_dir)
-        context["detail_entries"] = detail_entries
-        context["current_sort"] = current_sort
-        context["current_dir"] = current_dir
-        context["sort_querystrings"] = _application_detail_sort_querystrings(current_sort, current_dir)
-        context.update(_public_attachment_context(entry))
-        return context
-
-
 class PublicMasterEntryDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "delete"
     def post(self, request, *args, **kwargs):
-        entry = models.PublicBeneficiaryEntry.objects.get(pk=kwargs["pk"])
+        entry = _public_any_queryset().get(pk=kwargs["pk"])
         snapshot = _public_audit_snapshot(entry)
         entry.delete()
         log_audit(
@@ -3180,11 +3119,64 @@ class PublicMasterEntryDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
         return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public")
 
 
+class PublicMasterEntryArchiveView(LoginRequiredMixin, AdminRequiredMixin, View):
+    module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
+    permission_action = "delete"
+
+    def post(self, request, *args, **kwargs):
+        entry = get_object_or_404(_public_active_queryset(), pk=kwargs["pk"])
+        snapshot_before = _public_audit_snapshot(entry)
+        now = timezone.now()
+        entry.archived_previous_status = entry.status or models.BeneficiaryStatusChoices.DRAFT
+        entry.status = models.BeneficiaryStatusChoices.ARCHIVED
+        entry.archived_at = now
+        entry.archived_by = request.user
+        entry.save(update_fields=["status", "archived_previous_status", "archived_at", "archived_by", "updated_at"])
+        log_audit(
+            user=request.user,
+            action_type=models.ActionTypeChoices.UPDATE,
+            entity_type="public_application",
+            entity_id=str(entry.id),
+            details={"before": snapshot_before, "after": _public_audit_snapshot(entry), "archive_action": "archived"},
+            **get_request_audit_meta(request),
+        )
+        messages.success(request, "Public application archived.")
+        return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public")
+
+
+class PublicMasterEntryUnarchiveView(LoginRequiredMixin, AdminRequiredMixin, View):
+    module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
+    permission_action = "reopen"
+
+    def post(self, request, *args, **kwargs):
+        entry = get_object_or_404(models.PublicBeneficiaryEntry.objects.archived(), pk=kwargs["pk"])
+        snapshot_before = _public_audit_snapshot(entry)
+        restored_status = entry.archived_previous_status or models.BeneficiaryStatusChoices.DRAFT
+        entry.status = restored_status
+        entry.archived_previous_status = None
+        entry.archived_at = None
+        entry.archived_by = None
+        entry.save(update_fields=["status", "archived_previous_status", "archived_at", "archived_by", "updated_at"])
+        log_audit(
+            user=request.user,
+            action_type=models.ActionTypeChoices.UPDATE,
+            entity_type="public_application",
+            entity_id=str(entry.id),
+            details={"before": snapshot_before, "after": _public_audit_snapshot(entry), "archive_action": "unarchived"},
+            **get_request_audit_meta(request),
+        )
+        messages.success(request, "Public application unarchived.")
+        return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public")
+
+
 class PublicMasterEntryReopenView(LoginRequiredMixin, AdminRequiredMixin, View):
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "reopen"
     def post(self, request, *args, **kwargs):
-        entry = models.PublicBeneficiaryEntry.objects.get(pk=kwargs["pk"])
+        entry = _public_any_queryset().get(pk=kwargs["pk"])
+        if entry.status == models.BeneficiaryStatusChoices.ARCHIVED:
+            messages.error(request, "Archived public applications must be unarchived first.")
+            return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public&status=archived")
         previous_status = entry.status
         entry.status = models.BeneficiaryStatusChoices.DRAFT
         entry.save(update_fields=["status"])
@@ -3445,38 +3437,6 @@ class InstitutionsMasterEntryUpdateView(InstitutionsMasterEntryBaseView):
             return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": saved_application_number}))
 
 
-class InstitutionsMasterEntryDetailView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
-    module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
-    permission_action = "view"
-    template_name = "application_entry/master_entry_institution_detail.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        application_number = self.kwargs["application_number"]
-        entries = list(
-            models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).select_related("article").order_by("id")
-        )
-        current_sort = (self.request.GET.get("sort") or "article_name").strip()
-        current_dir = "asc" if (self.request.GET.get("dir") or "asc").lower() == "asc" else "desc"
-        entries = _sort_application_detail_entries(entries, current_sort, current_dir)
-        first = entries[0]
-        context.update(
-            {
-                "application_number": application_number,
-                "entry_header": first,
-                "entries": entries,
-                "total_quantity": sum((row.quantity or 0) for row in entries),
-                "total_value": sum((row.total_amount or 0) for row in entries),
-                "application_status": first.status,
-                "current_sort": current_sort,
-                "current_dir": current_dir,
-                "sort_querystrings": _application_detail_sort_querystrings(current_sort, current_dir),
-            }
-        )
-        context.update(_institution_attachment_context(application_number))
-        return context
-
-
 class InstitutionsMasterEntryDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "delete"
@@ -3629,7 +3589,10 @@ class PublicApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin, 
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "create_edit"
     def post(self, request, *args, **kwargs):
-        entry = get_object_or_404(models.PublicBeneficiaryEntry, pk=kwargs["pk"])
+        entry = get_object_or_404(_public_any_queryset(), pk=kwargs["pk"])
+        if entry.status == models.BeneficiaryStatusChoices.ARCHIVED:
+            messages.error(request, "This public application is archived. Unarchive it before uploading attachments.")
+            return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public&status=archived")
         form = ApplicationAttachmentUploadForm(request.POST, request.FILES)
         if not form.is_valid():
             messages.error(request, "; ".join(form.errors.get("file", []) + form.errors.get("file_name", [])) or "Choose a valid file before uploading.")
@@ -3678,7 +3641,10 @@ class PublicApplicationAttachmentDeleteView(LoginRequiredMixin, WriteRoleMixin, 
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "create_edit"
     def post(self, request, *args, **kwargs):
-        entry = get_object_or_404(models.PublicBeneficiaryEntry, pk=kwargs["pk"])
+        entry = get_object_or_404(_public_any_queryset(), pk=kwargs["pk"])
+        if entry.status == models.BeneficiaryStatusChoices.ARCHIVED:
+            messages.error(request, "This public application is archived. Unarchive it before editing attachments.")
+            return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public&status=archived")
         attachment = get_object_or_404(
             models.ApplicationAttachment,
             pk=kwargs["attachment_id"],

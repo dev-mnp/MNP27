@@ -61,7 +61,7 @@ def _fund_request_recipient_display_name(recipient) -> str:
                     return f"{application_number} - {district_name}"
                 return district_name or application_number or "-"
         elif beneficiary_type == models.RecipientTypeChoices.PUBLIC:
-            source_entry = models.PublicBeneficiaryEntry.objects.filter(pk=source_entry_id).first()
+            source_entry = models.PublicBeneficiaryEntry.objects.active().filter(pk=source_entry_id).first()
             if source_entry:
                 application_number = str(source_entry.application_number or "").strip()
                 public_name = str(source_entry.name or "").strip()
@@ -96,7 +96,7 @@ def _fund_request_article_beneficiary_display(article_item) -> str:
     labels = []
     if article.district_entries.exists():
         labels.append("District")
-    if article.public_entries.exists():
+    if article.public_entries.exclude(status=models.BeneficiaryStatusChoices.ARCHIVED).exists():
         labels.append("Public")
     if article.institution_entries.exists():
         labels.append("Institutions")
@@ -656,7 +656,7 @@ def _fund_request_aid_type_choices():
     names.update(
         filter(
             None,
-            models.PublicBeneficiaryEntry.objects.filter(article__item_type=models.ItemTypeChoices.AID).values_list("article__article_name", flat=True),
+            models.PublicBeneficiaryEntry.objects.active().filter(article__item_type=models.ItemTypeChoices.AID).values_list("article__article_name", flat=True),
         )
     )
     names.update(
@@ -706,7 +706,7 @@ def _aid_entry_queryset(aid_type, beneficiary_type):
     if beneficiary_type == models.RecipientTypeChoices.DISTRICT:
         return models.DistrictBeneficiaryEntry.objects.select_related("district", "article", "fund_request").filter(**filters)
     if beneficiary_type == models.RecipientTypeChoices.PUBLIC:
-        return models.PublicBeneficiaryEntry.objects.select_related("article", "fund_request").filter(**filters)
+        return models.PublicBeneficiaryEntry.objects.active().select_related("article", "fund_request").filter(**filters)
     return models.InstitutionsBeneficiaryEntry.objects.select_related("article", "fund_request").filter(**filters)
 
 
@@ -963,7 +963,7 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
 
     def _link_aid_sources(self, fr: models.FundRequest):
         models.DistrictBeneficiaryEntry.objects.filter(fund_request=fr).update(fund_request=None)
-        models.PublicBeneficiaryEntry.objects.filter(fund_request=fr).update(fund_request=None)
+        models.PublicBeneficiaryEntry.objects.active().filter(fund_request=fr).update(fund_request=None)
         models.InstitutionsBeneficiaryEntry.objects.filter(fund_request=fr).update(fund_request=None)
         if fr.fund_request_type != models.FundRequestTypeChoices.AID:
             return
@@ -971,7 +971,7 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
             if recipient.beneficiary_type == models.RecipientTypeChoices.DISTRICT:
                 models.DistrictBeneficiaryEntry.objects.filter(pk=recipient.source_entry_id).update(fund_request=fr)
             elif recipient.beneficiary_type == models.RecipientTypeChoices.PUBLIC:
-                models.PublicBeneficiaryEntry.objects.filter(pk=recipient.source_entry_id).update(fund_request=fr)
+                models.PublicBeneficiaryEntry.objects.active().filter(pk=recipient.source_entry_id).update(fund_request=fr)
             elif recipient.beneficiary_type in {models.RecipientTypeChoices.INSTITUTIONS, models.RecipientTypeChoices.OTHERS}:
                 models.InstitutionsBeneficiaryEntry.objects.filter(pk=recipient.source_entry_id).update(fund_request=fr)
 
@@ -982,7 +982,7 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
         if beneficiary_type == models.RecipientTypeChoices.DISTRICT:
             entry = models.DistrictBeneficiaryEntry.objects.select_related("fund_request").filter(pk=source_entry_id).first()
         elif beneficiary_type == models.RecipientTypeChoices.PUBLIC:
-            entry = models.PublicBeneficiaryEntry.objects.select_related("fund_request").filter(pk=source_entry_id).first()
+            entry = models.PublicBeneficiaryEntry.objects.active().select_related("fund_request").filter(pk=source_entry_id).first()
         elif beneficiary_type in {models.RecipientTypeChoices.INSTITUTIONS, models.RecipientTypeChoices.OTHERS}:
             entry = models.InstitutionsBeneficiaryEntry.objects.select_related("fund_request").filter(pk=source_entry_id).first()
         if not entry:

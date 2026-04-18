@@ -53,7 +53,7 @@ class DistrictBeneficiaryEntryViewSet(viewsets.ModelViewSet):
 
 
 class PublicBeneficiaryEntryViewSet(viewsets.ModelViewSet):
-    queryset = models.PublicBeneficiaryEntry.objects.select_related("article").order_by("-created_at")
+    queryset = models.PublicBeneficiaryEntry.objects.active().select_related("article").order_by("-created_at")
     serializer_class = serializers.PublicBeneficiaryEntrySerializer
     permission_classes = [IsAuthenticated, ModelRolePermission]
     filterset_fields = ["status", "article", "fund_request"]

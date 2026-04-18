@@ -255,7 +255,7 @@
             </div>
             <div class="public-metric-block public-metric-comments" id="public-inline-comments-wrap" {% if public_entry.article.item_type == "Aid" %}hidden{% endif %}>
               <label>Comments</label>
-              <textarea class="textarea" name="notes" id="public-inline-notes" rows="2" placeholder="Comments" {% if public_entry.article.item_type == "Aid" %}disabled{% endif %}>{{ public_form_data.notes }}</textarea>
+              <textarea class="textarea" name="notes" id="public-inline-notes" rows="1" placeholder="Comments" {% if public_entry.article.item_type == "Aid" %}disabled{% endif %}>{{ public_form_data.notes }}</textarea>
             </div>
           </div>
         </div>
@@ -367,6 +367,64 @@
     </div>
   </section>
 
+  <div class="modal-backdrop" id="article-create-modal" aria-hidden="true">
+    <div class="modal-card" style="width:min(680px,94vw);height:auto;max-height:min(88vh,620px);overflow:auto;padding:14px 16px;background:#fff;">
+      <div class="toolbar" style="justify-content: flex-start; margin-bottom: 10px;">
+        <h3 style="margin: 0;">Add New Article</h3>
+      </div>
+      <form id="article-create-form" novalidate>
+        <div id="article-create-errors" class="messages inline-feedback-group" style="display: none;"></div>
+        <div class="grid2" style="gap: 10px 12px;">
+          <div>
+            <label>Article name</label>
+            <input class="input" type="text" name="article_name" required>
+          </div>
+          <div>
+            <label>Token Name</label>
+            <input class="input" type="text" name="article_name_tk">
+          </div>
+          <div>
+            <label>Cost per unit</label>
+            <input class="input" type="number" name="cost_per_unit" min="0" step="0.01" required>
+          </div>
+          <div>
+            <label>Item type</label>
+            <select class="input" name="item_type">
+              <option value="Article">Article</option>
+              <option value="Aid">Aid</option>
+            </select>
+          </div>
+          <div>
+            <label>Category</label>
+            <input class="input" type="text" name="category" list="article-modal-category-options">
+          </div>
+          <div>
+            <label>Super Category</label>
+            <input class="input" type="text" name="master_category" list="article-modal-master-category-options">
+          </div>
+        </div>
+        <datalist id="article-modal-category-options">
+          {% for value in article_category_suggestions %}
+            <option value="{{ value }}"></option>
+          {% endfor %}
+        </datalist>
+        <datalist id="article-modal-master-category-options">
+          {% for value in article_master_category_suggestions %}
+            <option value="{{ value }}"></option>
+          {% endfor %}
+        </datalist>
+        <div class="toolbar" style="margin-top: 8px; justify-content: flex-start; gap: 16px;">
+          <label><input type="checkbox" name="is_active" checked> Active</label>
+          <label><input type="checkbox" name="combo"> Combo</label>
+        </div>
+        <div class="toolbar" style="margin-top: 14px; justify-content: flex-end; gap: 10px;">
+          <button class="btn" type="button" id="article-create-cancel">Cancel</button>
+          <button class="btn" type="submit" id="article-create-save">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <style>
     .duplicate-lock-zone {
       border: 0;
@@ -467,6 +525,11 @@
       const femaleStatusDescription = document.getElementById("female-status-description");
       const femaleStatusDescriptions = JSON.parse(document.getElementById("female-status-descriptions-data").textContent);
       const articleCreateUrl = "{% url 'ui:article-create' %}?popup=1";
+      const articleCreateModal = document.getElementById("article-create-modal");
+      const articleCreateForm = document.getElementById("article-create-form");
+      const articleCreateErrors = document.getElementById("article-create-errors");
+      const articleCreateSaveBtn = document.getElementById("article-create-save");
+      const articleCreateCancelBtn = document.getElementById("article-create-cancel");
       const submitRequiredFields = Array.from(form.querySelectorAll("[data-submit-required]"));
       const isEditMode = form.dataset.editMode === "true";
       let lastArticleId = articleSelect.value;
@@ -506,7 +569,39 @@
 
       function openArticleCreatePopup(targetSelect) {
         articleCreateTarget = targetSelect;
-        window.open(articleCreateUrl, "articleCreatePopup", "popup=yes,width=760,height=760,resizable=yes,scrollbars=yes");
+        articleCreateForm.reset();
+        articleCreateErrors.style.display = "none";
+        articleCreateErrors.innerHTML = "";
+        articleCreateModal.classList.add("is-open");
+        articleCreateModal.setAttribute("aria-hidden", "false");
+        document.body.classList.add("modal-open");
+        const firstField = articleCreateForm.querySelector('input[name="article_name"]');
+        if (firstField) firstField.focus();
+      }
+
+      function closeArticleCreateModal() {
+        articleCreateModal.classList.remove("is-open");
+        articleCreateModal.setAttribute("aria-hidden", "true");
+        document.body.classList.remove("modal-open");
+      }
+
+      function getCookie(name) {
+        const cookieValue = document.cookie
+          .split(";")
+          .map(function(cookie) { return cookie.trim(); })
+          .find(function(cookie) { return cookie.startsWith(name + "="); });
+        return cookieValue ? decodeURIComponent(cookieValue.split("=").slice(1).join("=")) : "";
+      }
+
+      function showArticleCreateErrors(errors) {
+        const rows = [];
+        Object.keys(errors || {}).forEach(function(field) {
+          (errors[field] || []).forEach(function(message) {
+            rows.push("<li class=\"error\">" + message + "</li>");
+          });
+        });
+        articleCreateErrors.innerHTML = "<ul class=\"messages inline-feedback-group\" style=\"margin:0;\">" + rows.join("") + "</ul>";
+        articleCreateErrors.style.display = rows.length ? "block" : "none";
       }
 
       window.handleArticleCreated = function(article) {
@@ -520,6 +615,47 @@
           articleCreateTarget.focus();
         }
       };
+
+      articleCreateForm.addEventListener("submit", function(event) {
+        event.preventDefault();
+        const formData = new FormData(articleCreateForm);
+        const payload = new URLSearchParams(formData);
+        articleCreateSaveBtn.disabled = true;
+        fetch(articleCreateUrl, {
+          method: "POST",
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+            "X-CSRFToken": getCookie("csrftoken"),
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+          },
+          body: payload.toString()
+        })
+          .then(function(response) {
+            return response.json().then(function(data) {
+              if (!response.ok || !data.ok) {
+                throw data;
+              }
+              return data;
+            });
+          })
+          .then(function(data) {
+            window.handleArticleCreated(data.article);
+            closeArticleCreateModal();
+          })
+          .catch(function(error) {
+            showArticleCreateErrors(error.errors || {"__all__": ["Unable to create article. Please check the fields and try again."]});
+          })
+          .finally(function() {
+            articleCreateSaveBtn.disabled = false;
+          });
+      });
+
+      articleCreateCancelBtn.addEventListener("click", closeArticleCreateModal);
+      articleCreateModal.addEventListener("click", function(event) {
+        if (event.target === articleCreateModal) {
+          closeArticleCreateModal();
+        }
+      });
 
       function formSnapshot() {
         const formData = new FormData(form);

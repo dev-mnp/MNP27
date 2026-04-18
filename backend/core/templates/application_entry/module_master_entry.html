@@ -36,7 +36,7 @@
         </p>
       </div>
       <div class="small master-count-pill">
-        <div>District: {{ district_count }} | Public: {{ public_count }} | Institutions: {{ institution_count }}</div>
+        <div>District: {{ district_count }} | Public: {{ public_count }}{% if public_archived_count %} (Archived: {{ public_archived_count }}){% endif %} | Institutions: {{ institution_count }}</div>
         <div class="master-total-rows">Total rows: <strong>{{ total_material_rows }}</strong></div>
       </div>
     </div>
@@ -138,9 +138,6 @@
               <td>{{ row.created_at|date:"d/m/Y" }}</td>
               <td>
                 <div class="actions-inline">
-                <a class="btn icon-btn view-icon-btn" title="View" aria-label="View" href="{% url 'ui:master-entry-district-detail' row.district_id %}">
-                  <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                </a>
                 {% if row.status != "submitted" %}
                 <a class="btn btn-edit icon-btn" title="Modify" aria-label="Modify" href="{% url 'ui:master-entry-district-edit' row.district_id %}">
                   <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
@@ -238,14 +235,11 @@
               <td>{{ entry.created_at|date:"d/m/Y" }}</td>
               <td>
                 <div class="actions-inline">
-                <a class="btn icon-btn view-icon-btn" title="View" aria-label="View" href="{% url 'ui:master-entry-public-detail' entry.id %}">
-                  <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                </a>
-                {% if entry.status != "submitted" %}
+                {% if entry.status != "submitted" and entry.status != "archived" %}
                 <a class="btn btn-edit icon-btn" title="Modify" aria-label="Modify" href="{% url 'ui:master-entry-public-edit' entry.id %}">
                   <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
                 </a>
-                {% elif request.user.role == "admin" and module_perms.application_entry.can_reopen %}
+                {% elif entry.status != "archived" and request.user.role == "admin" and module_perms.application_entry.can_reopen %}
                   <form method="post" action="{% url 'ui:master-entry-public-reopen' entry.id %}" style="display: inline;" data-confirm-message="Reopen this public application as draft?">
                     {% csrf_token %}
                     <button class="btn btn-reopen icon-btn" type="submit" title="Reopen" aria-label="Reopen">
@@ -254,6 +248,21 @@
                   </form>
                 {% endif %}
                 {% if request.user.role == "admin" %}
+                  {% if entry.status != "archived" %}
+                    <form method="post" action="{% url 'ui:master-entry-public-archive' entry.id %}" style="display: inline;" data-confirm-message="Archive this public application?">
+                      {% csrf_token %}
+                      <button class="btn icon-btn" type="submit" title="Archive" aria-label="Archive" style="background:none; border:none; color:#16a34a; padding:2px;">
+                        <svg viewBox="0 0 24 24"><path d="M3 7h18"/><path d="M5 7l1 13h12l1-13"/><path d="M9 11h6"/></svg>
+                      </button>
+                    </form>
+                  {% else %}
+                    <form method="post" action="{% url 'ui:master-entry-public-unarchive' entry.id %}" style="display: inline;" data-confirm-message="Unarchive this public application?">
+                      {% csrf_token %}
+                      <button class="btn btn-reopen icon-btn" type="submit" title="Unarchive" aria-label="Unarchive">
+                        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                      </button>
+                    </form>
+                  {% endif %}
                   <form method="post" action="{% url 'ui:master-entry-public-delete' entry.id %}" style="display: inline;" data-confirm-message="Delete this public entry?">
                     {% csrf_token %}
                     <button class="btn btn-danger icon-btn" type="submit" title="Delete" aria-label="Delete">
@@ -338,9 +347,6 @@
               <td>{{ row.created_at|date:"d/m/Y" }}</td>
               <td>
                 <div class="actions-inline">
-                <a class="btn icon-btn view-icon-btn" title="View" aria-label="View" href="{% url 'ui:master-entry-institution-detail' row.application_number %}">
-                  <svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                </a>
                 {% if row.status != "submitted" %}
                 <a class="btn btn-edit icon-btn" title="Modify" aria-label="Modify" href="{% url 'ui:master-entry-institution-edit' row.application_number %}">
                   <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
@@ -495,7 +501,7 @@
     }
     .master-filter-grid {
       display: grid;
-      grid-template-columns: minmax(280px, 1fr) 150px 150px 160px auto;
+      grid-template-columns: minmax(240px, 2fr) 130px 130px 150px 140px auto;
       gap: 10px;
       align-items: end;
     }
@@ -608,23 +614,6 @@
     .actions-inline .icon-btn svg {
       width: 15px;
       height: 15px;
-    }
-    .view-icon-btn {
-      width: 26px !important;
-      min-width: 26px !important;
-      height: 26px !important;
-      border: 0 !important;
-      background: transparent !important;
-      box-shadow: none !important;
-      color: #2563eb;
-    }
-    .view-icon-btn:hover {
-      background: transparent !important;
-      color: #1d4ed8;
-    }
-    .view-icon-btn svg {
-      width: 16px !important;
-      height: 16px !important;
     }
     table th:last-child,
     table td:last-child {

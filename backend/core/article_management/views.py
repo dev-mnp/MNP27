@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
 from django.db.models import Q
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
@@ -17,6 +17,7 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 from core import models
 from core.article_management.forms import ArticleForm
 from core.shared.permissions import AdminRequiredMixin, RoleRequiredMixin, WriteRoleMixin
+from core.shared.article_suggestions import get_article_text_suggestions
 
 
 class ArticleListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
@@ -74,24 +75,12 @@ class ArticleListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
         context = super().get_context_data(**kwargs)
         category_choices = cache.get("mnp27:article:category_choices")
         if category_choices is None:
-            category_choices = list(
-                models.Article.objects.exclude(category__isnull=True)
-                .exclude(category__exact="")
-                .order_by("category")
-                .values_list("category", flat=True)
-                .distinct()
-            )
+            category_choices = get_article_text_suggestions("category")
             cache.set("mnp27:article:category_choices", category_choices, timeout=300)
 
         master_category_choices = cache.get("mnp27:article:master_category_choices")
         if master_category_choices is None:
-            master_category_choices = list(
-                models.Article.objects.exclude(master_category__isnull=True)
-                .exclude(master_category__exact="")
-                .order_by("master_category")
-                .values_list("master_category", flat=True)
-                .distinct()
-            )
+            master_category_choices = get_article_text_suggestions("master_category")
             cache.set("mnp27:article:master_category_choices", master_category_choices, timeout=300)
         context.update(
             {
@@ -165,24 +154,24 @@ class ArticleCreateView(LoginRequiredMixin, WriteRoleMixin, CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["popup_mode"] = self.request.GET.get("popup") == "1"
-        context["category_suggestions"] = (
-            models.Article.objects.exclude(category__isnull=True)
-            .exclude(category__exact="")
-            .order_by("category")
-            .values_list("category", flat=True)
-            .distinct()
-        )
-        context["master_category_suggestions"] = (
-            models.Article.objects.exclude(master_category__isnull=True)
-            .exclude(master_category__exact="")
-            .order_by("master_category")
-            .values_list("master_category", flat=True)
-            .distinct()
-        )
+        context["category_suggestions"] = get_article_text_suggestions("category")
+        context["master_category_suggestions"] = get_article_text_suggestions("master_category")
         return context
 
     def form_valid(self, form):
         self.object = form.save()
+        if self.request.GET.get("popup") == "1" and self.request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return JsonResponse(
+                {
+                    "ok": True,
+                    "article": {
+                        "id": self.object.id,
+                        "article_name": self.object.article_name,
+                        "cost_per_unit": str(self.object.cost_per_unit),
+                        "item_type": self.object.item_type,
+                    },
+                }
+            )
         if self.request.GET.get("popup") == "1":
             payload = json.dumps(
                 {
@@ -216,6 +205,11 @@ class ArticleCreateView(LoginRequiredMixin, WriteRoleMixin, CreateView):
         messages.success(self.request, "Article created.")
         return HttpResponseRedirect(self.get_success_url())
 
+    def form_invalid(self, form):
+        if self.request.GET.get("popup") == "1" and self.request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return JsonResponse({"ok": False, "errors": form.errors}, status=400)
+        return super().form_invalid(form)
+
 
 class ArticleUpdateView(LoginRequiredMixin, WriteRoleMixin, UpdateView):
     module_key = models.ModuleKeyChoices.ARTICLE_MANAGEMENT
@@ -228,20 +222,8 @@ class ArticleUpdateView(LoginRequiredMixin, WriteRoleMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["popup_mode"] = False
-        context["category_suggestions"] = (
-            models.Article.objects.exclude(category__isnull=True)
-            .exclude(category__exact="")
-            .order_by("category")
-            .values_list("category", flat=True)
-            .distinct()
-        )
-        context["master_category_suggestions"] = (
-            models.Article.objects.exclude(master_category__isnull=True)
-            .exclude(master_category__exact="")
-            .order_by("master_category")
-            .values_list("master_category", flat=True)
-            .distinct()
-        )
+        context["category_suggestions"] = get_article_text_suggestions("category")
+        context["master_category_suggestions"] = get_article_text_suggestions("master_category")
         return context
 
     def form_valid(self, form):

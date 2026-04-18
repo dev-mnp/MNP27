@@ -212,14 +212,6 @@ class ApplicationEntryFlowTests(TestCase):
         self.assertEqual(entry.name_of_beneficiary, "Student B")
         self.assertEqual(entry.aadhar_number, "777788889999")
 
-        detail_response = self.client.get(
-            reverse("ui:master-entry-district-detail", kwargs={"district_id": self.district.id})
-        )
-        self.assertEqual(detail_response.status_code, 200)
-        self.assertEqual(detail_response.context["total_quantity"], 3)
-        self.assertEqual(detail_response.context["total_accrued"], Decimal("19500.00"))
-        self.assertEqual(detail_response.context["remaining_fund"], Decimal("80500.00"))
-
         reopen_response = self.client.post(
             reverse("ui:master-entry-district-reopen", kwargs={"district_id": self.district.id})
         )
@@ -232,40 +224,6 @@ class ApplicationEntryFlowTests(TestCase):
         )
         self.assertRedirects(delete_response, reverse("ui:master-entry"))
         self.assertFalse(models.DistrictBeneficiaryEntry.objects.filter(district=self.district).exists())
-
-    def test_district_detail_supports_sorting(self):
-        models.DistrictBeneficiaryEntry.objects.create(
-            district=self.district,
-            application_number="D001",
-            article=self.article,
-            article_cost_per_unit=Decimal("5000.00"),
-            quantity=1,
-            total_amount=Decimal("5000.00"),
-            status=models.BeneficiaryStatusChoices.DRAFT,
-            created_by=self.user,
-            name_of_beneficiary="Alpha",
-        )
-        models.DistrictBeneficiaryEntry.objects.create(
-            district=self.district,
-            application_number="D001",
-            article=self.aid_article,
-            article_cost_per_unit=Decimal("6000.00"),
-            quantity=4,
-            total_amount=Decimal("24000.00"),
-            status=models.BeneficiaryStatusChoices.DRAFT,
-            created_by=self.user,
-            name_of_beneficiary="Zulu",
-        )
-
-        response = self.client.get(
-            reverse("ui:master-entry-district-detail", kwargs={"district_id": self.district.id}),
-            {"sort": "quantity", "dir": "desc"},
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual([entry.quantity for entry in response.context["entries"]], [4, 1])
-        self.assertEqual(response.context["current_sort"], "quantity")
-        self.assertEqual(response.context["current_dir"], "desc")
 
     def test_public_entry_flow_create_update_submit_detail_reopen_delete(self):
         create_response = self.client.post(
@@ -296,12 +254,6 @@ class ApplicationEntryFlowTests(TestCase):
         self.assertEqual(created.total_amount, Decimal("18000.00"))
         self.assertEqual(created.name_of_institution, "Public Trust")
 
-        detail_response = self.client.get(
-            reverse("ui:master-entry-public-detail", kwargs={"pk": created.pk})
-        )
-        self.assertEqual(detail_response.status_code, 200)
-        self.assertEqual(detail_response.context["entry"].pk, created.pk)
-
         reopen_response = self.client.post(
             reverse("ui:master-entry-public-reopen", kwargs={"pk": created.pk})
         )
@@ -314,34 +266,6 @@ class ApplicationEntryFlowTests(TestCase):
         )
         self.assertRedirects(delete_response, reverse("ui:master-entry") + "?type=public")
         self.assertFalse(models.PublicBeneficiaryEntry.objects.filter(pk=created.pk).exists())
-
-    def test_public_detail_exposes_sortable_detail_entries(self):
-        entry = models.PublicBeneficiaryEntry.objects.create(
-            application_number="P001",
-            name="Public Beneficiary",
-            aadhar_number="123456789012",
-            is_handicapped=models.HandicappedStatusChoices.NO,
-            gender=models.GenderChoices.MALE,
-            address="Public Address",
-            mobile="9999999999",
-            article=self.article,
-            article_cost_per_unit=Decimal("5000.00"),
-            quantity=1,
-            total_amount=Decimal("5000.00"),
-            status=models.BeneficiaryStatusChoices.SUBMITTED,
-            created_by=self.user,
-            name_of_institution="Public Trust",
-        )
-
-        response = self.client.get(
-            reverse("ui:master-entry-public-detail", kwargs={"pk": entry.pk}),
-            {"sort": "name_of_institution", "dir": "asc"},
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(list(response.context["detail_entries"]), [entry])
-        self.assertEqual(response.context["current_sort"], "name_of_institution")
-        self.assertEqual(response.context["current_dir"], "asc")
 
     def test_institution_entry_flow_create_update_submit_detail_reopen_delete(self):
         create_response = self.client.post(
@@ -378,13 +302,6 @@ class ApplicationEntryFlowTests(TestCase):
         self.assertEqual(created.status, models.BeneficiaryStatusChoices.SUBMITTED)
         self.assertEqual(created.total_amount, Decimal("22000.00"))
 
-        detail_response = self.client.get(
-            reverse("ui:master-entry-institution-detail", kwargs={"application_number": created.application_number})
-        )
-        self.assertEqual(detail_response.status_code, 200)
-        self.assertEqual(detail_response.context["total_quantity"], 4)
-        self.assertEqual(detail_response.context["total_value"], Decimal("22000.00"))
-
         reopen_response = self.client.post(
             reverse("ui:master-entry-institution-reopen", kwargs={"application_number": created.application_number})
         )
@@ -399,49 +316,6 @@ class ApplicationEntryFlowTests(TestCase):
         self.assertFalse(
             models.InstitutionsBeneficiaryEntry.objects.filter(application_number=created.application_number).exists()
         )
-
-    def test_institution_detail_supports_sorting(self):
-        models.InstitutionsBeneficiaryEntry.objects.create(
-            institution_name="SRV School",
-            institution_type=models.InstitutionTypeChoices.OTHERS,
-            application_number="I001",
-            address="Institution Address",
-            mobile="8888888888",
-            article=self.article,
-            article_cost_per_unit=Decimal("5000.00"),
-            quantity=2,
-            total_amount=Decimal("10000.00"),
-            status=models.BeneficiaryStatusChoices.DRAFT,
-            created_by=self.user,
-            name_of_beneficiary="Zulu",
-        )
-        models.InstitutionsBeneficiaryEntry.objects.create(
-            institution_name="SRV School",
-            institution_type=models.InstitutionTypeChoices.OTHERS,
-            application_number="I001",
-            address="Institution Address",
-            mobile="8888888888",
-            article=self.aid_article,
-            article_cost_per_unit=Decimal("6000.00"),
-            quantity=1,
-            total_amount=Decimal("6000.00"),
-            status=models.BeneficiaryStatusChoices.DRAFT,
-            created_by=self.user,
-            name_of_beneficiary="Alpha",
-        )
-
-        response = self.client.get(
-            reverse("ui:master-entry-institution-detail", kwargs={"application_number": "I001"}),
-            {"sort": "name_of_beneficiary", "dir": "asc"},
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            [entry.name_of_beneficiary for entry in response.context["entries"]],
-            ["Alpha", "Zulu"],
-        )
-        self.assertEqual(response.context["current_sort"], "name_of_beneficiary")
-        self.assertEqual(response.context["current_dir"], "asc")
 
     def test_master_entry_export_all_uses_expected_status_label_and_rows(self):
         models.DistrictBeneficiaryEntry.objects.create(
