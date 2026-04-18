@@ -1,0 +1,137 @@
+from __future__ import annotations
+
+"""URL routes for the application entry business module."""
+
+from django.urls import path
+
+from . import views
+
+urlpatterns = [
+    path("master-entry/", views.MasterEntryView.as_view(), name="master-entry"),
+    path(
+        "master-entry/district/new/",
+        views.DistrictMasterEntryCreateView.as_view(),
+        name="master-entry-district-create",
+    ),
+    path(
+        "master-entry/district/<int:district_id>/",
+        views.DistrictMasterEntryDetailView.as_view(),
+        name="master-entry-district-detail",
+    ),
+    path(
+        "master-entry/district/<int:district_id>/summary/",
+        views.DistrictMasterEntryInlineSummaryView.as_view(),
+        name="master-entry-district-summary",
+    ),
+    path(
+        "master-entry/district/<int:district_id>/edit/",
+        views.DistrictMasterEntryUpdateView.as_view(),
+        name="master-entry-district-edit",
+    ),
+    path(
+        "master-entry/district/<int:district_id>/delete/",
+        views.DistrictMasterEntryDeleteView.as_view(),
+        name="master-entry-district-delete",
+    ),
+    path(
+        "master-entry/district/<int:district_id>/reopen/",
+        views.DistrictMasterEntryReopenView.as_view(),
+        name="master-entry-district-reopen",
+    ),
+    path(
+        "master-entry/district/<int:district_id>/attachments/upload/",
+        views.DistrictApplicationAttachmentUploadView.as_view(),
+        name="district-attachment-upload",
+    ),
+    path(
+        "master-entry/district/<int:district_id>/attachments/<int:attachment_id>/delete/",
+        views.DistrictApplicationAttachmentDeleteView.as_view(),
+        name="district-attachment-delete",
+    ),
+    path(
+        "master-entry/public/new/",
+        views.PublicMasterEntryCreateView.as_view(),
+        name="master-entry-public-create",
+    ),
+    path(
+        "master-entry/public/<int:pk>/",
+        views.PublicMasterEntryDetailView.as_view(),
+        name="master-entry-public-detail",
+    ),
+    path(
+        "master-entry/public/<int:pk>/summary/",
+        views.PublicMasterEntryInlineSummaryView.as_view(),
+        name="master-entry-public-summary",
+    ),
+    path(
+        "master-entry/public/<int:pk>/edit/",
+        views.PublicMasterEntryUpdateView.as_view(),
+        name="master-entry-public-edit",
+    ),
+    path(
+        "master-entry/public/<int:pk>/delete/",
+        views.PublicMasterEntryDeleteView.as_view(),
+        name="master-entry-public-delete",
+    ),
+    path(
+        "master-entry/public/<int:pk>/reopen/",
+        views.PublicMasterEntryReopenView.as_view(),
+        name="master-entry-public-reopen",
+    ),
+    path(
+        "master-entry/public/<int:pk>/attachments/upload/",
+        views.PublicApplicationAttachmentUploadView.as_view(),
+        name="public-attachment-upload",
+    ),
+    path(
+        "master-entry/public/<int:pk>/attachments/<int:attachment_id>/delete/",
+        views.PublicApplicationAttachmentDeleteView.as_view(),
+        name="public-attachment-delete",
+    ),
+    path(
+        "master-entry/institutions/new/",
+        views.InstitutionsMasterEntryCreateView.as_view(),
+        name="master-entry-institution-create",
+    ),
+    path(
+        "master-entry/institutions/<str:application_number>/",
+        views.InstitutionsMasterEntryDetailView.as_view(),
+        name="master-entry-institution-detail",
+    ),
+    path(
+        "master-entry/institutions/<str:application_number>/summary/",
+        views.InstitutionsMasterEntryInlineSummaryView.as_view(),
+        name="master-entry-institution-summary",
+    ),
+    path(
+        "master-entry/institutions/<str:application_number>/edit/",
+        views.InstitutionsMasterEntryUpdateView.as_view(),
+        name="master-entry-institution-edit",
+    ),
+    path(
+        "master-entry/institutions/<str:application_number>/delete/",
+        views.InstitutionsMasterEntryDeleteView.as_view(),
+        name="master-entry-institution-delete",
+    ),
+    path(
+        "master-entry/institutions/<str:application_number>/reopen/",
+        views.InstitutionsMasterEntryReopenView.as_view(),
+        name="master-entry-institution-reopen",
+    ),
+    path(
+        "master-entry/institutions/<str:application_number>/attachments/upload/",
+        views.InstitutionApplicationAttachmentUploadView.as_view(),
+        name="institution-attachment-upload",
+    ),
+    path(
+        "master-entry/institutions/<str:application_number>/attachments/<int:attachment_id>/delete/",
+        views.InstitutionApplicationAttachmentDeleteView.as_view(),
+        name="institution-attachment-delete",
+    ),
+    path(
+        "applications/attachments/<int:attachment_id>/download/",
+        views.ApplicationAttachmentDownloadView.as_view(),
+        name="application-attachment-download",
+    ),
+]
+

@@ -4,7 +4,7 @@
   <!-- Shared layout for every `/ui/` page: sidebar, top bar, global styles, and common scripts. -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>மக்கள் நலப்பணி Admin</title>
+  <title>மக்கள் நலப்பணி</title>
   {% load static %}
   <style>
     :root {
@@ -1019,7 +1019,7 @@
               </div>
             {% endif %}
           {% endif %}
-          {% if module_perms.user_management.can_view or module_perms.base_files.can_view or module_perms.purchase_order.can_view or module_perms.audit_logs.can_view %}
+          {% if module_perms.user_management.can_view or module_perms.base_files.can_view or module_perms.purchase_order.can_view or module_perms.article_management.can_view or module_perms.audit_logs.can_view %}
             <div class="menu-divider"></div>
             {% if module_perms.user_management.can_view %}
               <a href="{% url 'ui:user-list' %}" class="menu-item {% if '/ui/users/' in request.path %}active{% endif %}">
@@ -1034,6 +1034,11 @@
             {% if module_perms.purchase_order.can_view %}
               <a href="{% url 'ui:purchase-order-list' %}" class="menu-item {% if '/ui/purchase-orders/' in request.path %}active{% endif %}">
                 <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M7 4h10l3 3v13H7z"/><path d="M17 4v4h4"/><path d="M9 12h8"/><path d="M9 16h6"/></svg></span><span class="menu-label">Purchase Order</span>
+              </a>
+            {% endif %}
+            {% if module_perms.article_management.can_view %}
+              <a href="{% url 'ui:vendor-list' %}" class="menu-item {% if '/ui/vendors/' in request.path %}active{% endif %}">
+                <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"/><path d="M7 11h10"/><path d="M8 15h3"/></svg></span><span class="menu-label">Vendors</span>
               </a>
             {% endif %}
             {% if module_perms.audit_logs.can_view %}

@@ -125,7 +125,7 @@ class PurchaseOrderModuleTests(TestCase):
             created_by=self.user,
         )
 
-        from core import services
+        from core.purchase_order import services
 
         self.assertEqual(services.next_purchase_order_number(), f"MASM/MNP023{year_suffix}")
 

@@ -31,3 +31,5 @@ RUN DJANGO_DEBUG=False \
 
 EXPOSE 8080
 CMD ["/app/backend/entrypoint.sh"]
+
+

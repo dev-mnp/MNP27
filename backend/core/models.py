@@ -42,6 +42,9 @@ def format_fund_request_number(value) -> str:
     return f"FR-{sequence:03d}"
 
 
+# =========================
+# Shared Choices / Constants
+# =========================
 class RoleChoices(models.TextChoices):
     ADMIN = "admin", "Admin"
     EDITOR = "editor", "Editor"
@@ -330,6 +333,9 @@ class InstitutionTypeChoices(models.TextChoices):
     OTHERS = "others", "Others"
 
 
+# =========================
+# Shared Base Utilities
+# =========================
 class BaseTimestampedModel(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -345,6 +351,9 @@ def non_negative_decimal(value: Decimal | int | float) -> Decimal:
     return value
 
 
+# =========================
+# Users / Permissions Models
+# =========================
 class AppUserManager(BaseUserManager):
     """Manager tuned for email-based custom user model."""
 
@@ -476,6 +485,9 @@ class UserModulePermission(BaseTimestampedModel):
         return f"{self.user.email} - {self.get_module_key_display()}"
 
 
+# =========================
+# Article Management Models
+# =========================
 class Article(BaseTimestampedModel):
     article_name = models.CharField(max_length=255, unique=True)
     article_name_tk = models.CharField(max_length=255, blank=True, null=True)
@@ -501,6 +513,34 @@ class Article(BaseTimestampedModel):
         return self.article_name
 
 
+class Vendor(BaseTimestampedModel):
+    vendor_name = models.CharField(max_length=255)
+    gst_number = models.CharField(max_length=64, blank=True, null=True)
+    phone_number = models.CharField(max_length=32, blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
+    city = models.CharField(max_length=120, blank=True, null=True)
+    state = models.CharField(max_length=120, blank=True, null=True)
+    pincode = models.CharField(max_length=20, blank=True, null=True)
+    cheque_in_favour = models.CharField(max_length=255, blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "vendors"
+        verbose_name = "Vendor"
+        verbose_name_plural = "Vendors"
+        indexes = [
+            models.Index(fields=["vendor_name"]),
+            models.Index(fields=["gst_number"]),
+            models.Index(fields=["is_active"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.vendor_name
+
+
+# =========================
+# Application Entry Models
+# =========================
 class DistrictMaster(BaseTimestampedModel):
     district_name = models.CharField(max_length=255, unique=True)
     allotted_budget = models.DecimalField(max_digits=16, decimal_places=2, default=0)
@@ -523,6 +563,9 @@ class DistrictMaster(BaseTimestampedModel):
         return self.district_name
 
 
+# =========================
+# Order / Fund Request Models
+# =========================
 class FundRequest(BaseTimestampedModel):
     fund_request_type = models.CharField(max_length=20, choices=FundRequestTypeChoices.choices)
     fund_request_number = models.CharField(max_length=80, unique=True, blank=True, null=True)
@@ -562,30 +605,6 @@ class FundRequest(BaseTimestampedModel):
     @property
     def formatted_fund_request_number(self) -> str:
         return format_fund_request_number(self.fund_request_number)
-
-
-class Vendor(BaseTimestampedModel):
-    vendor_name = models.CharField(max_length=255)
-    gst_number = models.CharField(max_length=64, blank=True, null=True)
-    address = models.TextField(blank=True, null=True)
-    city = models.CharField(max_length=120, blank=True, null=True)
-    state = models.CharField(max_length=120, blank=True, null=True)
-    pincode = models.CharField(max_length=20, blank=True, null=True)
-    cheque_in_favour = models.CharField(max_length=255, blank=True, null=True)
-    is_active = models.BooleanField(default=True)
-
-    class Meta:
-        db_table = "vendors"
-        verbose_name = "Vendor"
-        verbose_name_plural = "Vendors"
-        indexes = [
-            models.Index(fields=["vendor_name"]),
-            models.Index(fields=["gst_number"]),
-            models.Index(fields=["is_active"]),
-        ]
-
-    def __str__(self) -> str:
-        return self.vendor_name
 
 
 class FundRequestRecipient(BaseTimestampedModel):
@@ -712,6 +731,9 @@ PURCHASE_ORDER_DEFAULT_COMMENTS = (
 )
 
 
+# =========================
+# Purchase Order Models
+# =========================
 class PurchaseOrder(BaseTimestampedModel):
     purchase_order_number = models.CharField(max_length=80, unique=True, blank=True, null=True)
     status = models.CharField(max_length=12, choices=FundRequestStatusChoices.choices, default=FundRequestStatusChoices.DRAFT)
@@ -776,6 +798,9 @@ class PurchaseOrderItem(BaseTimestampedModel):
         self.save(update_fields=["quantity", "unit_price", "total_value"])
 
 
+# =========================
+# Pipeline Models (Seat/Sequence/Token/Labels)
+# =========================
 class EventSession(BaseTimestampedModel):
     session_name = models.CharField(max_length=120, unique=True)
     event_year = models.PositiveIntegerField(default=timezone.localdate().year)
@@ -978,6 +1003,10 @@ class LabelGenerationRow(BaseTimestampedModel):
     def __str__(self) -> str:
         return f"{self.application_number or '-'} - {self.requested_item or '-'}"
 
+
+# =========================
+# Application Entry Models (Beneficiary Data)
+# =========================
 class DistrictBeneficiaryEntry(BaseTimestampedModel):
     district = models.ForeignKey(DistrictMaster, on_delete=models.RESTRICT, related_name="beneficiaries")
     application_number = models.CharField(max_length=120, blank=True, null=True, db_index=True)
@@ -1174,6 +1203,9 @@ class ApplicationAttachment(BaseTimestampedModel):
         return self.file_name
 
 
+# =========================
+# Inventory / Order Tracking Models
+# =========================
 class OrderEntry(BaseTimestampedModel):
     article = models.ForeignKey(Article, on_delete=models.RESTRICT, related_name="orders")
     quantity_ordered = models.PositiveIntegerField(default=1)
@@ -1221,6 +1253,9 @@ class OrderEntry(BaseTimestampedModel):
         super().save(*args, **kwargs)
 
 
+# =========================
+# Dashboard Models
+# =========================
 class DashboardSetting(BaseTimestampedModel):
     event_budget = models.DecimalField(max_digits=16, decimal_places=2, default=0)
     updated_by = models.ForeignKey(
@@ -1240,7 +1275,9 @@ class DashboardSetting(BaseTimestampedModel):
         return f"Dashboard Setting ({self.event_budget})"
 
 
-
+# =========================
+# Base Files / History Models
+# =========================
 class PublicBeneficiaryHistory(BaseTimestampedModel):
     aadhar_number = models.CharField(max_length=20)
     name = models.CharField(max_length=255)
@@ -1264,6 +1301,9 @@ class PublicBeneficiaryHistory(BaseTimestampedModel):
         return f"{self.application_number or ''} {self.aadhar_number}"
 
 
+# =========================
+# Audit Logs Models
+# =========================
 class AuditLog(BaseTimestampedModel):
     user = models.ForeignKey(AppUser, on_delete=models.SET_NULL, null=True, related_name="audit_logs")
     action_type = models.CharField(max_length=16, choices=ActionTypeChoices.choices)

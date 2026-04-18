@@ -11,7 +11,10 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core import models
-from core.web_views import _build_district_entry_summaries, _district_export_rows, _sync_district_entries, _sync_institution_entries
+from core.application_entry.views import _build_district_entry_summaries
+from core.application_entry.views import _district_export_rows
+from core.application_entry.views import _sync_district_entries
+from core.application_entry.views import _sync_institution_entries
 
 
 class SearchBarSmokeTests(TestCase):

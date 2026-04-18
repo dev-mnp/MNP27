@@ -13,13 +13,14 @@ from openpyxl import load_workbook
 from pypdf import PdfReader
 
 from core import models
-from core import services
-from core.web_views import EXPORT_COLUMNS
-from core.web_views import _phase2_master_change_state
-from core.web_views import _reports_public_signature_rows_from_dataset
-from core.web_views import _reports_district_signature_grouped
-from core.web_views import _reports_district_signature_rows_from_dataset
-from core.web_views import _reports_token_lookup_data_rows
+from core.reports import services
+from core.application_entry.views import EXPORT_COLUMNS
+from core.reports.services import _reports_district_signature_grouped
+from core.reports.services import _reports_district_signature_rows_from_dataset
+from core.reports.services import _reports_public_signature_rows_from_dataset
+from core.reports.services import _reports_token_lookup_data_rows
+from core.reports.services import _reports_token_lookup_rows_from_session
+from core.shared.phase2 import _phase2_master_change_state
 
 
 class Phase2ModuleTests(TestCase):
@@ -281,8 +282,6 @@ class Phase2ModuleTests(TestCase):
             row_data={"Application Number": "P023", "Beneficiary Name": "Valli.M"},
         )
 
-        from core.web_views import _reports_token_lookup_rows_from_session
-
         rows = _reports_token_lookup_rows_from_session(session)
 
         self.assertEqual(rows[0]["token_quantity"], 3)
@@ -312,8 +311,6 @@ class Phase2ModuleTests(TestCase):
                 "Total Value": "10000",
             },
         )
-
-        from core.web_views import _reports_token_lookup_rows_from_session
 
         rows = _reports_token_lookup_rows_from_session(session)
 
@@ -477,7 +474,7 @@ class Phase2ModuleTests(TestCase):
         self.assertNotIn("Medical Aid", document_xml)
 
     def test_public_acknowledgment_pdf_uses_aid_values_only_for_aid_rows(self):
-        from core import services
+        from core.reports import services
 
         template_path = Path("/Users/aswathshakthi/PycharmProjects/MLMR/Project-MNP/Token/Token/Acknowledgment/data/Public ACK 2026.pdf")
         template_bytes = template_path.read_bytes()

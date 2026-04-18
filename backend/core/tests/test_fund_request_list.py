@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core import models
-from core import services
+from core.order_fund_request import services
 
 
 class FundRequestListRegressionTests(TestCase):

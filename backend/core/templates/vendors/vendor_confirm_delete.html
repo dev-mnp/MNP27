@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="card" style="max-width: 620px;">
+    <h2 style="margin-top: 0;">Delete vendor</h2>
+    <p>Are you sure you want to delete <strong>{{ object.vendor_name }}</strong>?</p>
+    <form method="post" data-confirm-message="Delete this vendor?">
+      {% csrf_token %}
+      <button class="btn btn-danger" type="submit">Delete</button>
+      <a class="btn" href="{% url 'ui:vendor-list' %}">Cancel</a>
+    </form>
+  </section>
+{% endblock %}

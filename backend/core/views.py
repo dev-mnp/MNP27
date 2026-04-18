@@ -14,7 +14,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
-from . import models, serializers, services
+from . import models, serializers
+from .order_fund_request import services as fund_request_services
+from .purchase_order import services as purchase_order_services
+from .shared.audit import log_audit
 from .permissions import IsAdmin, IsAdminOrEditor, ModelRolePermission
 
 
@@ -76,12 +79,12 @@ class FundRequestViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user, fund_request_number=self._ensure_request_number(serializer.validated_data))
-        services.sync_fund_request_totals(serializer.instance)
+        fund_request_services.sync_fund_request_totals(serializer.instance)
 
     def _ensure_request_number(self, validated_data):
         if validated_data.get("fund_request_number"):
             return validated_data["fund_request_number"]
-        return services.next_fund_request_number()
+        return fund_request_services.next_fund_request_number()
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -94,7 +97,7 @@ class FundRequestViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save()
-        services.sync_fund_request_totals(serializer.instance)
+        fund_request_services.sync_fund_request_totals(serializer.instance)
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -112,10 +115,10 @@ class FundRequestViewSet(viewsets.ModelViewSet):
         if fr.status != models.FundRequestStatusChoices.DRAFT:
             return Response({"detail": "Only draft records can be submitted."}, status=status.HTTP_400_BAD_REQUEST)
         if not fr.fund_request_number:
-            fr.fund_request_number = services.next_fund_request_number()
+            fr.fund_request_number = fund_request_services.next_fund_request_number()
         fr.status = models.FundRequestStatusChoices.SUBMITTED
         fr.save(update_fields=["fund_request_number", "status"])
-        services.log_audit(
+        log_audit(
             user=request.user,
             action_type=models.ActionTypeChoices.STATUS_CHANGE,
             entity_type="fund_request",
@@ -137,7 +140,7 @@ class FundRequestViewSet(viewsets.ModelViewSet):
         prev = fr.status
         fr.status = target
         fr.save(update_fields=["status"])
-        services.log_audit(
+        log_audit(
             user=request.user,
             action_type=models.ActionTypeChoices.STATUS_CHANGE,
             entity_type="fund_request",
@@ -154,7 +157,7 @@ class FundRequestViewSet(viewsets.ModelViewSet):
         if request.user.role not in {"admin", "editor"}:
             return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
         if not fr.purchase_order_number:
-            fr.purchase_order_number = services.next_purchase_order_number()
+            fr.purchase_order_number = purchase_order_services.next_purchase_order_number()
             fr.save(update_fields=["purchase_order_number"])
         return Response({"purchase_order_number": fr.purchase_order_number})
 

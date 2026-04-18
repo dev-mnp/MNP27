@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="card">
+    <h2 style="margin-top:0;">{% if object %}Edit Vendor{% else %}Create Vendor{% endif %}</h2>
+    <form method="post" class="stack">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="helptext" style="color:#b42318;">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <div class="grid2">
+        <div>
+          <label>Vendor Name</label>
+          {{ form.vendor_name }}
+          {{ form.vendor_name.errors }}
+        </div>
+        <div>
+          <label>GST Number</label>
+          {{ form.gst_number }}
+          {{ form.gst_number.errors }}
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <label>Phone Number</label>
+          {{ form.phone_number }}
+          {{ form.phone_number.errors }}
+        </div>
+        <div>
+          <label>Cheque / RTGS in Favour</label>
+          {{ form.cheque_in_favour }}
+          {{ form.cheque_in_favour.errors }}
+        </div>
+      </div>
+
+      <div>
+        <label>Address</label>
+        {{ form.address }}
+        {{ form.address.errors }}
+      </div>
+
+      <div class="grid2">
+        <div>
+          <label>City</label>
+          {{ form.city }}
+          {{ form.city.errors }}
+        </div>
+        <div>
+          <label>State</label>
+          {{ form.state }}
+          {{ form.state.errors }}
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <label>Pincode</label>
+          {{ form.pincode }}
+          {{ form.pincode.errors }}
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:8px;">
+          <label style="display:flex; align-items:center; gap:8px; margin:0;">
+            {{ form.is_active }}
+            <span>Active vendor</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="toolbar" style="margin-top: 16px;">
+        <button class="btn" type="submit">Save</button>
+        {% if popup_mode %}
+          <button class="btn" type="button" onclick="window.close();">Cancel</button>
+        {% else %}
+          <a class="btn" href="{% url 'ui:vendor-list' %}">Cancel</a>
+        {% endif %}
+      </div>
+    </form>
+  </section>
+{% endblock %}
