@@ -61,8 +61,9 @@
       </ul>
     {% endif %}
 
-    <form method="post" id="public-entry-form" data-unsaved-guard="true" {% if request.resolver_match.url_name == 'master-entry-public-edit' %}data-edit-mode="true" data-confirm-message="Save changes to this public entry?"{% else %}data-edit-mode="false"{% endif %}>
+    <form method="post" enctype="multipart/form-data" id="public-entry-form" data-unsaved-guard="true" {% if request.resolver_match.url_name == 'master-entry-public-edit' %}data-edit-mode="true" data-confirm-message="Save changes to this public entry?"{% else %}data-edit-mode="false"{% endif %}>
       {% csrf_token %}
+      <input type="hidden" name="attachment_form_token" value="{{ attachment_form_token|default:'' }}">
       {% if conflict_token %}
         <input type="hidden" name="_conflict_token" value="{{ conflict_token }}">
       {% endif %}
@@ -77,6 +78,10 @@
         <div style="flex: 1;">
           <label>Aadhar Number<span class="required-star">*</span></label>
           <input class="input" type="text" name="aadhar_number" id="public-primary-aadhar" value="{{ public_form_data.aadhar_number }}" placeholder="Enter 12-digit Aadhaar number" maxlength="12" inputmode="numeric" pattern="[0-9]{12}" data-submit-required="true">
+          <label style="display: inline-flex; align-items: center; gap: 8px; margin-top: 8px;">
+            <input type="checkbox" name="aadhaar_not_available" id="public-aadhaar-not-available" value="1" {% if public_form_data.aadhaar_not_available %}checked{% endif %}>
+            Aadhaar not available at the moment
+          </label>
         </div>
         <button class="btn" type="submit" name="action" value="verify"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7H3V5h11"/></svg><span>Verify</span></button>
       </div>
@@ -253,10 +258,10 @@
               <label>Total Value</label>
               <div class="info-field" id="public-total-value">Rs.0</div>
             </div>
-            <div class="public-metric-block public-metric-comments" id="public-inline-comments-wrap" {% if public_entry.article.item_type == "Aid" %}hidden{% endif %}>
-              <label>Comments</label>
-              <textarea class="textarea" name="notes" id="public-inline-notes" rows="1" placeholder="Comments" {% if public_entry.article.item_type == "Aid" %}disabled{% endif %}>{{ public_form_data.notes }}</textarea>
-            </div>
+          </div>
+          <div class="public-comments-row public-metric-comments" id="public-inline-comments-wrap" {% if public_entry.article.item_type == "Aid" %}hidden{% endif %}>
+            <label>Comments</label>
+            <textarea class="textarea" name="notes" id="public-inline-notes" rows="1" placeholder="Comments" {% if public_entry.article.item_type == "Aid" %}disabled{% endif %}>{{ public_form_data.notes }}</textarea>
           </div>
         </div>
 
@@ -287,11 +292,6 @@
 
       </fieldset>
 
-      <div class="toolbar" style="justify-content: flex-end; margin-top: 20px;">
-        <a class="btn" href="{% url 'ui:master-entry' %}?type=public"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg><span>Cancel</span></a>
-        <button class="btn js-save-button{% if request.resolver_match.url_name == 'master-entry-public-edit' or current_match %} btn-disabled{% endif %}" type="submit" name="action" value="draft" {% if request.resolver_match.url_name == 'master-entry-public-edit' or current_match %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v6h6V3"/><path d="M9 17h6"/></svg><span>Save as Draft</span></button>
-        <button class="btn js-submit-button{% if current_match %} btn-disabled{% endif %}" type="submit" name="action" value="submit" {% if current_match %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Submit</span></button>
-      </div>
     </form>
 
     <div class="form-section-card" style="margin-top: 20px;">
@@ -302,27 +302,29 @@
           <div class="field-hint" style="margin-top: 6px;">{{ attachment_constraints_text }}</div>
         </div>
       </div>
-      {% if attachments_enabled %}
-        <form method="post" action="{{ attachment_upload_url }}" enctype="multipart/form-data">
-          {% csrf_token %}
-          <div class="toolbar" style="align-items: end;">
-            <div style="flex: 1;">
-              <label>Upload file</label>
-              {{ attachment_upload_form.file }}
-            </div>
-            <div style="flex: 1;">
-              <label>File name</label>
-              {{ attachment_upload_form.file_name }}
-            </div>
-            <button class="btn js-camera-capture" type="button" data-camera-file-input="id_file" data-camera-name-input="id_file_name">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="14" r="4"/></svg>
-              <span>Camera</span>
-            </button>
-            <button class="btn" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg><span>Upload</span></button>
+      <form method="post" action="{{ attachment_upload_url }}" enctype="multipart/form-data" style="border:0;padding:0;margin:0;">
+        {% csrf_token %}
+        <input type="hidden" name="attachment_form_token" value="{{ attachment_form_token|default:'' }}">
+        <div class="toolbar" style="align-items: end;">
+          <div style="flex: 1;">
+            <label>Upload file</label>
+            <input class="input" type="file" id="public-attachment-file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv" {% if not attachment_upload_url %}disabled{% endif %}>
           </div>
-        </form>
-        {% if application_attachments %}
-          <table style="margin-top: 14px;">
+          <div style="flex: 1;">
+            <label>File name</label>
+            <input class="input" type="text" id="public-attachment-file-name" name="file_name" placeholder="Optional display name" {% if not attachment_upload_url %}disabled{% endif %}>
+          </div>
+          <button class="btn js-camera-capture" type="button" data-camera-file-input="public-attachment-file" data-camera-name-input="public-attachment-file-name">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="14" r="4"/></svg>
+            <span>Camera</span>
+          </button>
+          <button class="btn" type="submit" {% if not attachment_upload_url %}disabled{% endif %}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg><span>Upload</span>
+          </button>
+        </div>
+      </form>
+      {% if application_attachments %}
+        <table style="margin-top: 14px;">
             <thead>
               <tr>
                 <th>File Name</th>
@@ -348,23 +350,41 @@
                       <a class="btn icon-btn" href="{% url 'ui:application-attachment-download' attachment.id %}?download=1" title="Download file" aria-label="Download file">
                         <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
                       </a>
-                      <form method="post" action="{% url 'ui:public-attachment-delete' entry_id attachment.id %}" style="display: inline;">
-                        {% csrf_token %}
-                        <button class="btn btn-danger icon-btn" type="submit" title="Delete file" aria-label="Delete file" onclick="return window.confirm('Delete this attachment?');">
-                          <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-                        </button>
-                      </form>
+                      {% if attachment.status == 'temp' %}
+                        <form method="post" action="{% url 'ui:public-attachment-temp-delete' attachment.id %}" style="display: inline;">
+                          {% csrf_token %}
+                          <input type="hidden" name="attachment_form_token" value="{{ attachment_form_token|default:'' }}">
+                          <button class="btn btn-danger icon-btn" type="submit" title="Delete file" aria-label="Delete file" onclick="return window.confirm('Delete this attachment?');">
+                            <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                          </button>
+                        </form>
+                      {% else %}
+                        <form method="post" action="{% url 'ui:public-attachment-delete' entry_id attachment.id %}" style="display: inline;">
+                          {% csrf_token %}
+                          <button class="btn btn-danger icon-btn" type="submit" title="Delete file" aria-label="Delete file" onclick="return window.confirm('Delete this attachment?');">
+                            <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                          </button>
+                        </form>
+                      {% endif %}
                     </div>
                   </td>
                 </tr>
               {% endfor %}
             </tbody>
-          </table>
-        {% else %}
-          <div class="field-hint" style="margin-top: 10px;">No attachments uploaded yet.</div>
-        {% endif %}
+        </table>
+      {% else %}
+        <div class="field-hint" style="margin-top: 10px;">No attachments uploaded yet.</div>
       {% endif %}
     </div>
+    <div class="toolbar" style="justify-content: flex-end; margin-top: 20px;">
+      <a class="btn" id="public-cancel-link" href="{% url 'ui:master-entry' %}?type=public"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg><span>Cancel</span></a>
+      <button class="btn js-save-button{% if request.resolver_match.url_name == 'master-entry-public-edit' or current_match %} btn-disabled{% endif %}" type="submit" name="action" value="draft" form="public-entry-form" {% if request.resolver_match.url_name == 'master-entry-public-edit' or current_match %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v6h6V3"/><path d="M9 17h6"/></svg><span>Save as Draft</span></button>
+      <button class="btn js-submit-button{% if current_match %} btn-disabled{% endif %}" type="submit" name="action" value="submit" form="public-entry-form" {% if current_match %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Submit</span></button>
+    </div>
+    <form id="public-temp-clear-form" method="post" action="{{ attachment_temp_delete_url }}" style="display:none;">
+      {% csrf_token %}
+      <input type="hidden" name="attachment_form_token" value="{{ attachment_form_token|default:'' }}">
+    </form>
   </section>
 
   <div class="modal-backdrop" id="article-create-modal" aria-hidden="true">
@@ -440,9 +460,12 @@
     }
     .public-metrics-row {
       display: grid;
-      grid-template-columns: minmax(220px, 1.2fr) minmax(220px, 0.8fr) minmax(220px, 1fr);
+      grid-template-columns: minmax(220px, 1.4fr) minmax(180px, 0.8fr) minmax(180px, 0.8fr);
       gap: 16px;
       align-items: start;
+    }
+    .public-comments-row {
+      margin-top: 12px;
     }
     .public-metric-block {
       min-width: 0;
@@ -478,6 +501,21 @@
   {{ female_status_descriptions|json_script:"female-status-descriptions-data" }}
   <script>
     (function() {
+      const hasTempUploads = {{ attachment_has_temp_uploads|yesno:"true,false" }};
+      const cancelLink = document.getElementById("public-cancel-link");
+      const clearForm = document.getElementById("public-temp-clear-form");
+      if (hasTempUploads && cancelLink && clearForm) {
+        cancelLink.addEventListener("click", function(event) {
+          const shouldDelete = window.confirm("Temporary uploads are present. Click OK to delete uploads and cancel, or Cancel to continue editing.");
+          if (!shouldDelete) {
+            event.preventDefault();
+            return;
+          }
+          event.preventDefault();
+          clearForm.submit();
+        });
+      }
+
       function syncSelectOptionLabels(select, mode) {
         if (!select) return;
         Array.from(select.options).forEach(function(option) {
@@ -500,6 +538,7 @@
       const form = document.getElementById("public-entry-form");
       const saveButtons = Array.from(form.querySelectorAll(".js-save-button"));
       const submitButton = form.querySelector(".js-submit-button");
+      const verifyButton = form.querySelector('button[name="action"][value="verify"]');
       const articleSelect = document.getElementById("public-article-select");
       const aidFieldsCard = document.getElementById("public-aid-fields");
       const inlineNotesWrap = document.getElementById("public-inline-comments-wrap");
@@ -508,6 +547,7 @@
       const primaryAadharInput = document.getElementById("public-primary-aadhar");
       const aidAadharInput = document.getElementById("public-aid-aadhar");
       const aidAadharWrap = document.getElementById("public-aid-aadhar-wrap");
+      const aadhaarNotAvailableInput = document.getElementById("public-aadhaar-not-available");
       const unitCostInput = document.getElementById("public-unit-cost");
       const chequeWrap = document.getElementById("public-cheque-wrap");
       const chequeRtgsWrap = document.getElementById("public-cheque-rtgs-wrap");
@@ -760,7 +800,7 @@
           if (notesInput && notesInput.value !== inlineNotesInput.value) {
             notesInput.value = inlineNotesInput.value;
           }
-          markDirty();
+          updateSaveState();
         });
       }
       if (notesInput) {
@@ -773,8 +813,13 @@
 
       function updateSubmitRequirements(mode) {
         const submitMode = mode === "submit";
+        const aadhaarNotAvailable = !!(aadhaarNotAvailableInput && aadhaarNotAvailableInput.checked);
         submitRequiredFields.forEach(function(field) {
           const requirement = field.dataset.submitRequired;
+          if (field.name === "aadhar_number") {
+            field.required = submitMode && !aadhaarNotAvailable;
+            return;
+          }
           if (field.type === "radio") {
             field.required = submitMode && requirement === "true";
             return;
@@ -789,6 +834,34 @@
             field.required = submitMode && selectedGender === "Female";
           }
         });
+        if (notesInput) {
+          notesInput.required = submitMode && aadhaarNotAvailable;
+        }
+        if (inlineNotesInput) {
+          inlineNotesInput.required = submitMode && aadhaarNotAvailable;
+        }
+      }
+
+      function updateAadhaarAvailabilityUI() {
+        const aadhaarNotAvailable = !!(aadhaarNotAvailableInput && aadhaarNotAvailableInput.checked);
+        if (primaryAadharInput) {
+          primaryAadharInput.readOnly = aadhaarNotAvailable;
+          if (aadhaarNotAvailable) {
+            primaryAadharInput.value = "";
+          }
+        }
+        if (aidAadharInput) {
+          aidAadharInput.readOnly = aadhaarNotAvailable;
+          if (aadhaarNotAvailable) {
+            aidAadharInput.value = "";
+          }
+        }
+        if (verifyButton) {
+          verifyButton.disabled = aadhaarNotAvailable;
+          verifyButton.classList.toggle("btn-disabled", aadhaarNotAvailable);
+          verifyButton.setAttribute("aria-disabled", aadhaarNotAvailable ? "true" : "false");
+        }
+        updateSubmitRequirements(form.dataset.pendingAction || "draft");
       }
 
       function updateDisabilityCategoryUI() {
@@ -830,11 +903,19 @@
       });
       if (primaryAadharInput && aidAadharInput) {
         primaryAadharInput.addEventListener("input", function() {
+          if (aadhaarNotAvailableInput && aadhaarNotAvailableInput.checked) return;
           syncAidAadhar(primaryAadharInput, aidAadharInput);
           updateSaveState();
         });
         aidAadharInput.addEventListener("input", function() {
+          if (aadhaarNotAvailableInput && aadhaarNotAvailableInput.checked) return;
           syncAidAadhar(aidAadharInput, primaryAadharInput);
+          updateSaveState();
+        });
+      }
+      if (aadhaarNotAvailableInput) {
+        aadhaarNotAvailableInput.addEventListener("change", function() {
+          updateAadhaarAvailabilityUI();
           updateSaveState();
         });
       }
@@ -884,6 +965,15 @@
       }, true);
       form.addEventListener("submit", function(event) {
         const submitter = event.submitter;
+        if (
+          submitter
+          && submitter.value === "verify"
+          && aadhaarNotAvailableInput
+          && aadhaarNotAvailableInput.checked
+        ) {
+          event.preventDefault();
+          return;
+        }
         if (submitter && submitter.value === "submit") {
           const confirmed = window.confirm("Once submitted, this application can't be changed and will be treated as final. Do you want to continue?");
           if (!confirmed) {
@@ -899,6 +989,7 @@
       updateFemaleStatusUI();
       recalc();
       updateDisabilityCategoryUI();
+      updateAadhaarAvailabilityUI();
       updateSubmitRequirements("draft");
       initialSnapshot = formSnapshot();
       updateSaveState();

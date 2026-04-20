@@ -31,7 +31,7 @@
       </ul>
     {% endif %}
 
-    <form method="post" id="district-entry-form" data-unsaved-guard="true" {% if request.resolver_match.url_name == 'master-entry-district-edit' %}data-edit-mode="true" data-confirm-message="Save changes to this district entry?"{% else %}data-edit-mode="false"{% endif %}>
+    <form method="post" enctype="multipart/form-data" id="district-entry-form" data-unsaved-guard="true" {% if request.resolver_match.url_name == 'master-entry-district-edit' %}data-edit-mode="true" data-confirm-message="Save changes to this district entry?"{% else %}data-edit-mode="false"{% endif %}>
       {% csrf_token %}
       {% if conflict_token %}
         <input type="hidden" name="_conflict_token" value="{{ conflict_token }}">
@@ -310,14 +310,7 @@
       </div>
       </div>
 
-      <div class="toolbar" style="justify-content: flex-end; margin-top: 20px;">
-        <a class="btn" href="{% url 'ui:master-entry' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg><span>Cancel</span></a>
-        <button class="btn js-save-button{% if request.resolver_match.url_name == 'master-entry-district-edit' %} btn-disabled{% endif %}" type="submit" name="action" value="draft" {% if request.resolver_match.url_name == 'master-entry-district-edit' %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v6h6V3"/><path d="M9 17h6"/></svg><span>Save as Draft</span></button>
-        <button class="btn js-submit-button" type="submit" name="action" value="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Submit</span></button>
-      </div>
-    </form>
-
-    <div class="form-section-card" style="margin-top: 20px;">
+      <div class="form-section-card" style="margin-top: 20px;">
       <div class="section-title-row">
         <div>
           <h3 class="section-title">Attachments</h3>
@@ -325,26 +318,27 @@
           <div class="field-hint" style="margin-top: 6px;">{{ attachment_constraints_text }}</div>
         </div>
       </div>
-      {% if attachments_enabled %}
-        <form method="post" action="{{ attachment_upload_url }}" enctype="multipart/form-data">
-          {% csrf_token %}
-          <div class="toolbar" style="align-items: end;">
-            <div style="flex: 1;">
-              <label>Upload file</label>
-              {{ attachment_upload_form.file }}
-            </div>
-            <div style="flex: 1;">
-              <label>File name</label>
-              {{ attachment_upload_form.file_name }}
-            </div>
-            <button class="btn js-camera-capture" type="button" data-camera-file-input="id_file" data-camera-name-input="id_file_name">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="14" r="4"/></svg>
-              <span>Camera</span>
-            </button>
-            <button class="btn" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg><span>Upload</span></button>
+      <div style="border:0;padding:0;margin:0;">
+        <input type="hidden" id="district-attachment-district-id" name="district_id" value="{{ attachment_district_id|default:'' }}">
+        <div class="toolbar" style="align-items: end;">
+          <div style="flex: 1;">
+            <label>Upload file</label>
+            <input class="input" type="file" id="district-attachment-file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv" {% if not attachment_district_id %}disabled{% endif %}>
           </div>
-        </form>
-        {% if application_attachments %}
+          <div style="flex: 1;">
+            <label>File name</label>
+            <input class="input" type="text" id="district-attachment-file-name" name="file_name" placeholder="Optional display name" {% if not attachment_district_id %}disabled{% endif %}>
+          </div>
+          <button class="btn js-camera-capture" id="district-attachment-camera-btn" type="button" data-camera-file-input="district-attachment-file" data-camera-name-input="district-attachment-file-name" {% if not attachment_district_id %}disabled{% endif %}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="14" r="4"/></svg>
+            <span>Camera</span>
+          </button>
+          <button class="btn" id="district-attachment-upload-btn" type="submit" formaction="{{ attachment_upload_url }}" formmethod="post" formenctype="multipart/form-data" formnovalidate {% if not attachment_district_id %}disabled{% endif %}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg><span>Upload</span>
+          </button>
+        </div>
+      </div>
+      {% if application_attachments %}
           <table style="margin-top: 14px;">
             <thead>
               <tr>
@@ -383,11 +377,17 @@
               {% endfor %}
             </tbody>
           </table>
-        {% else %}
-          <div class="field-hint" style="margin-top: 10px;">No attachments uploaded yet.</div>
-        {% endif %}
+      {% else %}
+        <div class="field-hint" style="margin-top: 10px;">No attachments uploaded yet.</div>
       {% endif %}
-    </div>
+      </div>
+
+      <div class="toolbar" style="justify-content: flex-end; margin-top: 20px;">
+        <a class="btn" href="{% url 'ui:master-entry' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg><span>Cancel</span></a>
+        <button class="btn js-save-button{% if request.resolver_match.url_name == 'master-entry-district-edit' %} btn-disabled{% endif %}" type="submit" name="action" value="draft" {% if request.resolver_match.url_name == 'master-entry-district-edit' %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v6h6V3"/><path d="M9 17h6"/></svg><span>Save as Draft</span></button>
+        <button class="btn js-submit-button" type="submit" name="action" value="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Submit</span></button>
+      </div>
+    </form>
   </section>
 
   <div class="modal-backdrop" id="article-create-modal" aria-hidden="true">
@@ -477,6 +477,11 @@
       const districtPresident = document.getElementById("district-president");
       const districtMobile = document.getElementById("district-mobile");
       const districtBudget = document.getElementById("district-budget");
+      const districtAttachmentDistrictId = document.getElementById("district-attachment-district-id");
+      const districtAttachmentFile = document.getElementById("district-attachment-file");
+      const districtAttachmentFileName = document.getElementById("district-attachment-file-name");
+      const districtAttachmentCameraBtn = document.getElementById("district-attachment-camera-btn");
+      const districtAttachmentUploadBtn = document.getElementById("district-attachment-upload-btn");
       const totalAccrued = document.getElementById("total-accrued");
       const remainingFund = document.getElementById("remaining-fund");
       const remainingWarning = document.getElementById("remaining-warning");
@@ -683,12 +688,21 @@
       function updateDistrictMeta() {
         if (!districtSelect) return;
         const option = districtSelect.options[districtSelect.selectedIndex];
+        const selectedDistrictId = option && option.value ? String(option.value) : "";
         districtApp.textContent = option?.dataset.app || "-";
         districtPresident.textContent = option?.dataset.president || "-";
         districtMobile.textContent = option?.dataset.mobile || "-";
         const budget = option?.dataset.budget || "0";
         districtBudget.dataset.rawValue = budget;
         districtBudget.textContent = "Rs." + formatRupees(budget);
+        if (districtAttachmentDistrictId) {
+          districtAttachmentDistrictId.value = selectedDistrictId;
+        }
+        const hasDistrictContext = !!selectedDistrictId;
+        if (districtAttachmentFile) districtAttachmentFile.disabled = !hasDistrictContext;
+        if (districtAttachmentFileName) districtAttachmentFileName.disabled = !hasDistrictContext;
+        if (districtAttachmentCameraBtn) districtAttachmentCameraBtn.disabled = !hasDistrictContext;
+        if (districtAttachmentUploadBtn) districtAttachmentUploadBtn.disabled = !hasDistrictContext;
         recalcTotals();
       }
 

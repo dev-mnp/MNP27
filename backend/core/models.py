@@ -239,6 +239,12 @@ class FundRequestStatusChoices(models.TextChoices):
     COMPLETED = "completed", "Completed"
 
 
+class AadhaarVerificationStatusChoices(models.TextChoices):
+    VERIFIED = "VERIFIED", "Verified"
+    NOT_AVAILABLE = "NOT_AVAILABLE", "Not Available"
+    PENDING_VERIFICATION = "PENDING_VERIFICATION", "Pending Verification"
+
+
 class FundRequestDocumentType(models.TextChoices):
     FUND_REQUEST = "fund_request", "Fund Request"
     PURCHASE_ORDER = "purchase_order", "Purchase Order"
@@ -1063,7 +1069,12 @@ class PublicBeneficiaryEntry(BaseTimestampedModel):
 
     application_number = models.CharField(max_length=120, unique=True, blank=True, null=True)
     name = models.CharField(max_length=255)
-    aadhar_number = models.CharField(max_length=20, validators=[MinLengthValidator(12)])
+    aadhar_number = models.CharField(max_length=20, validators=[MinLengthValidator(12)], blank=True, null=True)
+    aadhaar_status = models.CharField(
+        max_length=24,
+        choices=AadhaarVerificationStatusChoices.choices,
+        default=AadhaarVerificationStatusChoices.PENDING_VERIFICATION,
+    )
     is_handicapped = models.CharField(max_length=80, choices=HandicappedStatusChoices.choices, default=HandicappedStatusChoices.NO)
     gender = models.CharField(max_length=15, choices=GenderChoices.choices, blank=True, null=True)
     female_status = models.CharField(max_length=80, choices=FemaleStatusChoices.choices, blank=True, null=True)
@@ -1111,6 +1122,7 @@ class PublicBeneficiaryEntry(BaseTimestampedModel):
             models.Index(fields=["status"]),
             models.Index(fields=["article"]),
             models.Index(fields=["aadhar_number"]),
+            models.Index(fields=["aadhaar_status"]),
             models.Index(fields=["application_number"]),
             models.Index(fields=["fund_request"]),
             models.Index(fields=["gender"]),
@@ -1176,6 +1188,11 @@ class ApplicationAttachmentTypeChoices(models.TextChoices):
     INSTITUTION = "institution", "Institution"
 
 
+class ApplicationAttachmentStatusChoices(models.TextChoices):
+    TEMP = "temp", "Temp"
+    LINKED = "linked", "Linked"
+
+
 class ApplicationAttachment(BaseTimestampedModel):
     application_type = models.CharField(max_length=20, choices=ApplicationAttachmentTypeChoices.choices)
     district = models.ForeignKey(
@@ -1198,6 +1215,13 @@ class ApplicationAttachment(BaseTimestampedModel):
     drive_file_id = models.CharField(max_length=255, blank=True)
     drive_mime_type = models.CharField(max_length=255, blank=True)
     drive_view_url = models.URLField(blank=True)
+    form_token = models.CharField(max_length=64, blank=True, null=True)
+    status = models.CharField(
+        max_length=20,
+        choices=ApplicationAttachmentStatusChoices.choices,
+        default=ApplicationAttachmentStatusChoices.LINKED,
+    )
+    temp_expires_at = models.DateTimeField(blank=True, null=True)
     uploaded_by = models.ForeignKey(
         AppUser,
         on_delete=models.SET_NULL,
@@ -1215,6 +1239,9 @@ class ApplicationAttachment(BaseTimestampedModel):
             models.Index(fields=["district"]),
             models.Index(fields=["public_entry"]),
             models.Index(fields=["institution_application_number"]),
+            models.Index(fields=["status"]),
+            models.Index(fields=["form_token"]),
+            models.Index(fields=["temp_expires_at"]),
         ]
 
     def __str__(self) -> str:

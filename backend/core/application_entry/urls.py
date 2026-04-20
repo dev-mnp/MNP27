@@ -39,6 +39,11 @@ urlpatterns = [
         name="district-attachment-upload",
     ),
     path(
+        "master-entry/district/attachments/temp/upload/",
+        views.DistrictApplicationAttachmentTempUploadView.as_view(),
+        name="district-attachment-temp-upload",
+    ),
+    path(
         "master-entry/district/<int:district_id>/attachments/<int:attachment_id>/delete/",
         views.DistrictApplicationAttachmentDeleteView.as_view(),
         name="district-attachment-delete",
@@ -84,6 +89,21 @@ urlpatterns = [
         name="public-attachment-upload",
     ),
     path(
+        "master-entry/public/attachments/temp/upload/",
+        views.PublicApplicationAttachmentTempUploadView.as_view(),
+        name="public-attachment-temp-upload",
+    ),
+    path(
+        "master-entry/public/attachments/temp/<int:attachment_id>/delete/",
+        views.PublicApplicationAttachmentTempDeleteView.as_view(),
+        name="public-attachment-temp-delete",
+    ),
+    path(
+        "master-entry/public/attachments/temp/clear/",
+        views.PublicApplicationAttachmentTempClearView.as_view(),
+        name="public-attachment-temp-clear",
+    ),
+    path(
         "master-entry/public/<int:pk>/attachments/<int:attachment_id>/delete/",
         views.PublicApplicationAttachmentDeleteView.as_view(),
         name="public-attachment-delete",
@@ -117,6 +137,21 @@ urlpatterns = [
         "master-entry/institutions/<str:application_number>/attachments/upload/",
         views.InstitutionApplicationAttachmentUploadView.as_view(),
         name="institution-attachment-upload",
+    ),
+    path(
+        "master-entry/institutions/attachments/temp/upload/",
+        views.InstitutionApplicationAttachmentTempUploadView.as_view(),
+        name="institution-attachment-temp-upload",
+    ),
+    path(
+        "master-entry/institutions/attachments/temp/<int:attachment_id>/delete/",
+        views.InstitutionApplicationAttachmentTempDeleteView.as_view(),
+        name="institution-attachment-temp-delete",
+    ),
+    path(
+        "master-entry/institutions/attachments/temp/clear/",
+        views.InstitutionApplicationAttachmentTempClearView.as_view(),
+        name="institution-attachment-temp-clear",
     ),
     path(
         "master-entry/institutions/<str:application_number>/attachments/<int:attachment_id>/delete/",

@@ -706,7 +706,11 @@ def _aid_entry_queryset(aid_type, beneficiary_type):
     if beneficiary_type == models.RecipientTypeChoices.DISTRICT:
         return models.DistrictBeneficiaryEntry.objects.select_related("district", "article", "fund_request").filter(**filters)
     if beneficiary_type == models.RecipientTypeChoices.PUBLIC:
-        return models.PublicBeneficiaryEntry.objects.active().select_related("article", "fund_request").filter(**filters)
+        return (
+            models.PublicBeneficiaryEntry.objects.active()
+            .select_related("article", "fund_request")
+            .filter(aadhaar_status=models.AadhaarVerificationStatusChoices.VERIFIED, **filters)
+        )
     return models.InstitutionsBeneficiaryEntry.objects.select_related("article", "fund_request").filter(**filters)
 
 
@@ -987,6 +991,15 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
             entry = models.InstitutionsBeneficiaryEntry.objects.select_related("fund_request").filter(pk=source_entry_id).first()
         if not entry:
             return False, "This beneficiary is no longer available."
+        if (
+            beneficiary_type == models.RecipientTypeChoices.PUBLIC
+            and getattr(entry, "aadhaar_status", models.AadhaarVerificationStatusChoices.PENDING_VERIFICATION)
+            != models.AadhaarVerificationStatusChoices.VERIFIED
+        ):
+            return False, (
+                "This application does not have a verified Aadhaar. "
+                "Update and validate in Application Entry to proceed."
+            )
         if entry.fund_request_id and (not current_fund_request or entry.fund_request_id != current_fund_request.id):
             label = entry.fund_request.formatted_fund_request_number if entry.fund_request and entry.fund_request.fund_request_number else f"Draft #{entry.fund_request_id}"
             if entry.fund_request:

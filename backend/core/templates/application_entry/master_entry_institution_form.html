@@ -31,8 +31,9 @@
       </ul>
     {% endif %}
 
-    <form method="post" id="institution-entry-form" data-unsaved-guard="true" {% if request.resolver_match.url_name == 'master-entry-institution-edit' %}data-edit-mode="true" data-confirm-message="Save changes to this institution entry?"{% else %}data-edit-mode="false"{% endif %}>
+    <form method="post" enctype="multipart/form-data" id="institution-entry-form" data-unsaved-guard="true" {% if request.resolver_match.url_name == 'master-entry-institution-edit' %}data-edit-mode="true" data-confirm-message="Save changes to this institution entry?"{% else %}data-edit-mode="false"{% endif %}>
       {% csrf_token %}
+      <input type="hidden" name="attachment_form_token" value="{{ attachment_form_token|default:'' }}">
       {% if conflict_token %}
         <input type="hidden" name="_conflict_token" value="{{ conflict_token }}">
       {% endif %}
@@ -276,11 +277,6 @@
       </template>
       </div>
 
-      <div class="toolbar" style="justify-content: flex-end; margin-top: 20px;">
-        <a class="btn" href="{% url 'ui:master-entry' %}?type=institutions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg><span>Cancel</span></a>
-        <button class="btn js-save-button{% if request.resolver_match.url_name == 'master-entry-institution-edit' %} btn-disabled{% endif %}" type="submit" name="action" value="draft" {% if request.resolver_match.url_name == 'master-entry-institution-edit' %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v6h6V3"/><path d="M9 17h6"/></svg><span>Save as Draft</span></button>
-        <button class="btn js-submit-button" type="submit" name="action" value="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Submit</span></button>
-      </div>
     </form>
 
     <div class="form-section-card" style="margin-top: 20px;">
@@ -291,26 +287,28 @@
           <div class="field-hint" style="margin-top: 6px;">{{ attachment_constraints_text }}</div>
         </div>
       </div>
-      {% if attachments_enabled %}
-        <form method="post" action="{{ attachment_upload_url }}" enctype="multipart/form-data">
-          {% csrf_token %}
-          <div class="toolbar" style="align-items: end;">
-            <div style="flex: 1;">
-              <label>Upload file</label>
-              {{ attachment_upload_form.file }}
-            </div>
-            <div style="flex: 1;">
-              <label>File name</label>
-              {{ attachment_upload_form.file_name }}
-            </div>
-            <button class="btn js-camera-capture" type="button" data-camera-file-input="id_file" data-camera-name-input="id_file_name">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="14" r="4"/></svg>
-              <span>Camera</span>
-            </button>
-            <button class="btn" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg><span>Upload</span></button>
+      <form method="post" action="{{ attachment_upload_url }}" enctype="multipart/form-data" style="border:0;padding:0;margin:0;">
+        {% csrf_token %}
+        <input type="hidden" name="attachment_form_token" value="{{ attachment_form_token|default:'' }}">
+        <div class="toolbar" style="align-items: end;">
+          <div style="flex: 1;">
+            <label>Upload file</label>
+            <input class="input" type="file" id="institution-attachment-file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv" {% if not attachment_upload_url %}disabled{% endif %}>
           </div>
-        </form>
-        {% if application_attachments %}
+          <div style="flex: 1;">
+            <label>File name</label>
+            <input class="input" type="text" id="institution-attachment-file-name" name="file_name" placeholder="Optional display name" {% if not attachment_upload_url %}disabled{% endif %}>
+          </div>
+          <button class="btn js-camera-capture" type="button" data-camera-file-input="institution-attachment-file" data-camera-name-input="institution-attachment-file-name">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="14" r="4"/></svg>
+            <span>Camera</span>
+          </button>
+          <button class="btn" type="submit" {% if not attachment_upload_url %}disabled{% endif %}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg><span>Upload</span>
+          </button>
+        </div>
+      </form>
+      {% if application_attachments %}
           <table style="margin-top: 14px;">
             <thead>
               <tr>
@@ -337,23 +335,41 @@
                       <a class="btn icon-btn" href="{% url 'ui:application-attachment-download' attachment.id %}?download=1" title="Download file" aria-label="Download file">
                         <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
                       </a>
-                      <form method="post" action="{% url 'ui:institution-attachment-delete' institution_application_number attachment.id %}" style="display: inline;">
-                        {% csrf_token %}
-                        <button class="btn btn-danger icon-btn" type="submit" title="Delete file" aria-label="Delete file" onclick="return window.confirm('Delete this attachment?');">
-                          <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-                        </button>
-                      </form>
+                      {% if attachment.status == 'temp' %}
+                        <form method="post" action="{% url 'ui:institution-attachment-temp-delete' attachment.id %}" style="display: inline;">
+                          {% csrf_token %}
+                          <input type="hidden" name="attachment_form_token" value="{{ attachment_form_token|default:'' }}">
+                          <button class="btn btn-danger icon-btn" type="submit" title="Delete file" aria-label="Delete file" onclick="return window.confirm('Delete this attachment?');">
+                            <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                          </button>
+                        </form>
+                      {% else %}
+                        <form method="post" action="{% url 'ui:institution-attachment-delete' institution_application_number attachment.id %}" style="display: inline;">
+                          {% csrf_token %}
+                          <button class="btn btn-danger icon-btn" type="submit" title="Delete file" aria-label="Delete file" onclick="return window.confirm('Delete this attachment?');">
+                            <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                          </button>
+                        </form>
+                      {% endif %}
                     </div>
                   </td>
                 </tr>
               {% endfor %}
             </tbody>
           </table>
-        {% else %}
-          <div class="field-hint" style="margin-top: 10px;">No attachments uploaded yet.</div>
-        {% endif %}
+      {% else %}
+        <div class="field-hint" style="margin-top: 10px;">No attachments uploaded yet.</div>
       {% endif %}
     </div>
+    <div class="toolbar" style="justify-content: flex-end; margin-top: 20px;">
+      <a class="btn" id="institution-cancel-link" href="{% url 'ui:master-entry' %}?type=institutions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg><span>Cancel</span></a>
+      <button class="btn js-save-button{% if request.resolver_match.url_name == 'master-entry-institution-edit' %} btn-disabled{% endif %}" type="submit" name="action" value="draft" form="institution-entry-form" {% if request.resolver_match.url_name == 'master-entry-institution-edit' %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v6h6V3"/><path d="M9 17h6"/></svg><span>Save as Draft</span></button>
+      <button class="btn js-submit-button" type="submit" name="action" value="submit" form="institution-entry-form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Submit</span></button>
+    </div>
+    <form id="institution-temp-clear-form" method="post" action="{{ attachment_temp_delete_url }}" style="display:none;">
+      {% csrf_token %}
+      <input type="hidden" name="attachment_form_token" value="{{ attachment_form_token|default:'' }}">
+    </form>
   </section>
 
   <div class="modal-backdrop" id="article-create-modal" aria-hidden="true">
@@ -416,6 +432,21 @@
 
   <script>
     (function() {
+      const hasTempUploads = {{ attachment_has_temp_uploads|yesno:"true,false" }};
+      const cancelLink = document.getElementById("institution-cancel-link");
+      const clearForm = document.getElementById("institution-temp-clear-form");
+      if (hasTempUploads && cancelLink && clearForm) {
+        cancelLink.addEventListener("click", function(event) {
+          const shouldDelete = window.confirm("Temporary uploads are present. Click OK to delete uploads and cancel, or Cancel to continue editing.");
+          if (!shouldDelete) {
+            event.preventDefault();
+            return;
+          }
+          event.preventDefault();
+          clearForm.submit();
+        });
+      }
+
       function syncSelectOptionLabels(select, mode) {
         if (!select) return;
         Array.from(select.options).forEach(function(option) {
