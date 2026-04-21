@@ -26,7 +26,7 @@ from django.views import View
 from django.views.generic import TemplateView
 
 from core import models
-from core.application_entry import google_drive
+from core.application_entry import drive_service
 from core.application_entry.forms import ApplicationAttachmentUploadForm
 from core.base_files import services as base_file_services
 from core.shared.permissions import AdminRequiredMixin, RoleRequiredMixin, WriteRoleMixin
@@ -60,16 +60,13 @@ FEMALE_STATUS_DESCRIPTIONS = {
 
 
 def _available_attachment_q():
-    return Q(drive_file_id__gt="") | ~Q(file="")
+    return Q(drive_file_id__gt="")
 
 
 def _mark_attachment_unavailable(attachment):
     if not attachment:
         return
     update_fields = []
-    if attachment.file:
-        attachment.file = ""
-        update_fields.append("file")
     if attachment.drive_file_id:
         attachment.drive_file_id = ""
         update_fields.append("drive_file_id")
@@ -79,6 +76,9 @@ def _mark_attachment_unavailable(attachment):
     if attachment.drive_view_url:
         attachment.drive_view_url = ""
         update_fields.append("drive_view_url")
+    if getattr(attachment, "status", "") != models.ApplicationAttachmentStatusChoices.MISSING:
+        attachment.status = models.ApplicationAttachmentStatusChoices.MISSING
+        update_fields.append("status")
     if update_fields:
         attachment.save(update_fields=update_fields)
 
@@ -208,6 +208,7 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 entry.attachment_id = attachment.id if attachment else None
                 entry.attachment_preview_url = reverse("ui:application-attachment-download", kwargs={"attachment_id": attachment.id}) if attachment else ""
                 entry.attachment_source = _attachment_preview_source(attachment)
+                entry.attachment_preview_kind = _attachment_preview_kind(attachment)
                 entry.attachment_title = _attachment_preview_title(attachment)
                 entry.attachment_count = public_attachment_counts.get(entry.id, 0)
                 entry.attachment_preview_items_b64 = _attachment_items_b64(
@@ -435,24 +436,6 @@ TOKEN_GENERATION_ARTICLE_PRINT_EXCLUDES = {
 }
 
 
-def _attachment_upload_context(*, attachments=None, enabled=False, upload_url="", helper_text="Attachments can be added after the application is first saved."):
-    attachment_list = list(attachments or [])
-    return {
-        "application_attachments": attachment_list,
-        "attachment_upload_form": ApplicationAttachmentUploadForm(),
-        "attachments_enabled": enabled,
-        "attachment_upload_url": upload_url,
-        "attachment_preview_items_b64": _attachment_items_b64(
-            [item for item in (_attachment_preview_payload(attachment) for attachment in attachment_list) if item]
-        ),
-        "attachment_helper_text": helper_text,
-        "attachment_constraints_text": (
-            "Allowed files: PDF, JPG, JPEG, PNG, WEBP, DOC, DOCX, XLS, XLSX, CSV. "
-            "Maximum file size: 10 MB. Maximum 2 files per application."
-        ),
-    }
-
-
 def _prefixed_attachment_name(application_reference, uploaded_name, custom_name=""):
     prefix = (application_reference or "").strip()
     original_name = (uploaded_name or "").strip()
@@ -481,6 +464,8 @@ def _attachment_name_exists(queryset, final_name):
 def _attachment_application_reference(attachment):
     if not attachment:
         return ""
+    if attachment.prefix:
+        return str(attachment.prefix).strip()
     if attachment.application_type == models.ApplicationAttachmentTypeChoices.DISTRICT and attachment.district_id:
         return attachment.district.application_number or ""
     if attachment.application_type == models.ApplicationAttachmentTypeChoices.PUBLIC and attachment.public_entry_id:
@@ -491,212 +476,128 @@ def _attachment_application_reference(attachment):
 
 
 def _save_application_attachment(*, uploaded, display_name, application_type, uploaded_by, district=None, public_entry=None, institution_application_number=None):
-    from django.conf import settings
-
+    original_filename = str(getattr(uploaded, "name", "") or "").strip() or "attachment"
+    display_filename = (display_name or "").strip() or original_filename
+    prefix = ""
+    application_id = None
+    if district is not None:
+        prefix = district.application_number or ""
+        application_id = district.id
+    elif public_entry is not None:
+        prefix = public_entry.application_number or ""
+        application_id = public_entry.id
+    elif institution_application_number is not None:
+        prefix = institution_application_number
     attachment_kwargs = {
         "application_type": application_type,
+        "application_id": application_id,
         "district": district,
         "public_entry": public_entry,
         "institution_application_number": institution_application_number,
-        "file_name": display_name,
+        "prefix": prefix,
+        "original_filename": original_filename,
+        "display_filename": display_filename,
+        "file_name": display_filename,
         "uploaded_by": uploaded_by,
+        "status": models.ApplicationAttachmentStatusChoices.LINKED,
     }
-    application_reference = (
-        (district.application_number if district else "")
-        or (public_entry.application_number if public_entry else "")
-        or institution_application_number
-        or ""
+    if not drive_service.is_configured():
+        raise RuntimeError("Google Drive is not configured for attachments in this environment.")
+    uploaded.seek(0)
+    result = drive_service.upload_attachment(
+        application_type=application_type,
+        reference=prefix,
+        filename=display_filename,
+        content=uploaded.read(),
+        content_type=str(getattr(uploaded, "content_type", "") or mimetypes.guess_type(display_filename)[0] or "application/octet-stream"),
     )
-    if google_drive.is_configured():
-        drive_file = google_drive.upload_application_attachment(
-            content=uploaded.read(),
-            display_name=display_name,
-            content_type=str(getattr(uploaded, "content_type", "") or mimetypes.guess_type(display_name)[0] or "application/octet-stream"),
-            application_type=application_type,
-            application_reference=application_reference,
-        )
-        attachment_kwargs.update(
-            {
-                "drive_file_id": str(drive_file.get("file_id") or "").strip(),
-                "drive_mime_type": str(drive_file.get("mime_type") or "").strip(),
-                "drive_view_url": str(drive_file.get("view_url") or "").strip(),
-            }
-        )
-    else:
-        # In production (Cloud Run), local filesystem uploads are ephemeral and will be lost.
-        # Require Google Drive configuration in non-debug environments to avoid false success.
-        if settings.DEBUG:
-            attachment_kwargs["file"] = uploaded
-        else:
-            raise RuntimeError("Google Drive is not configured for attachments in this environment.")
+    attachment_kwargs.update(
+        {
+            "drive_file_id": result.file_id,
+            "drive_mime_type": result.mime_type,
+            "drive_view_url": result.view_url,
+        }
+    )
     return models.ApplicationAttachment.objects.create(**attachment_kwargs)
 
 
 def _delete_application_attachment_file(attachment):
     try:
         if attachment.drive_file_id:
-            google_drive.delete_file(attachment.drive_file_id)
+            drive_service.delete_attachment(attachment.drive_file_id)
         elif attachment.file:
             attachment.file.delete(save=False)
     except Exception:
         logger.exception("Failed to delete attachment file (id=%s). Continuing.", getattr(attachment, "id", None))
 
 
-def _rename_attachment_display_names_for_reference(*, attachments_qs, new_reference):
-    for attachment in attachments_qs:
-        current_name = (attachment.file_name or "").strip()
-        if not current_name:
-            continue
-        if "_" in current_name:
-            _, suffix = current_name.split("_", 1)
-        else:
-            suffix = current_name
-        attachment.file_name = f"{new_reference}_{suffix}" if suffix else new_reference
-        update_fields = ["file_name"]
-        if attachment.drive_file_id:
-            try:
-                metadata = google_drive.rename_file(attachment.drive_file_id, attachment.file_name)
-                attachment.drive_mime_type = str(metadata.get("mime_type") or "").strip()
-                attachment.drive_view_url = str(metadata.get("view_url") or "").strip()
-                update_fields.extend(["drive_mime_type", "drive_view_url"])
-            except Exception:
-                logger.warning(
-                    "Failed to rename Drive file for attachment_id=%s drive_file_id=%s",
-                    attachment.id,
-                    attachment.drive_file_id,
-                    exc_info=True,
-                )
-        attachment.save(update_fields=update_fields)
-
-
-def _save_attachment_from_main_form(
-    *,
-    request,
-    application_type,
-    application_reference,
-    uploaded_by,
-    district=None,
-    public_entry=None,
-    institution_application_number=None,
-):
-    if "file" not in request.FILES:
-        return
-
-    form = ApplicationAttachmentUploadForm(request.POST, request.FILES)
-    if not form.is_valid():
-        messages.error(
-            request,
-            "; ".join(form.errors.get("file", []) + form.errors.get("file_name", []))
-            or "Choose a valid file before saving.",
-        )
-        return
-
+def _cleanup_application_attachments(*, application_type, district=None, public_entry=None, institution_application_number=None):
     filters = {
         "application_type": application_type,
         "status": models.ApplicationAttachmentStatusChoices.LINKED,
     }
     if district is not None:
+        filters["application_id"] = district.id
         filters["district"] = district
     if public_entry is not None:
+        filters["application_id"] = public_entry.id
         filters["public_entry"] = public_entry
     if institution_application_number is not None:
         filters["institution_application_number"] = institution_application_number
-
-    attachments_qs = models.ApplicationAttachment.objects.filter(**filters)
-    existing_count = attachments_qs.count()
-    if existing_count >= ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION:
-        messages.error(
-            request,
-            f"Maximum {ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION} files are allowed for one application.",
-        )
-        return
-
-    uploaded = form.cleaned_data["file"]
-    display_name = _prefixed_attachment_name(
-        application_reference,
-        uploaded.name,
-        form.cleaned_data.get("file_name") or "",
-    )
-    if _attachment_name_exists(attachments_qs, display_name):
-        messages.error(
-            request,
-            "A file with this name already exists for this application. Please rename it before saving.",
-        )
-        return
-    try:
-        _save_application_attachment(
-            uploaded=uploaded,
-            display_name=display_name,
-            application_type=application_type,
-            uploaded_by=uploaded_by,
-            district=district,
-            public_entry=public_entry,
-            institution_application_number=institution_application_number,
-        )
-    except Exception:
-        logger.exception("Attachment save failed for %s", application_reference)
-        if not google_drive.is_configured():
-            messages.error(
-                request,
-                "Google Drive is not configured for uploads in this environment. "
-                "Set GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID, GOOGLE_DRIVE_CLIENT_ID, "
-                "GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_DRIVE_REFRESH_TOKEN.",
+    attachments = list(models.ApplicationAttachment.objects.filter(**filters))
+    failures = []
+    for attachment in attachments:
+        try:
+            if attachment.drive_file_id:
+                drive_service.delete_attachment(attachment.drive_file_id)
+            elif attachment.file:
+                attachment.file.delete(save=False)
+        except Exception as exc:
+            if _is_probably_missing_drive_file_error(exc):
+                continue
+            failures.append(attachment.id)
+            logger.warning(
+                "Attachment cleanup failed for attachment_id=%s while deleting application",
+                attachment.id,
+                exc_info=True,
             )
-        else:
-            messages.error(request, "Attachment save failed. Please check Google Drive configuration and try again.")
-        return
-    messages.success(request, "Attachment saved with application.")
+    if failures:
+        return False, len(attachments), len(failures)
+    if attachments:
+        models.ApplicationAttachment.objects.filter(id__in=[item.id for item in attachments]).delete()
+    return True, len(attachments), 0
 
 
-def _attachment_session_token_key(application_type):
-    return f"application_attachment_form_token:{application_type}"
+def _attachment_form_token_session_key(application_type):
+    return f"application_attachment_draft_uid:{str(application_type or '').strip().lower()}"
 
 
 def _ensure_attachment_form_token(request, application_type):
-    key = _attachment_session_token_key(application_type)
+    key = _attachment_form_token_session_key(application_type)
     token = (request.session.get(key) or "").strip()
-    if not token:
-        token = uuid.uuid4().hex
-        request.session[key] = token
-        request.session.modified = True
+    if token:
+        return token
+    token = str(uuid.uuid4())
+    request.session[key] = token
+    request.session.modified = True
     return token
 
 
 def _clear_attachment_form_token(request, application_type):
-    key = _attachment_session_token_key(application_type)
+    key = _attachment_form_token_session_key(application_type)
     if key in request.session:
-        del request.session[key]
+        request.session.pop(key, None)
         request.session.modified = True
 
 
-def _attachment_temp_expiry():
-    return timezone.now() + timedelta(hours=24)
-
-
-def _cleanup_stale_temp_attachments():
-    stale = list(
-        models.ApplicationAttachment.objects.filter(
-            status=models.ApplicationAttachmentStatusChoices.TEMP,
-            temp_expires_at__lt=timezone.now(),
-        ).only("id", "drive_file_id", "file")
-    )
-    if not stale:
-        return 0
-    deleted = 0
-    for attachment in stale:
-        _delete_application_attachment_file(attachment)
-        attachment.delete()
-        deleted += 1
-    return deleted
-
-
 def _temp_attachment_queryset(*, application_type, form_token, user):
-    return models.ApplicationAttachment.objects.filter(
+    queryset = models.ApplicationAttachment.objects.filter(
         application_type=application_type,
         status=models.ApplicationAttachmentStatusChoices.TEMP,
-        form_token=form_token,
+        draft_uid=form_token,
         uploaded_by=user,
-    ).order_by("-created_at", "-id")
+    )
+    return queryset.filter(_available_attachment_q()).order_by("-created_at", "-id")
 
 
 def _linked_attachment_queryset(*, application_type, district=None, public_entry=None, institution_application_number=None):
@@ -705,65 +606,43 @@ def _linked_attachment_queryset(*, application_type, district=None, public_entry
         "status": models.ApplicationAttachmentStatusChoices.LINKED,
     }
     if district is not None:
+        filters["application_id"] = district.id
         filters["district"] = district
     if public_entry is not None:
+        filters["application_id"] = public_entry.id
         filters["public_entry"] = public_entry
     if institution_application_number is not None:
         filters["institution_application_number"] = institution_application_number
-    return models.ApplicationAttachment.objects.filter(**filters).order_by("-created_at", "-id")
+    return models.ApplicationAttachment.objects.filter(**filters).filter(_available_attachment_q()).order_by("-created_at", "-id")
 
 
-def _save_temp_attachment_upload(*, request, application_type, form_token, application_reference=""):
-    form = ApplicationAttachmentUploadForm(request.POST, request.FILES)
-    if not form.is_valid():
-        messages.error(
-            request,
-            "; ".join(form.errors.get("file", []) + form.errors.get("file_name", []))
-            or "Choose a valid file before uploading.",
-        )
+def _rename_attachment_display_names_for_reference(*, attachments_qs, new_reference):
+    reference = (new_reference or "").strip()
+    if not reference:
         return
-    existing_count = _temp_attachment_queryset(
-        application_type=application_type,
-        form_token=form_token,
-        user=request.user,
-    ).count()
-    if existing_count >= ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION:
-        messages.error(
-            request,
-            f"Maximum {ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION} files are allowed for one application.",
-        )
-        return
-    uploaded = form.cleaned_data["file"]
-    raw_name = (form.cleaned_data.get("file_name") or "").strip() or uploaded.name
-    display_name = (
-        _prefixed_attachment_name(application_reference, uploaded.name, form.cleaned_data.get("file_name") or "")
-        if application_reference
-        else raw_name
-    )
-    try:
-        attachment = _save_application_attachment(
-            uploaded=uploaded,
-            display_name=display_name,
-            application_type=application_type,
-            uploaded_by=request.user,
-        )
-        attachment.status = models.ApplicationAttachmentStatusChoices.TEMP
-        attachment.form_token = form_token
-        attachment.temp_expires_at = _attachment_temp_expiry()
-        attachment.save(update_fields=["status", "form_token", "temp_expires_at"])
-    except Exception:
-        logger.exception("Temporary attachment upload failed for %s", application_type)
-        if not google_drive.is_configured():
-            messages.error(
-                request,
-                "Google Drive is not configured for uploads in this environment. "
-                "Set GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID, GOOGLE_DRIVE_CLIENT_ID, "
-                "GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_DRIVE_REFRESH_TOKEN.",
-            )
-        else:
-            messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
-        return
-    messages.success(request, "Attachment uploaded.")
+    for attachment in attachments_qs.order_by("id"):
+        current_name = (attachment.display_filename or attachment.file_name or attachment.original_filename or "").strip() or "attachment"
+        bare_name = current_name
+        current_prefix = (attachment.prefix or "").strip()
+        if current_prefix and bare_name.startswith(f"{current_prefix}_"):
+            bare_name = bare_name[len(f"{current_prefix}_") :]
+        renamed = _prefixed_attachment_name(reference, bare_name, bare_name)
+        if renamed == current_name:
+            continue
+        attachment.prefix = reference
+        attachment.display_filename = renamed
+        attachment.file_name = renamed
+        update_fields = ["prefix", "display_filename", "file_name"]
+        if attachment.drive_file_id:
+            try:
+                drive_data = drive_service.rename_attachment(attachment.drive_file_id, renamed)
+                attachment.drive_mime_type = str(drive_data.mime_type or attachment.drive_mime_type or "").strip()
+                attachment.drive_view_url = str(drive_data.view_url or attachment.drive_view_url or "").strip()
+                update_fields.extend(["drive_mime_type", "drive_view_url"])
+            except Exception as exc:
+                logger.warning("Attachment rename failed for attachment_id=%s", attachment.id, exc_info=True)
+                raise RuntimeError(f"Failed to rename Drive attachment {attachment.id}") from exc
+        attachment.save(update_fields=sorted(set(update_fields)))
 
 
 def _link_temp_attachments_to_application(
@@ -784,693 +663,184 @@ def _link_temp_attachments_to_application(
         )
     )
     for attachment in temp_items:
+        bare_name = (attachment.original_filename or attachment.display_filename or attachment.file_name or "").strip() or "attachment"
+        normalized_reference = (application_reference or "").strip()
+        is_draft_reference = normalized_reference.startswith("DRAFT-")
+        target_prefix = f"DRAFT_{form_token}" if is_draft_reference else normalized_reference
+        renamed = _prefixed_attachment_name(target_prefix, bare_name, bare_name)
+        attachment.prefix = target_prefix
+        attachment.file_name = renamed
+        attachment.display_filename = renamed
         attachment.status = models.ApplicationAttachmentStatusChoices.LINKED
-        attachment.form_token = None
+        attachment.draft_uid = form_token if is_draft_reference else None
         attachment.temp_expires_at = None
-        final_name = _prefixed_attachment_name(
-            application_reference,
-            attachment.file_name or "attachment",
-            attachment.file_name or "",
-        )
-        attachment.file_name = final_name
-        update_fields = ["status", "form_token", "temp_expires_at", "file_name"]
-        if attachment.drive_file_id:
-            try:
-                metadata = google_drive.rename_file(attachment.drive_file_id, final_name)
-                attachment.drive_mime_type = str(metadata.get("mime_type") or "").strip()
-                attachment.drive_view_url = str(metadata.get("view_url") or "").strip()
-                update_fields.extend(["drive_mime_type", "drive_view_url"])
-            except Exception:
-                logger.warning(
-                    "Failed to rename temporary Drive attachment_id=%s drive_file_id=%s",
-                    attachment.id,
-                    attachment.drive_file_id,
-                    exc_info=True,
-                )
         if district is not None:
+            attachment.application_id = district.id
             attachment.district = district
-            update_fields.append("district")
         if public_entry is not None:
+            attachment.application_id = public_entry.id
             attachment.public_entry = public_entry
-            update_fields.append("public_entry")
         if institution_application_number is not None:
             attachment.institution_application_number = institution_application_number
-            update_fields.append("institution_application_number")
-        attachment.save(update_fields=list(dict.fromkeys(update_fields)))
-
-
-def _sync_drive_attachments_for_application(
-    *,
-    application_type,
-    application_reference,
-    district=None,
-    public_entry=None,
-    institution_application_number=None,
-):
-    if not google_drive.is_configured():
-        return []
-    reference = (application_reference or "").strip()
-    if not reference:
-        return []
-    filters = {
-        "application_type": application_type,
-        "status": models.ApplicationAttachmentStatusChoices.LINKED,
-    }
-    if district is not None:
-        filters["district"] = district
-    if public_entry is not None:
-        filters["public_entry"] = public_entry
-    if institution_application_number is not None:
-        filters["institution_application_number"] = institution_application_number
-    attachments = list(
-        models.ApplicationAttachment.objects.filter(**filters).select_related("uploaded_by").order_by("-created_at", "-id")
-    )
-    try:
-        drive_files = google_drive.list_application_attachments(
-            application_type=application_type,
-            application_reference=reference,
-        )
-    except Exception:
-        # Google Drive sync should never break data entry pages.
-        # Return current DB attachments without syncing.
-        logger.exception("Failed to sync Drive attachments for %s:%s", application_type, reference)
-        return attachments
-    if not drive_files:
-        stale_drive_only_ids = [
-            attachment.id
-            for attachment in attachments
-            if attachment.drive_file_id and not attachment.file
+        update_fields = [
+            "application_id",
+            "prefix",
+            "file_name",
+            "display_filename",
+            "status",
+            "draft_uid",
+            "temp_expires_at",
+            "district",
+            "public_entry",
+            "institution_application_number",
         ]
-        if stale_drive_only_ids:
-            for stale_attachment in models.ApplicationAttachment.objects.filter(id__in=stale_drive_only_ids):
-                _mark_attachment_unavailable(stale_attachment)
-        return list(
-            models.ApplicationAttachment.objects.filter(**filters)
-            .filter(_available_attachment_q())
-            .select_related("uploaded_by")
-            .order_by("-created_at", "-id")
-        )
-
-    def _normalized_name(value):
-        return str(value or "").strip().casefold()
-
-    existing_by_id = {
-        str(attachment.drive_file_id or "").strip(): attachment
-        for attachment in attachments
-        if str(attachment.drive_file_id or "").strip()
-    }
-    available_by_name = {}
-    for drive_file in drive_files:
-        normalized_name = _normalized_name(drive_file.get("file_name"))
-        if normalized_name and normalized_name not in available_by_name:
-            available_by_name[normalized_name] = drive_file
-
-    touched_ids = set()
-    seen_drive_ids = {
-        str(item.get("file_id") or "").strip()
-        for item in drive_files
-        if str(item.get("file_id") or "").strip()
-    }
-    for attachment in attachments:
-        matched_drive_file = None
-        drive_id = str(attachment.drive_file_id or "").strip()
-        if drive_id and drive_id in existing_by_id and any(str(item.get("file_id") or "").strip() == drive_id for item in drive_files):
-            matched_drive_file = next(
-                (item for item in drive_files if str(item.get("file_id") or "").strip() == drive_id),
-                None,
-            )
-        elif not attachment.file:
-            matched_drive_file = available_by_name.get(_normalized_name(attachment.file_name))
-        if not matched_drive_file:
-            continue
-        update_fields = []
-        matched_id = str(matched_drive_file.get("file_id") or "").strip()
-        if attachment.drive_file_id != matched_id:
-            attachment.drive_file_id = matched_id
-            update_fields.append("drive_file_id")
-        matched_mime = str(matched_drive_file.get("mime_type") or "").strip()
-        if attachment.drive_mime_type != matched_mime:
-            attachment.drive_mime_type = matched_mime
-            update_fields.append("drive_mime_type")
-        matched_view = str(matched_drive_file.get("view_url") or "").strip()
-        if attachment.drive_view_url != matched_view:
-            attachment.drive_view_url = matched_view
-            update_fields.append("drive_view_url")
-        matched_name = str(matched_drive_file.get("file_name") or "").strip()
-        if matched_name and attachment.file_name != matched_name:
-            attachment.file_name = matched_name
-            update_fields.append("file_name")
-        if update_fields:
-            attachment.save(update_fields=update_fields)
-        touched_ids.add(matched_id)
-
-    stale_attachment_ids = []
-    for attachment in attachments:
-        drive_id = str(attachment.drive_file_id or "").strip()
-        if not drive_id:
-            continue
-        if attachment.file:
-            continue
-        if drive_id in seen_drive_ids:
-            continue
-        stale_attachment_ids.append(attachment.id)
-
-    for drive_file in drive_files:
-        matched_id = str(drive_file.get("file_id") or "").strip()
-        if not matched_id or matched_id in touched_ids:
-            continue
-        existing_attachment = existing_by_id.get(matched_id)
-        if existing_attachment:
-            continue
-        attachments.append(
-            models.ApplicationAttachment.objects.create(
-                application_type=application_type,
-                district=district,
-                public_entry=public_entry,
-                institution_application_number=institution_application_number,
-                file_name=str(drive_file.get("file_name") or "").strip(),
-                drive_file_id=matched_id,
-                drive_mime_type=str(drive_file.get("mime_type") or "").strip(),
-                drive_view_url=str(drive_file.get("view_url") or "").strip(),
-            )
-        )
-
-    if stale_attachment_ids:
-        for stale_attachment in models.ApplicationAttachment.objects.filter(id__in=stale_attachment_ids):
-            _mark_attachment_unavailable(stale_attachment)
-
-    return list(
-        models.ApplicationAttachment.objects.filter(**filters)
-        .filter(_available_attachment_q())
-        .select_related("uploaded_by")
-        .order_by("-created_at", "-id")
-    )
-
-
-def _district_attachment_context(district):
-    has_saved_application = bool(district and models.DistrictBeneficiaryEntry.objects.filter(district=district).exists())
-    attachments = []
-    upload_url = ""
-    if has_saved_application:
-        attachments = _sync_drive_attachments_for_application(
-            application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
-            application_reference=district.application_number,
-            district=district,
-        )
-        upload_url = reverse("ui:district-attachment-upload", kwargs={"district_id": district.id})
-    return _attachment_upload_context(
-        attachments=attachments,
-        enabled=has_saved_application,
-        upload_url=upload_url,
-        helper_text="Upload files related to this district application. You can rename the file before upload.",
-    )
-
-
-def _public_attachment_context(entry):
-    has_saved_application = bool(entry and entry.pk)
-    attachments = []
-    upload_url = ""
-    if has_saved_application:
-        attachments = _sync_drive_attachments_for_application(
-            application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
-            application_reference=entry.application_number or f"PUBLIC-{entry.pk}",
-            public_entry=entry,
-        )
-        upload_url = reverse("ui:public-attachment-upload", kwargs={"pk": entry.pk})
-    context = _attachment_upload_context(
-        attachments=attachments,
-        enabled=has_saved_application,
-        upload_url=upload_url,
-        helper_text="Upload files related to this public application. You can rename the file before upload.",
-    )
-    context["entry_id"] = entry.pk if has_saved_application else None
-    return context
-
-
-def _institution_attachment_context(application_number):
-    has_saved_application = bool(application_number)
-    attachments = []
-    upload_url = ""
-    if has_saved_application:
-        attachments = _sync_drive_attachments_for_application(
-            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
-            application_reference=application_number,
-            institution_application_number=application_number,
-        )
-        upload_url = reverse("ui:institution-attachment-upload", kwargs={"application_number": application_number})
-    return _attachment_upload_context(
-        attachments=attachments,
-        enabled=has_saved_application,
-        upload_url=upload_url,
-        helper_text="Upload files related to this institution application. You can rename the file before upload.",
-    )
-
-
-def _district_attachment_preview_data(district_ids):
-    if not district_ids:
-        return {}, {}
-    attachments = (
-        models.ApplicationAttachment.objects.filter(
-            application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
-            district_id__in=district_ids,
-        )
-        .filter(_available_attachment_q())
-        .order_by("district_id", "-created_at", "-id")
-    )
-    preview_map = {}
-    preview_lists = {}
-    for attachment in attachments:
-        if attachment.district_id not in preview_map:
-            preview_map[attachment.district_id] = attachment
-        preview_lists.setdefault(attachment.district_id, []).append(attachment)
-    return preview_map, preview_lists
-
-
-def _district_attachment_preview_map(district_ids):
-    preview_map, _preview_lists = _district_attachment_preview_data(district_ids)
-    return preview_map
-
-
-def _district_attachment_preview_lists(district_ids):
-    _preview_map, preview_lists = _district_attachment_preview_data(district_ids)
-    return preview_lists
-
-
-def _public_attachment_preview_data(entry_ids):
-    if not entry_ids:
-        return {}, {}
-    attachments = (
-        models.ApplicationAttachment.objects.filter(
-            application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
-            public_entry_id__in=entry_ids,
-        )
-        .filter(_available_attachment_q())
-        .order_by("public_entry_id", "-created_at", "-id")
-    )
-    preview_map = {}
-    preview_lists = {}
-    for attachment in attachments:
-        if attachment.public_entry_id not in preview_map:
-            preview_map[attachment.public_entry_id] = attachment
-        preview_lists.setdefault(attachment.public_entry_id, []).append(attachment)
-    return preview_map, preview_lists
-
-
-def _public_attachment_preview_map(entry_ids):
-    preview_map, _preview_lists = _public_attachment_preview_data(entry_ids)
-    return preview_map
-
-
-def _public_attachment_preview_lists(entry_ids):
-    _preview_map, preview_lists = _public_attachment_preview_data(entry_ids)
-    return preview_lists
-
-
-def _institution_attachment_preview_data(application_numbers):
-    if not application_numbers:
-        return {}, {}
-    attachments = (
-        models.ApplicationAttachment.objects.filter(
-            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
-            institution_application_number__in=application_numbers,
-        )
-        .filter(_available_attachment_q())
-        .order_by("institution_application_number", "-created_at", "-id")
-    )
-    preview_map = {}
-    preview_lists = {}
-    for attachment in attachments:
-        key = attachment.institution_application_number
-        if key and key not in preview_map:
-            preview_map[key] = attachment
-        if key:
-            preview_lists.setdefault(key, []).append(attachment)
-    return preview_map, preview_lists
-
-
-def _institution_attachment_preview_map(application_numbers):
-    preview_map, _preview_lists = _institution_attachment_preview_data(application_numbers)
-    return preview_map
-
-
-def _institution_attachment_preview_lists(application_numbers):
-    _preview_map, preview_lists = _institution_attachment_preview_data(application_numbers)
-    return preview_lists
-
-
-def _attachment_preview_title(attachment):
-    if not attachment:
-        return ""
-    if attachment.file_name:
-        return attachment.file_name
-    if attachment.drive_view_url:
-        return "Attachment"
-    if attachment.file:
-        return os.path.basename(attachment.file.name)
-    return ""
-
-
-def _attachment_preview_payload(attachment):
-    if not attachment:
-        return None
-    preview_url = reverse("ui:application-attachment-download", kwargs={"attachment_id": attachment.id})
-    source_name = _attachment_preview_source(attachment)
-    return {
-        "id": attachment.id,
-        "title": _attachment_preview_title(attachment),
-        "preview_url": preview_url,
-        "download_url": f"{preview_url}?download=1",
-        "source": source_name,
-    }
-
-
-def _attachment_preview_source(attachment):
-    if not attachment:
-        return ""
-    if attachment.file and attachment.file.name:
-        return (attachment.file.name or "").lower()
-    source_name = (attachment.file_name or "").lower()
-    mime_type = (attachment.drive_mime_type or "").lower()
-    if source_name and "." not in os.path.basename(source_name):
-        if mime_type == "application/pdf":
-            source_name = f"{source_name}.pdf"
-        elif mime_type.startswith("image/"):
-            ext = mime_type.split("/", 1)[1].strip()
-            if ext == "jpeg":
-                ext = "jpg"
-            if ext:
-                source_name = f"{source_name}.{ext}"
-    return source_name
-
-
-def _attachment_items_b64(items):
-    payload = json.dumps(items, ensure_ascii=False)
-    return base64.b64encode(payload.encode("utf-8")).decode("ascii")
-
-
-def _district_audit_snapshot(district):
-    entries = list(
-        models.DistrictBeneficiaryEntry.objects.filter(district=district).select_related("article").order_by("id")
-    )
-    total_accrued = sum((entry.total_amount or 0) for entry in entries)
-    return {
-        "district_id": str(district.id),
-        "application_number": district.application_number or "",
-        "district_name": district.district_name or "",
-        "president_name": district.president_name or "",
-        "mobile_number": district.mobile_number or "",
-        "allotted_budget": str(district.allotted_budget or 0),
-        "status": entries[0].status if entries else "",
-        "internal_notes": (entries[0].internal_notes or "") if entries else "",
-        "total_accrued": str(total_accrued or 0),
-        "item_count": len(entries),
-        "items": [
-            {
-                "id": str(entry.id),
-                "article_id": str(entry.article_id),
-                "article_name": entry.article.article_name,
-                "item_type": entry.article.item_type,
-                "quantity": entry.quantity,
-                "unit_cost": str(entry.article_cost_per_unit or 0),
-                "total_amount": str(entry.total_amount or 0),
-                "name_of_beneficiary": entry.name_of_beneficiary or "",
-                "name_of_institution": entry.name_of_institution or "",
-                "aadhar_number": entry.aadhar_number or "",
-                "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour or "",
-                "notes": entry.notes or "",
-            }
-            for entry in entries
-        ],
-    }
-
-
-def _public_audit_snapshot(entry):
-    return {
-        "id": str(entry.id),
-        "application_number": entry.application_number or "",
-        "name": entry.name or "",
-        "aadhar_number": entry.aadhar_number or "",
-        "is_handicapped": entry.get_is_handicapped_display() if entry.is_handicapped else models.HandicappedStatusChoices.NO,
-        "gender": entry.gender or "",
-        "female_status": entry.female_status or "",
-        "address": entry.address or "",
-        "mobile": entry.mobile or "",
-        "article_id": str(entry.article_id),
-        "article_name": entry.article.article_name,
-        "item_type": entry.article.item_type,
-        "quantity": entry.quantity,
-        "unit_cost": str(entry.article_cost_per_unit or 0),
-        "total_amount": str(entry.total_amount or 0),
-        "name_of_institution": entry.name_of_institution or "",
-        "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour or "",
-        "notes": entry.notes or "",
-        "status": entry.status or "",
-    }
-
-
-def _institution_audit_snapshot(application_number):
-    entries = list(
-        models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).select_related("article").order_by("id")
-    )
-    if not entries:
-        return {"application_number": application_number, "item_count": 0, "items": []}
-    first = entries[0]
-    total_value = sum((entry.total_amount or 0) for entry in entries)
-    return {
-        "application_number": application_number,
-        "institution_name": first.institution_name or "",
-        "institution_type": first.institution_type or "",
-        "status": first.status or "",
-        "address": first.address or "",
-        "mobile": first.mobile or "",
-        "internal_notes": first.internal_notes or "",
-        "total_value": str(total_value or 0),
-        "item_count": len(entries),
-        "items": [
-            {
-                "id": str(entry.id),
-                "article_id": str(entry.article_id),
-                "article_name": entry.article.article_name,
-                "item_type": entry.article.item_type,
-                "quantity": entry.quantity,
-                "unit_cost": str(entry.article_cost_per_unit or 0),
-                "total_amount": str(entry.total_amount or 0),
-                "name_of_beneficiary": entry.name_of_beneficiary or "",
-                "name_of_institution": entry.name_of_institution or "",
-                "aadhar_number": entry.aadhar_number or "",
-                "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour or "",
-                "notes": entry.notes or "",
-            }
-            for entry in entries
-        ],
-    }
-
-
-def _reconciliation_parse_decimal(value):
-    raw = str(value or "").replace(",", "").strip()
-    try:
-        return Decimal(raw or "0")
-    except (InvalidOperation, ValueError):
-        return Decimal("0")
-
-
-EXPORT_COLUMNS = [
-    "Application Number",
-    "Beneficiary Name",
-    "Requested Item",
-    "Quantity",
-    "Cost Per Unit",
-    "Total Value",
-    "Address",
-    "Mobile",
-    "Aadhar Number",
-    "Name of Beneficiary",
-    "Name of Institution",
-    "Cheque / RTGS in Favour",
-    "Handicapped Status",
-    "Gender",
-    "Gender Category",
-    "Beneficiary Type",
-    "Item Type",
-    "Article Category",
-    "Super Category Article",
-    "Token Name",
-    "Internal Notes",
-    "Comments",
-]
-
-TOKEN_GENERATION_NUMERIC_HEADERS = {
-    "Quantity",
-    "Cost Per Unit",
-    "Total Value",
-    "Mobile",
-    "Aadhar Number",
-    "Waiting Hall Quantity",
-    "Token Quantity",
-    "Sequence No",
-}
-
-TOKEN_GENERATION_BENEFICIARY_ORDER = {
-    "Institutions": 0,
-    "Public": 1,
-    "District": 2,
-}
-
-TOKEN_GENERATION_RENAME_MAP = {
-    "I001 - Government Leprosy Centre,Chengalpattu.": "I001-Govt Leprosy Centre,CGL",
-    "I002 - Athivakkam,Panchayat Union Primary School.": "I002-Athivakkam,Panchayat School",
-    "I003 - Thirukazhukundram,Govt Girls Higher Secondary School.": "I003-Thirukazhukundram,Govt Girls School",
-    "I004 - Acharapakkam,Govt Girls Higher Secondary School.": "I004-Acharapakkam,Govt Girls School",
-    "I005 - Maduranthagam,District Educational Office.": "I005-Maduranthagam,District Edu Off",
-    "I006 - Thozhupedu,Govt Higher Secondary School.": "I006-Thozhupedu,Govt School",
-    "I007 - Kayappakkam,Government Higher Secondary School.": "I007-Kayappakkam,Government School",
-    "I008 - Nolambur Government Higher SecondarySchool": "I008-Nolambur Government School",
-    "I009 - Acharapakkam, Govt Boys Higher Secondary School.": "I009-Acharapakkam,Govt Boys School",
-    "I010 - Cheyyur Govt Girls Higher Secondary School.": "I010-Cheyyur Govt Girls School",
-    "I011 - Chunambedu Govt Higher Secondary School.": "I011-Chunambedu Govt School",
-    "I012 - Avanippur Government Higher Secondary School": "I012-Avanippur Government School",
-    "I013 - Polambakkam Govt Higher Secondary School.": "I013-Polambakkam Govt School",
-}
-
-TOKEN_GENERATION_ARTICLE_PRINT_EXCLUDES = {
-    "Plant Sapling",
-    "Provision items",
-    "Aluminium holed rice strainer with Handle",
-    "Goat(1 Pair)",
-    "Ortho Caliper",
-    "Fishing Net",
-    "Grocery Items",
-    "Artificial leg",
-    "Cow & Calf",
-}
-
-
-def _prefixed_attachment_name(application_reference, uploaded_name, custom_name=""):
-    prefix = (application_reference or "").strip()
-    original_name = (uploaded_name or "").strip()
-    chosen_name = (custom_name or "").strip() or original_name or "attachment"
-    chosen_root, chosen_ext = os.path.splitext(chosen_name)
-    _, original_ext = os.path.splitext(original_name)
-    final_name = chosen_name if chosen_ext else f"{chosen_name}{original_ext}"
-    if prefix:
-        normalized_prefix = f"{prefix}_"
-        if final_name.startswith(normalized_prefix):
-            return final_name
-        return f"{prefix}_{final_name}"
-    return final_name
-
-
-def _attachment_name_exists(queryset, final_name):
-    normalized = (final_name or "").strip().lower()
-    if not normalized:
-        return False
-    for existing_name in queryset.values_list("file_name", flat=True):
-        if (existing_name or "").strip().lower() == normalized:
-            return True
-    return False
-
-
-def _attachment_application_reference(attachment):
-    if not attachment:
-        return ""
-    if attachment.application_type == models.ApplicationAttachmentTypeChoices.DISTRICT and attachment.district_id:
-        return attachment.district.application_number or ""
-    if attachment.application_type == models.ApplicationAttachmentTypeChoices.PUBLIC and attachment.public_entry_id:
-        return attachment.public_entry.application_number or f"PUBLIC-{attachment.public_entry_id}"
-    if attachment.application_type == models.ApplicationAttachmentTypeChoices.INSTITUTION:
-        return attachment.institution_application_number or ""
-    return ""
-
-
-def _save_application_attachment(*, uploaded, display_name, application_type, uploaded_by, district=None, public_entry=None, institution_application_number=None):
-    from django.conf import settings
-
-    attachment_kwargs = {
-        "application_type": application_type,
-        "district": district,
-        "public_entry": public_entry,
-        "institution_application_number": institution_application_number,
-        "file_name": display_name,
-        "uploaded_by": uploaded_by,
-    }
-    application_reference = (
-        (district.application_number if district else "")
-        or (public_entry.application_number if public_entry else "")
-        or institution_application_number
-        or ""
-    )
-    if google_drive.is_configured():
-        drive_file = google_drive.upload_application_attachment(
-            content=uploaded.read(),
-            display_name=display_name,
-            content_type=str(getattr(uploaded, "content_type", "") or mimetypes.guess_type(display_name)[0] or "application/octet-stream"),
-            application_type=application_type,
-            application_reference=application_reference,
-        )
-        attachment_kwargs.update(
-            {
-                "drive_file_id": str(drive_file.get("file_id") or "").strip(),
-                "drive_mime_type": str(drive_file.get("mime_type") or "").strip(),
-                "drive_view_url": str(drive_file.get("view_url") or "").strip(),
-            }
-        )
-    else:
-        # In production (Cloud Run), local filesystem uploads are ephemeral and will be lost.
-        # Require Google Drive configuration in non-debug environments to avoid false success.
-        if settings.DEBUG:
-            attachment_kwargs["file"] = uploaded
-        else:
-            raise RuntimeError("Google Drive is not configured for attachments in this environment.")
-    return models.ApplicationAttachment.objects.create(**attachment_kwargs)
-
-
-def _delete_application_attachment_file(attachment):
-    try:
         if attachment.drive_file_id:
-            google_drive.delete_file(attachment.drive_file_id)
-        elif attachment.file:
-            attachment.file.delete(save=False)
-    except Exception:
-        logger.exception("Failed to delete attachment file (id=%s). Continuing.", getattr(attachment, "id", None))
+            try:
+                drive_data = drive_service.rename_attachment(attachment.drive_file_id, renamed)
+                attachment.drive_mime_type = str(drive_data.mime_type or attachment.drive_mime_type or "").strip()
+                attachment.drive_view_url = str(drive_data.view_url or attachment.drive_view_url or "").strip()
+                update_fields.extend(["drive_mime_type", "drive_view_url"])
+            except Exception as exc:
+                logger.warning("Attachment relink rename failed for attachment_id=%s", attachment.id, exc_info=True)
+                raise RuntimeError(f"Failed to relink Drive attachment {attachment.id}") from exc
+        attachment.save(update_fields=sorted(set(update_fields)))
 
 
-def _cleanup_application_attachments(*, application_type, district=None, public_entry=None, institution_application_number=None):
-    filters = {"application_type": application_type}
-    if district is not None:
-        filters["district"] = district
-    if public_entry is not None:
-        filters["public_entry"] = public_entry
-    if institution_application_number is not None:
-        filters["institution_application_number"] = institution_application_number
-    attachments = list(models.ApplicationAttachment.objects.filter(**filters))
-    failures = []
-    for attachment in attachments:
-        try:
-            if attachment.drive_file_id:
-                google_drive.delete_file(attachment.drive_file_id)
-            elif attachment.file:
-                attachment.file.delete(save=False)
-        except Exception as exc:
-            if _is_probably_missing_drive_file_error(exc):
-                continue
-            failures.append(attachment.id)
-            logger.warning(
-                "Attachment cleanup failed for attachment_id=%s while deleting application",
-                attachment.id,
-                exc_info=True,
+def _save_temp_attachment_upload(
+    *,
+    request,
+    application_type,
+    form_token,
+    initial_prefix="",
+    save_kwargs=None,
+    temp_scope_filters=None,
+):
+    form = ApplicationAttachmentUploadForm(request.POST, request.FILES)
+    if not form.is_valid():
+        messages.error(
+            request,
+            "; ".join(form.errors.get("file", []) + form.errors.get("file_name", []))
+            or "Choose a valid file before uploading.",
+        )
+        return False
+
+    uploaded = form.cleaned_data["file"]
+    raw_name = form.cleaned_data.get("file_name") or uploaded.name
+    draft_prefix = (initial_prefix or "").strip() or f"DRAFT_{form_token}"
+    base_name = (raw_name or "").strip() or (uploaded.name or "attachment")
+    display_name = _prefixed_attachment_name(draft_prefix, uploaded.name, base_name)
+    existing_names_qs = models.ApplicationAttachment.objects.filter(
+        application_type=application_type,
+        status=models.ApplicationAttachmentStatusChoices.TEMP,
+        draft_uid=form_token,
+        uploaded_by=request.user,
+        **(temp_scope_filters or {}),
+    )
+    if _attachment_name_exists(existing_names_qs, display_name):
+        messages.error(request, "A file with this name already exists. Please rename it before uploading.")
+        return False
+
+    # Serialize temp-upload mutations per (application_type, form_token, user) so two rapid uploads
+    # cannot bypass the max-files guard.
+    try:
+        with transaction.atomic():
+            locked_qs = (
+                models.ApplicationAttachment.objects.select_for_update()
+                .filter(
+                    application_type=application_type,
+                    status=models.ApplicationAttachmentStatusChoices.TEMP,
+                    draft_uid=form_token,
+                    uploaded_by=request.user,
+                    **(temp_scope_filters or {}),
+                )
             )
-    if failures:
-        return False, len(attachments), len(failures)
-    if attachments:
-        models.ApplicationAttachment.objects.filter(id__in=[item.id for item in attachments]).delete()
-    return True, len(attachments), 0
+            existing_count = locked_qs.filter(_available_attachment_q()).count()
+            if existing_count >= ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION:
+                messages.error(request, f"Maximum {ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION} files are allowed for one application.")
+                return False
+            if _attachment_name_exists(locked_qs, display_name):
+                messages.error(request, "A file with this name already exists. Please rename it before uploading.")
+                return False
+            attachment = _save_application_attachment(
+                uploaded=uploaded,
+                display_name=display_name,
+                application_type=application_type,
+                uploaded_by=request.user,
+                **(save_kwargs or {}),
+            )
+    except Exception:
+        logger.exception("Temporary attachment upload failed for %s", application_type)
+        messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
+        return False
+
+    attachment.status = models.ApplicationAttachmentStatusChoices.TEMP
+    attachment.draft_uid = form_token
+    attachment.prefix = draft_prefix
+    attachment.display_filename = display_name
+    attachment.original_filename = uploaded.name or attachment.original_filename
+    attachment.file_name = display_name
+    attachment.temp_expires_at = timezone.now() + timedelta(hours=24)
+    attachment.save(
+        update_fields=[
+            "status",
+            "draft_uid",
+            "prefix",
+            "display_filename",
+            "original_filename",
+            "file_name",
+            "temp_expires_at",
+        ]
+    )
+    messages.success(request, "Attachment uploaded.")
+    return True
+
+
+def _save_linked_attachment_upload(
+    *,
+    request,
+    uploaded,
+    application_type,
+    display_name,
+    queryset_filters,
+    save_kwargs,
+):
+    with transaction.atomic():
+        attachments_qs = (
+            models.ApplicationAttachment.objects.select_for_update()
+            .filter(**queryset_filters)
+            .filter(_available_attachment_q())
+        )
+        existing_count = attachments_qs.count()
+        if existing_count >= ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION:
+            return False, f"Maximum {ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION} files are allowed for one application."
+        if _attachment_name_exists(attachments_qs, display_name):
+            return False, "A file with this name already exists for this application. Please rename it before uploading."
+        _save_application_attachment(
+            uploaded=uploaded,
+            display_name=display_name,
+            application_type=application_type,
+            uploaded_by=request.user,
+            **save_kwargs,
+        )
+    return True, ""
+
+
+def _cleanup_stale_temp_attachments():
+    expiry_cutoff = timezone.now()
+    stale_qs = models.ApplicationAttachment.objects.filter(
+        status=models.ApplicationAttachmentStatusChoices.TEMP,
+        temp_expires_at__lt=expiry_cutoff,
+    )
+    for attachment in stale_qs.iterator():
+        _delete_application_attachment_file(attachment)
+        attachment.delete()
 
 
 def _drive_file_exists(file_id):
     if not file_id:
         return False
     try:
-        google_drive.get_file_metadata(file_id)
+        drive_service.attachment_exists(file_id)
         return True
     except Exception:
         return False
@@ -1484,11 +854,8 @@ def _sync_drive_attachments_for_application(
     public_entry=None,
     institution_application_number=None,
 ):
-    if not google_drive.is_configured():
-        return []
-    reference = (application_reference or "").strip()
-    if not reference:
-        return []
+    # V2 behavior: DB rows with drive_file_id are the source of truth.
+    # Avoid destructive sync-by-name logic that can hide valid files.
     filters = {
         "application_type": application_type,
         "status": models.ApplicationAttachmentStatusChoices.LINKED,
@@ -1499,125 +866,6 @@ def _sync_drive_attachments_for_application(
         filters["public_entry"] = public_entry
     if institution_application_number is not None:
         filters["institution_application_number"] = institution_application_number
-    attachments = list(
-        models.ApplicationAttachment.objects.filter(**filters).select_related("uploaded_by").order_by("-created_at", "-id")
-    )
-    try:
-        drive_files = google_drive.list_application_attachments(
-            application_type=application_type,
-            application_reference=reference,
-        )
-    except Exception:
-        # Google Drive sync should never break data entry pages.
-        # Return current DB attachments without syncing.
-        logger.exception("Failed to sync Drive attachments for %s:%s", application_type, reference)
-        return attachments
-    if not drive_files:
-        stale_drive_only_ids = []
-        for attachment in attachments:
-            if not attachment.drive_file_id or attachment.file:
-                continue
-            if _drive_file_exists(attachment.drive_file_id):
-                continue
-            stale_drive_only_ids.append(attachment.id)
-        if stale_drive_only_ids:
-            for stale_attachment in models.ApplicationAttachment.objects.filter(id__in=stale_drive_only_ids):
-                _mark_attachment_unavailable(stale_attachment)
-        return list(
-            models.ApplicationAttachment.objects.filter(**filters)
-            .filter(_available_attachment_q())
-            .select_related("uploaded_by")
-            .order_by("-created_at", "-id")
-        )
-
-    def _normalized_name(value):
-        return str(value or "").strip().casefold()
-
-    existing_by_id = {
-        str(attachment.drive_file_id or "").strip(): attachment
-        for attachment in attachments
-        if str(attachment.drive_file_id or "").strip()
-    }
-    available_by_name = {}
-    for drive_file in drive_files:
-        normalized_name = _normalized_name(drive_file.get("file_name"))
-        if normalized_name and normalized_name not in available_by_name:
-            available_by_name[normalized_name] = drive_file
-
-    touched_ids = set()
-    seen_drive_ids = {
-        str(item.get("file_id") or "").strip()
-        for item in drive_files
-        if str(item.get("file_id") or "").strip()
-    }
-    for attachment in attachments:
-        matched_drive_file = None
-        drive_id = str(attachment.drive_file_id or "").strip()
-        if drive_id and drive_id in existing_by_id and any(str(item.get("file_id") or "").strip() == drive_id for item in drive_files):
-            matched_drive_file = next(
-                (item for item in drive_files if str(item.get("file_id") or "").strip() == drive_id),
-                None,
-            )
-        elif not attachment.file:
-            matched_drive_file = available_by_name.get(_normalized_name(attachment.file_name))
-        if not matched_drive_file:
-            continue
-        update_fields = []
-        matched_id = str(matched_drive_file.get("file_id") or "").strip()
-        if attachment.drive_file_id != matched_id:
-            attachment.drive_file_id = matched_id
-            update_fields.append("drive_file_id")
-        matched_mime = str(matched_drive_file.get("mime_type") or "").strip()
-        if attachment.drive_mime_type != matched_mime:
-            attachment.drive_mime_type = matched_mime
-            update_fields.append("drive_mime_type")
-        matched_view = str(matched_drive_file.get("view_url") or "").strip()
-        if attachment.drive_view_url != matched_view:
-            attachment.drive_view_url = matched_view
-            update_fields.append("drive_view_url")
-        matched_name = str(matched_drive_file.get("file_name") or "").strip()
-        if matched_name and attachment.file_name != matched_name:
-            attachment.file_name = matched_name
-            update_fields.append("file_name")
-        if update_fields:
-            attachment.save(update_fields=update_fields)
-        touched_ids.add(matched_id)
-
-    stale_attachment_ids = []
-    for attachment in attachments:
-        drive_id = str(attachment.drive_file_id or "").strip()
-        if not drive_id:
-            continue
-        if attachment.file:
-            continue
-        if drive_id in seen_drive_ids:
-            continue
-        stale_attachment_ids.append(attachment.id)
-
-    for drive_file in drive_files:
-        matched_id = str(drive_file.get("file_id") or "").strip()
-        if not matched_id or matched_id in touched_ids:
-            continue
-        existing_attachment = existing_by_id.get(matched_id)
-        if existing_attachment:
-            continue
-        attachments.append(
-            models.ApplicationAttachment.objects.create(
-                application_type=application_type,
-                district=district,
-                public_entry=public_entry,
-                institution_application_number=institution_application_number,
-                file_name=str(drive_file.get("file_name") or "").strip(),
-                drive_file_id=matched_id,
-                drive_mime_type=str(drive_file.get("mime_type") or "").strip(),
-                drive_view_url=str(drive_file.get("view_url") or "").strip(),
-            )
-        )
-
-    if stale_attachment_ids:
-        for stale_attachment in models.ApplicationAttachment.objects.filter(id__in=stale_attachment_ids):
-            _mark_attachment_unavailable(stale_attachment)
-
     return list(
         models.ApplicationAttachment.objects.filter(**filters)
         .filter(_available_attachment_q())
@@ -1629,23 +877,82 @@ def _sync_drive_attachments_for_application(
 def _district_attachment_context(district):
     has_district = bool(district)
     attachments = []
-    upload_url = reverse("ui:district-attachment-temp-upload")
+    upload_url = ""
+    helper_text = ""
     if has_district:
+        upload_url = reverse("ui:district-attachment-upload", kwargs={"district_id": district.id})
         attachments = list(
             _linked_attachment_queryset(
                 application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
                 district=district,
             ).select_related("uploaded_by")
         )
+        helper_text = "Upload sends file to Google Drive immediately. Save Draft / Submit saves application data and links uploaded files."
     context = _attachment_upload_context(
         attachments=attachments,
         enabled=has_district,
         upload_url=upload_url,
-        helper_text="Upload sends file to Google Drive immediately. Save Draft / Submit saves application data and links uploaded files.",
+        helper_text=helper_text,
     )
     context["attachment_district_id"] = district.id if district else ""
     context["attachment_has_temp_uploads"] = False
     return context
+
+
+def _district_attachment_context_with_request(request, district):
+    _cleanup_stale_temp_attachments()
+    has_saved_application = bool(
+        district and models.DistrictBeneficiaryEntry.objects.filter(district=district).exists()
+    )
+    if has_saved_application:
+        return _district_attachment_context(district)
+    form_token = _ensure_attachment_form_token(request, models.ApplicationAttachmentTypeChoices.DISTRICT)
+    temp_query = _temp_attachment_queryset(
+        application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
+        form_token=form_token,
+        user=request.user,
+    )
+    if district is not None:
+        temp_query = temp_query.filter(district=district)
+    else:
+        temp_query = temp_query.none()
+    temp_items = list(temp_query)
+    context = _attachment_upload_context(
+        attachments=temp_items,
+        enabled=bool(district),
+        upload_url=reverse("ui:district-attachment-temp-upload") if district else "",
+        helper_text="Upload sends file to Google Drive immediately. Save Draft / Submit saves application data and links uploaded files.",
+    )
+    context["attachment_form_token"] = form_token
+    context["attachment_temp_delete_url"] = reverse("ui:district-attachment-temp-clear")
+    context["attachment_district_id"] = district.id if district else ""
+    context["attachment_has_temp_uploads"] = bool(temp_items)
+    return context
+
+
+def _attachment_upload_context(*, attachments, enabled, upload_url, helper_text):
+    # Keep the rich attachment card always visible; disable controls via upload_url.
+    # This helper centralizes template context keys used by all beneficiary forms.
+    return {
+        "application_attachments": list(attachments or []),
+        "attachments_enabled": bool(enabled),
+        "attachment_upload_url": upload_url or "",
+        "attachment_helper_text": helper_text or "",
+        "attachment_constraints_text": (
+            "Allowed files: PDF, JPG, JPEG, PNG, WEBP, DOC, DOCX, XLS, XLSX, CSV. "
+            "Maximum file size: 10 MB. Maximum 2 files per application."
+        ),
+        "attachment_preview_items_b64": _attachment_items_b64(
+            [
+                item
+                for item in (
+                    _attachment_preview_payload(attached)
+                    for attached in (attachments or [])
+                )
+                if item
+            ]
+        ),
+    }
 
 
 def _public_attachment_context(entry):
@@ -1848,12 +1155,14 @@ def _institution_attachment_preview_lists(application_numbers):
 def _attachment_preview_title(attachment):
     if not attachment:
         return ""
+    if attachment.display_filename:
+        return attachment.display_filename
     if attachment.file_name:
         return attachment.file_name
+    if attachment.original_filename:
+        return attachment.original_filename
     if attachment.drive_view_url:
         return "Attachment"
-    if attachment.file:
-        return os.path.basename(attachment.file.name)
     return ""
 
 
@@ -1868,15 +1177,18 @@ def _attachment_preview_payload(attachment):
         "preview_url": preview_url,
         "download_url": f"{preview_url}?download=1",
         "source": source_name,
+        "preview_kind": _attachment_preview_kind(attachment),
     }
 
 
 def _attachment_preview_source(attachment):
     if not attachment:
         return ""
-    if attachment.file and attachment.file.name:
-        return (attachment.file.name or "").lower()
-    source_name = (attachment.file_name or "").lower()
+    source_name = (
+        str(attachment.display_filename or "").lower()
+        or str(attachment.file_name or "").lower()
+        or str(attachment.original_filename or "").lower()
+    )
     mime_type = (attachment.drive_mime_type or "").lower()
     if source_name and "." not in os.path.basename(source_name):
         if mime_type == "application/pdf":
@@ -1888,6 +1200,23 @@ def _attachment_preview_source(attachment):
             if ext:
                 source_name = f"{source_name}.{ext}"
     return source_name
+
+
+def _attachment_preview_kind(attachment):
+    if not attachment:
+        return "unsupported"
+    mime_type = str(getattr(attachment, "drive_mime_type", "") or "").lower().strip()
+    if mime_type == "application/pdf":
+        return "pdf"
+    if mime_type.startswith("image/"):
+        return "image"
+
+    source_name = _attachment_preview_source(attachment)
+    if source_name.endswith(".pdf"):
+        return "pdf"
+    if source_name.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
+        return "image"
+    return "unsupported"
 
 
 def _attachment_items_b64(items):
@@ -2285,6 +1614,7 @@ def _build_district_entry_summaries():
                     else ""
                 ),
                 "attachment_source": _attachment_preview_source(attachment),
+                "attachment_preview_kind": _attachment_preview_kind(attachment),
                 "attachment_title": _attachment_preview_title(attachment),
                 "attachment_count": attachment_counts.get(district_id, 0),
                 "attachment_preview_items_b64": _attachment_items_b64(
@@ -2535,7 +1865,7 @@ class DistrictMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, TemplateVi
 
     def _render_form(self, district=None, entries=None, errors=None):
         context = self.get_context_data(**_district_form_context(district=district, entries=entries, errors=errors))
-        context.update(_district_attachment_context(district))
+        context.update(_district_attachment_context_with_request(self.request, district))
         context["conflict_token"] = _district_conflict_token(district)
         return self.render_to_response(context)
 
@@ -2645,6 +1975,23 @@ class DistrictMasterEntryCreateView(DistrictMasterEntryBaseView):
         response = self._save_entries(district, rows, replace=False)
         if response is not None:
             return response
+        form_token = (request.POST.get("attachment_form_token") or "").strip()
+        if form_token:
+            try:
+                _link_temp_attachments_to_application(
+                    request=request,
+                    application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
+                    form_token=form_token,
+                    application_reference=district.application_number or f"DISTRICT-{district.id}",
+                    district=district,
+                )
+                _clear_attachment_form_token(request, models.ApplicationAttachmentTypeChoices.DISTRICT)
+            except RuntimeError as exc:
+                return self._render_form(
+                    district=district,
+                    entries=rows,
+                    errors=[str(exc) or "Attachment operation failed. Please retry."],
+                )
         action = (request.POST.get("action") or "draft").strip().lower()
         if action == "submit":
             messages.success(request, "District application submitted.")
@@ -3036,6 +2383,7 @@ def _build_institution_entry_summaries():
                     else ""
                 ),
                 "attachment_source": _attachment_preview_source(attachment),
+                "attachment_preview_kind": _attachment_preview_kind(attachment),
                 "attachment_title": _attachment_preview_title(attachment),
                 "attachment_count": attachment_counts.get(application_number, 0),
                 "attachment_preview_items_b64": _attachment_items_b64(
@@ -3448,56 +2796,67 @@ class PublicMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, TemplateView
                 warnings=warnings + ["Duplicate found in current applications. Review the existing record below and use Modify if you want to update it."],
             ), None
 
-        if entry is None:
-            entry = models.PublicBeneficiaryEntry(application_number=f"DRAFT-PUB-{uuid.uuid4().hex[:12].upper()}")
-            action_type = models.ActionTypeChoices.CREATE
-            before_snapshot = None
-            previous_status = None
-        else:
-            action_type = models.ActionTypeChoices.UPDATE
-            before_snapshot = _public_audit_snapshot(entry)
-            previous_status = entry.status
-        previous_application_number = entry.application_number
+        try:
+            with transaction.atomic():
+                if entry is None:
+                    entry = models.PublicBeneficiaryEntry(application_number=f"DRAFT-PUB-{uuid.uuid4().hex[:12].upper()}")
+                    action_type = models.ActionTypeChoices.CREATE
+                    before_snapshot = None
+                    previous_status = None
+                else:
+                    action_type = models.ActionTypeChoices.UPDATE
+                    before_snapshot = _public_audit_snapshot(entry)
+                    previous_status = entry.status
+                previous_application_number = entry.application_number
 
-        entry.name = form_data["name"]
-        entry.aadhar_number = form_data["aadhar_number"] or None
-        entry.aadhaar_status = _resolve_public_aadhaar_status(form_data)
-        entry.is_handicapped = form_data["disability_category"] or models.HandicappedStatusChoices.NO
-        entry.gender = form_data["gender"]
-        entry.female_status = form_data["female_status"] or None
-        entry.address = form_data["address"] or None
-        entry.mobile = form_data["mobile"]
-        entry.article = article
-        entry.article_cost_per_unit = unit_cost
-        entry.quantity = quantity
-        entry.total_amount = unit_cost * quantity
-        entry.name_of_institution = form_data["name_of_institution"] or None
-        entry.cheque_rtgs_in_favour = form_data["cheque_rtgs_in_favour"] or None
-        entry.notes = form_data["notes"] or None
-        if target_status == models.BeneficiaryStatusChoices.SUBMITTED and (not entry.application_number or str(entry.application_number).startswith("DRAFT-PUB-")):
-            entry.application_number = base_file_services.next_public_application_number()
-        entry.status = target_status
-        if not entry.created_by_id:
-            entry.created_by = self.request.user
-        entry.save()
-        if previous_application_number and previous_application_number != entry.application_number:
-            _rename_attachment_display_names_for_reference(
-                attachments_qs=models.ApplicationAttachment.objects.filter(
-                    application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
-                    public_entry=entry,
-                ),
-                new_reference=entry.application_number or f"PUBLIC-{entry.pk}",
-            )
-        form_token = (self.request.POST.get("attachment_form_token") or "").strip()
-        if form_token:
-            _link_temp_attachments_to_application(
-                request=self.request,
-                application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
-                form_token=form_token,
-                application_reference=entry.application_number or f"PUBLIC-{entry.pk}",
-                public_entry=entry,
-            )
-            _clear_attachment_form_token(self.request, models.ApplicationAttachmentTypeChoices.PUBLIC)
+                entry.name = form_data["name"]
+                entry.aadhar_number = form_data["aadhar_number"] or None
+                entry.aadhaar_status = _resolve_public_aadhaar_status(form_data)
+                entry.is_handicapped = form_data["disability_category"] or models.HandicappedStatusChoices.NO
+                entry.gender = form_data["gender"]
+                entry.female_status = form_data["female_status"] or None
+                entry.address = form_data["address"] or None
+                entry.mobile = form_data["mobile"]
+                entry.article = article
+                entry.article_cost_per_unit = unit_cost
+                entry.quantity = quantity
+                entry.total_amount = unit_cost * quantity
+                entry.name_of_institution = form_data["name_of_institution"] or None
+                entry.cheque_rtgs_in_favour = form_data["cheque_rtgs_in_favour"] or None
+                entry.notes = form_data["notes"] or None
+                if target_status == models.BeneficiaryStatusChoices.SUBMITTED and (not entry.application_number or str(entry.application_number).startswith("DRAFT-PUB-")):
+                    entry.application_number = base_file_services.next_public_application_number()
+                entry.status = target_status
+                if not entry.created_by_id:
+                    entry.created_by = self.request.user
+                entry.save()
+                if previous_application_number and previous_application_number != entry.application_number:
+                    _rename_attachment_display_names_for_reference(
+                        attachments_qs=models.ApplicationAttachment.objects.filter(
+                            application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
+                            public_entry=entry,
+                        ),
+                        new_reference=entry.application_number or f"PUBLIC-{entry.pk}",
+                    )
+                form_token = (self.request.POST.get("attachment_form_token") or "").strip()
+                if form_token:
+                    _link_temp_attachments_to_application(
+                        request=self.request,
+                        application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
+                        form_token=form_token,
+                        application_reference=entry.application_number or f"PUBLIC-{entry.pk}",
+                        public_entry=entry,
+                    )
+                    _clear_attachment_form_token(self.request, models.ApplicationAttachmentTypeChoices.PUBLIC)
+        except RuntimeError as exc:
+            return self._render_form(
+                entry=entry,
+                form_data=form_data,
+                history_matches=history_matches,
+                current_match=current_match,
+                warnings=warnings,
+                errors=[str(exc) or "Attachment operation failed. Please retry."],
+            ), None
         log_audit(
             user=self.request.user,
             action_type=action_type,
@@ -3833,88 +3192,96 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
         for built in built_rows:
             built["status"] = target_status
 
-        with transaction.atomic():
-            if replace:
-                lookup_application_number = source_application_number or application_number
-                before_snapshot = _institution_audit_snapshot(lookup_application_number)
-                existing_entries = list(
-                    models.InstitutionsBeneficiaryEntry.objects.filter(application_number=lookup_application_number).select_related("article").order_by("id")
-                )
-                previous_status = existing_entries[0].status if existing_entries else None
-                _sync_institution_entries(
-                    existing_entries,
-                    built_rows,
-                    self.request.user,
-                    application_number=application_number,
-                    form_data=form_data,
-                )
-                if lookup_application_number != application_number:
-                    models.ApplicationAttachment.objects.filter(
-                        application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
-                        institution_application_number=lookup_application_number,
-                    ).update(institution_application_number=application_number)
-                    _rename_attachment_display_names_for_reference(
-                        attachments_qs=models.ApplicationAttachment.objects.filter(
-                            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
-                            institution_application_number=application_number,
-                        ),
-                        new_reference=application_number,
+        try:
+            with transaction.atomic():
+                if replace:
+                    lookup_application_number = source_application_number or application_number
+                    before_snapshot = _institution_audit_snapshot(lookup_application_number)
+                    existing_entries = list(
+                        models.InstitutionsBeneficiaryEntry.objects.filter(application_number=lookup_application_number).select_related("article").order_by("id")
                     )
-                log_audit(
-                    user=self.request.user,
-                    action_type=models.ActionTypeChoices.UPDATE,
-                    entity_type="institution_application",
-                    entity_id=application_number,
-                    details={"before": before_snapshot, "after": _institution_audit_snapshot(application_number)},
-                    **get_request_audit_meta(self.request),
-                )
-                if previous_status != target_status:
+                    previous_status = existing_entries[0].status if existing_entries else None
+                    _sync_institution_entries(
+                        existing_entries,
+                        built_rows,
+                        self.request.user,
+                        application_number=application_number,
+                        form_data=form_data,
+                    )
+                    if lookup_application_number != application_number:
+                        models.ApplicationAttachment.objects.filter(
+                            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+                            institution_application_number=lookup_application_number,
+                        ).update(institution_application_number=application_number)
+                        _rename_attachment_display_names_for_reference(
+                            attachments_qs=models.ApplicationAttachment.objects.filter(
+                                application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+                                institution_application_number=application_number,
+                            ),
+                            new_reference=application_number,
+                        )
+                    log_audit(
+                        user=self.request.user,
+                        action_type=models.ActionTypeChoices.UPDATE,
+                        entity_type="institution_application",
+                        entity_id=application_number,
+                        details={"before": before_snapshot, "after": _institution_audit_snapshot(application_number)},
+                        **get_request_audit_meta(self.request),
+                    )
+                    if previous_status != target_status:
+                        log_audit(
+                            user=self.request.user,
+                            action_type=models.ActionTypeChoices.STATUS_CHANGE,
+                            entity_type="institution_application",
+                            entity_id=application_number,
+                            details={"from": previous_status, "to": target_status},
+                            **get_request_audit_meta(self.request),
+                        )
+                else:
+                    for built in built_rows:
+                        create_kwargs = {key: value for key, value in built.items() if key != "entry_id"}
+                        models.InstitutionsBeneficiaryEntry.objects.create(
+                            created_by=self.request.user,
+                            application_number=application_number,
+                            institution_name=form_data["institution_name"],
+                            institution_type=form_data["institution_type"],
+                            address=form_data["address"] or None,
+                            mobile=form_data["mobile"] or None,
+                            **create_kwargs,
+                        )
+                    log_audit(
+                        user=self.request.user,
+                        action_type=models.ActionTypeChoices.CREATE,
+                        entity_type="institution_application",
+                        entity_id=application_number,
+                        details={"after": _institution_audit_snapshot(application_number)},
+                        **get_request_audit_meta(self.request),
+                    )
                     log_audit(
                         user=self.request.user,
                         action_type=models.ActionTypeChoices.STATUS_CHANGE,
                         entity_type="institution_application",
                         entity_id=application_number,
-                        details={"from": previous_status, "to": target_status},
+                        details={"from": None, "to": target_status},
                         **get_request_audit_meta(self.request),
                     )
-            else:
-                for built in built_rows:
-                    create_kwargs = {key: value for key, value in built.items() if key != "entry_id"}
-                    models.InstitutionsBeneficiaryEntry.objects.create(
-                        created_by=self.request.user,
-                        application_number=application_number,
-                        institution_name=form_data["institution_name"],
-                        institution_type=form_data["institution_type"],
-                        address=form_data["address"] or None,
-                        mobile=form_data["mobile"] or None,
-                        **create_kwargs,
+                form_token = (self.request.POST.get("attachment_form_token") or "").strip()
+                if form_token:
+                    _link_temp_attachments_to_application(
+                        request=self.request,
+                        application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+                        form_token=form_token,
+                        application_reference=application_number,
+                        institution_application_number=application_number,
                     )
-                log_audit(
-                    user=self.request.user,
-                    action_type=models.ActionTypeChoices.CREATE,
-                    entity_type="institution_application",
-                    entity_id=application_number,
-                    details={"after": _institution_audit_snapshot(application_number)},
-                    **get_request_audit_meta(self.request),
-                )
-                log_audit(
-                    user=self.request.user,
-                    action_type=models.ActionTypeChoices.STATUS_CHANGE,
-                    entity_type="institution_application",
-                    entity_id=application_number,
-                    details={"from": None, "to": target_status},
-                    **get_request_audit_meta(self.request),
-                )
-        form_token = (self.request.POST.get("attachment_form_token") or "").strip()
-        if form_token:
-            _link_temp_attachments_to_application(
-                request=self.request,
-                application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
-                form_token=form_token,
-                application_reference=application_number,
-                institution_application_number=application_number,
+                    _clear_attachment_form_token(self.request, models.ApplicationAttachmentTypeChoices.INSTITUTION)
+        except RuntimeError as exc:
+            return self._render_form(
+                form_data=form_data,
+                rows=raw_rows,
+                errors=[str(exc) or "Attachment operation failed. Please retry."],
+                application_number=application_number,
             )
-            _clear_attachment_form_token(self.request, models.ApplicationAttachmentTypeChoices.INSTITUTION)
         self._saved_institution_application_number = application_number
         return None
 
@@ -4070,76 +3437,63 @@ class ApplicationAttachmentDownloadView(LoginRequiredMixin, RoleRequiredMixin, V
         attachment = get_object_or_404(models.ApplicationAttachment.objects.select_related("uploaded_by"), pk=kwargs["attachment_id"])
         is_probe = (request.GET.get("probe") or "").strip() == "1"
         if is_probe:
-            if not attachment.file and not attachment.drive_file_id:
+            if not attachment.drive_file_id:
                 return JsonResponse(
                     {"ok": True, "available": False, "missing": True, "message": "This attachment is no longer available in Google Drive."}
                 )
-            if attachment.drive_file_id:
-                try:
-                    google_drive.get_file_metadata(attachment.drive_file_id)
-                except Exception:
+            try:
+                drive_service.attachment_exists(attachment.drive_file_id)
+            except Exception as exc:
+                if _is_probably_missing_drive_file_error(exc):
                     _mark_attachment_unavailable(attachment)
                     return JsonResponse(
                         {"ok": True, "available": False, "missing": True, "message": "This attachment is no longer available in Google Drive."}
                     )
+                return JsonResponse(
+                    {
+                        "ok": True,
+                        "available": False,
+                        "missing": False,
+                        "message": "Could not verify attachment right now. Please try again.",
+                    }
+                )
             return JsonResponse({"ok": True, "available": True})
-        if not attachment.file and not attachment.drive_file_id:
+        if not attachment.drive_file_id:
             messages.error(request, "This attachment is no longer available in Google Drive.")
             return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("ui:master-entry"))
-        stored_name = attachment.file_name or (os.path.basename(attachment.file.name) if attachment.file else "attachment")
-        application_reference = _attachment_application_reference(attachment)
-        display_name = _prefixed_attachment_name(application_reference, stored_name, attachment.file_name or stored_name)
+        stored_name = (
+            (attachment.display_filename or "").strip()
+            or (attachment.file_name or "").strip()
+            or (attachment.original_filename or "").strip()
+            or "attachment"
+        )
+        display_name = stored_name
         as_attachment = (request.GET.get("download") or "").strip() == "1"
         content_type, _ = mimetypes.guess_type(stored_name)
         content_type = attachment.drive_mime_type or content_type or "application/octet-stream"
-        if attachment.drive_file_id:
-            try:
-                file_bytes = google_drive.download_file(attachment.drive_file_id)
-            except Exception:
-                logger.warning(
-                    "Attachment download failed for attachment_id=%s drive_file_id=%s",
-                    attachment.id,
-                    attachment.drive_file_id,
-                    exc_info=True,
-                )
+        try:
+            file_bytes = drive_service.download_attachment(attachment.drive_file_id)
+        except Exception as exc:
+            logger.warning(
+                "Attachment download failed for attachment_id=%s drive_file_id=%s",
+                attachment.id,
+                attachment.drive_file_id,
+                exc_info=True,
+            )
+            if _is_probably_missing_drive_file_error(exc):
                 _mark_attachment_unavailable(attachment)
                 messages.error(request, "This attachment is no longer available in Google Drive.")
-                return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("ui:master-entry"))
-            if as_attachment:
-                display_root, display_ext = os.path.splitext(display_name)
-                _, stored_ext = os.path.splitext(stored_name)
-                download_name = display_name if display_ext else f"{display_name}{stored_ext}"
-                response = HttpResponse(file_bytes, content_type=content_type)
-                response["Content-Disposition"] = f'attachment; filename="{download_name}"'
-                return response
-            response = HttpResponse(file_bytes, content_type=content_type)
-            response["Content-Disposition"] = "inline"
-            return response
+            else:
+                messages.error(request, "Attachment could not be opened right now. Please try again.")
+            return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("ui:master-entry"))
         if as_attachment:
             display_root, display_ext = os.path.splitext(display_name)
             _, stored_ext = os.path.splitext(stored_name)
             download_name = display_name if display_ext else f"{display_name}{stored_ext}"
-            try:
-                return FileResponse(
-                    attachment.file.open("rb"),
-                    as_attachment=True,
-                    filename=download_name,
-                    content_type=content_type,
-                )
-            except Exception:
-                _mark_attachment_unavailable(attachment)
-                messages.error(request, "This attachment file is no longer available.")
-                return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("ui:master-entry"))
-        try:
-            response = FileResponse(
-                attachment.file.open("rb"),
-                as_attachment=False,
-                content_type=content_type,
-            )
-        except Exception:
-            _mark_attachment_unavailable(attachment)
-            messages.error(request, "This attachment file is no longer available.")
-            return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("ui:master-entry"))
+            response = HttpResponse(file_bytes, content_type=content_type)
+            response["Content-Disposition"] = f'attachment; filename="{download_name}"'
+            return response
+        response = HttpResponse(file_bytes, content_type=content_type)
         response["Content-Disposition"] = "inline"
         return response
 
@@ -4160,7 +3514,10 @@ class DistrictApplicationAttachmentTempUploadView(LoginRequiredMixin, WriteRoleM
         if not district_id:
             messages.error(request, "Select a district before uploading attachments.")
             if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": reverse("ui:master-entry-district-create")}, status=400)
+                return JsonResponse(
+                    {"ok": False, "refresh_url": reverse("ui:master-entry-district-create"), "message": "Select a district before uploading attachments."},
+                    status=400,
+                )
             return HttpResponseRedirect(reverse("ui:master-entry-district-create"))
         district = get_object_or_404(models.DistrictMaster, pk=district_id, is_active=True)
         target_url = self._target_url_for_district(district)
@@ -4168,53 +3525,25 @@ class DistrictApplicationAttachmentTempUploadView(LoginRequiredMixin, WriteRoleM
         if not form.is_valid():
             messages.error(request, "; ".join(form.errors.get("file", []) + form.errors.get("file_name", [])) or "Choose a valid file before uploading.")
             if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
+                return JsonResponse({"ok": False, "refresh_url": target_url, "message": "Choose a valid file before uploading."}, status=400)
             return HttpResponseRedirect(target_url)
 
-        attachments_qs = models.ApplicationAttachment.objects.filter(
-            application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
-            district=district,
-            status=models.ApplicationAttachmentStatusChoices.LINKED,
+        form_token = (request.POST.get("attachment_form_token") or "").strip() or _ensure_attachment_form_token(
+            request, models.ApplicationAttachmentTypeChoices.DISTRICT
         )
-        existing_count = attachments_qs.count()
-        if existing_count >= ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION:
-            messages.error(request, f"Maximum {ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION} files are allowed for one application.")
-            if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
-            return HttpResponseRedirect(target_url)
-
-        uploaded = form.cleaned_data["file"]
-        display_name = _prefixed_attachment_name(district.application_number, uploaded.name, form.cleaned_data.get("file_name") or "")
-        if _attachment_name_exists(attachments_qs, display_name):
-            messages.error(request, "A file with this name already exists for this application. Please rename it before uploading.")
-            if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
-            return HttpResponseRedirect(target_url)
-        try:
-            _save_application_attachment(
-                uploaded=uploaded,
-                display_name=display_name,
-                application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
-                district=district,
-                uploaded_by=request.user,
-            )
-        except Exception:
-            logger.exception("Attachment upload failed for district=%s", district.id)
-            if not google_drive.is_configured():
-                messages.error(
-                    request,
-                    "Google Drive is not configured for uploads in this environment. "
-                    "Set GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID, GOOGLE_DRIVE_CLIENT_ID, "
-                    "GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_DRIVE_REFRESH_TOKEN."
-                )
-            else:
-                messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
-            if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": target_url}, status=500)
-            return HttpResponseRedirect(target_url)
-        messages.success(request, "Attachment uploaded.")
+        success = _save_temp_attachment_upload(
+            request=request,
+            application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
+            form_token=form_token,
+            initial_prefix=district.application_number or "",
+            save_kwargs={"district": district},
+            temp_scope_filters={"district": district},
+        )
         if is_ajax:
-            return JsonResponse({"ok": True, "refresh_url": target_url})
+            return JsonResponse(
+                {"ok": bool(success), "refresh_url": target_url, "message": "" if success else "Attachment upload failed."},
+                status=200 if success else 400,
+            )
         return HttpResponseRedirect(target_url)
 
 
@@ -4229,48 +3558,46 @@ class DistrictApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin
         if not form.is_valid():
             messages.error(request, "; ".join(form.errors.get("file", []) + form.errors.get("file_name", [])) or "Choose a valid file before uploading.")
             if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
-            return HttpResponseRedirect(target_url)
-
-        attachments_qs = models.ApplicationAttachment.objects.filter(
-            application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
-            district=district,
-        )
-        existing_count = attachments_qs.count()
-        if existing_count >= ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION:
-            messages.error(request, f"Maximum {ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION} files are allowed for one application.")
-            if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
+                return JsonResponse({"ok": False, "refresh_url": target_url, "message": "Choose a valid file before uploading."}, status=400)
             return HttpResponseRedirect(target_url)
 
         uploaded = form.cleaned_data["file"]
         display_name = _prefixed_attachment_name(district.application_number, uploaded.name, form.cleaned_data.get("file_name") or "")
-        if _attachment_name_exists(attachments_qs, display_name):
-            messages.error(request, "A file with this name already exists for this application. Please rename it before uploading.")
-            if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
-            return HttpResponseRedirect(target_url)
         try:
-            _save_application_attachment(
+            ok, error_message = _save_linked_attachment_upload(
+                request=request,
                 uploaded=uploaded,
-                display_name=display_name,
                 application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
-                district=district,
-                uploaded_by=request.user,
+                display_name=display_name,
+                queryset_filters={
+                    "application_type": models.ApplicationAttachmentTypeChoices.DISTRICT,
+                    "district": district,
+                    "status": models.ApplicationAttachmentStatusChoices.LINKED,
+                },
+                save_kwargs={"district": district},
             )
+            if not ok:
+                messages.error(request, error_message)
+                if is_ajax:
+                    return JsonResponse({"ok": False, "refresh_url": target_url, "message": error_message}, status=400)
+                return HttpResponseRedirect(target_url)
         except Exception:
             logger.exception("Attachment upload failed for district=%s", district.id)
-            if not google_drive.is_configured():
-                messages.error(
-                    request,
+            if not drive_service.is_configured():
+                error_message = (
                     "Google Drive is not configured for uploads in this environment. "
                     "Set GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID, GOOGLE_DRIVE_CLIENT_ID, "
                     "GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_DRIVE_REFRESH_TOKEN."
                 )
+                messages.error(
+                    request,
+                    error_message
+                )
             else:
-                messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
+                error_message = "Attachment upload failed. Please check Google Drive configuration and try again."
+                messages.error(request, error_message)
             if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": target_url}, status=500)
+                return JsonResponse({"ok": False, "refresh_url": target_url, "message": error_message}, status=500)
             return HttpResponseRedirect(target_url)
         messages.success(request, "Attachment uploaded.")
         if is_ajax:
@@ -4295,6 +3622,67 @@ class DistrictApplicationAttachmentDeleteView(LoginRequiredMixin, WriteRoleMixin
         return HttpResponseRedirect(reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}))
 
 
+class DistrictApplicationAttachmentTempDeleteView(LoginRequiredMixin, WriteRoleMixin, View):
+    module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
+    permission_action = "create_edit"
+
+    def post(self, request, *args, **kwargs):
+        form_token = (request.POST.get("attachment_form_token") or "").strip()
+        attachment = get_object_or_404(
+            models.ApplicationAttachment,
+            pk=kwargs["attachment_id"],
+            application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
+            status=models.ApplicationAttachmentStatusChoices.TEMP,
+            uploaded_by=request.user,
+        )
+        if form_token and attachment.draft_uid and attachment.draft_uid != form_token:
+            messages.error(request, "Attachment token mismatch. Refresh and try again.")
+            return HttpResponseRedirect(reverse("ui:master-entry-district-create"))
+        target_url = (
+            DistrictApplicationAttachmentTempUploadView._target_url_for_district(attachment.district)
+            if attachment.district
+            else reverse("ui:master-entry-district-create")
+        )
+        _delete_application_attachment_file(attachment)
+        attachment.delete()
+        messages.success(request, "Attachment removed.")
+        return HttpResponseRedirect(target_url)
+
+
+class DistrictApplicationAttachmentTempClearView(LoginRequiredMixin, WriteRoleMixin, View):
+    module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
+    permission_action = "create_edit"
+
+    def post(self, request, *args, **kwargs):
+        form_token = (request.POST.get("attachment_form_token") or "").strip()
+        district_id = (request.POST.get("district_id") or "").strip()
+        district = None
+        if district_id:
+            district = models.DistrictMaster.objects.filter(pk=district_id, is_active=True).first()
+        target_url = (
+            DistrictApplicationAttachmentTempUploadView._target_url_for_district(district)
+            if district
+            else reverse("ui:master-entry-district-create")
+        )
+        if not form_token:
+            return HttpResponseRedirect(target_url)
+        temp_items_qs = _temp_attachment_queryset(
+            application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
+            form_token=form_token,
+            user=request.user,
+        )
+        if district is not None:
+            temp_items_qs = temp_items_qs.filter(district=district)
+        temp_items = list(temp_items_qs)
+        for attachment in temp_items:
+            _delete_application_attachment_file(attachment)
+            attachment.delete()
+        if district is None:
+            _clear_attachment_form_token(request, models.ApplicationAttachmentTypeChoices.DISTRICT)
+        messages.success(request, "Uploaded temporary files were removed.")
+        return HttpResponseRedirect(target_url)
+
+
 class PublicApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin, View):
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "create_edit"
@@ -4305,55 +3693,53 @@ class PublicApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin, 
         if entry.status == models.BeneficiaryStatusChoices.ARCHIVED:
             messages.error(request, "This public application is archived. Unarchive it before uploading attachments.")
             if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": reverse("ui:master-entry") + "?type=public&status=archived"}, status=400)
+                return JsonResponse({"ok": False, "refresh_url": reverse("ui:master-entry") + "?type=public&status=archived", "message": "This public application is archived. Unarchive it before uploading attachments."}, status=400)
             return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public&status=archived")
         form = ApplicationAttachmentUploadForm(request.POST, request.FILES)
         if not form.is_valid():
             messages.error(request, "; ".join(form.errors.get("file", []) + form.errors.get("file_name", [])) or "Choose a valid file before uploading.")
             if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
-            return HttpResponseRedirect(target_url)
-
-        attachments_qs = models.ApplicationAttachment.objects.filter(
-            application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
-            public_entry=entry,
-        )
-        existing_count = attachments_qs.count()
-        if existing_count >= ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION:
-            messages.error(request, f"Maximum {ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION} files are allowed for one application.")
-            if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
+                return JsonResponse({"ok": False, "refresh_url": target_url, "message": "Choose a valid file before uploading."}, status=400)
             return HttpResponseRedirect(target_url)
 
         uploaded = form.cleaned_data["file"]
         application_reference = entry.application_number or f"PUBLIC-{entry.pk}"
         display_name = _prefixed_attachment_name(application_reference, uploaded.name, form.cleaned_data.get("file_name") or "")
-        if _attachment_name_exists(attachments_qs, display_name):
-            messages.error(request, "A file with this name already exists for this application. Please rename it before uploading.")
-            if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
-            return HttpResponseRedirect(target_url)
         try:
-            _save_application_attachment(
+            ok, error_message = _save_linked_attachment_upload(
+                request=request,
                 uploaded=uploaded,
-                display_name=display_name,
                 application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
-                public_entry=entry,
-                uploaded_by=request.user,
+                display_name=display_name,
+                queryset_filters={
+                    "application_type": models.ApplicationAttachmentTypeChoices.PUBLIC,
+                    "public_entry": entry,
+                    "status": models.ApplicationAttachmentStatusChoices.LINKED,
+                },
+                save_kwargs={"public_entry": entry},
             )
+            if not ok:
+                messages.error(request, error_message)
+                if is_ajax:
+                    return JsonResponse({"ok": False, "refresh_url": target_url, "message": error_message}, status=400)
+                return HttpResponseRedirect(target_url)
         except Exception:
             logger.exception("Attachment upload failed for public_entry=%s", entry.pk)
-            if not google_drive.is_configured():
-                messages.error(
-                    request,
+            if not drive_service.is_configured():
+                error_message = (
                     "Google Drive is not configured for uploads in this environment. "
                     "Set GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID, GOOGLE_DRIVE_CLIENT_ID, "
                     "GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_DRIVE_REFRESH_TOKEN."
                 )
+                messages.error(
+                    request,
+                    error_message
+                )
             else:
-                messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
+                error_message = "Attachment upload failed. Please check Google Drive configuration and try again."
+                messages.error(request, error_message)
             if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": target_url}, status=500)
+                return JsonResponse({"ok": False, "refresh_url": target_url, "message": error_message}, status=500)
             return HttpResponseRedirect(target_url)
         messages.success(request, "Attachment uploaded.")
         if is_ajax:
@@ -4370,13 +3756,16 @@ class PublicApplicationAttachmentTempUploadView(LoginRequiredMixin, WriteRoleMix
         form_token = (request.POST.get("attachment_form_token") or "").strip() or _ensure_attachment_form_token(
             request, models.ApplicationAttachmentTypeChoices.PUBLIC
         )
-        _save_temp_attachment_upload(
+        success = _save_temp_attachment_upload(
             request=request,
             application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
             form_token=form_token,
         )
         if is_ajax:
-            return JsonResponse({"ok": True, "refresh_url": reverse("ui:master-entry-public-create")})
+            return JsonResponse(
+                {"ok": bool(success), "refresh_url": reverse("ui:master-entry-public-create"), "message": "" if success else "Attachment upload failed."},
+                status=200 if success else 400,
+            )
         return HttpResponseRedirect(reverse("ui:master-entry-public-create"))
 
 
@@ -4413,7 +3802,7 @@ class PublicApplicationAttachmentTempDeleteView(LoginRequiredMixin, WriteRoleMix
             status=models.ApplicationAttachmentStatusChoices.TEMP,
             uploaded_by=request.user,
         )
-        if form_token and attachment.form_token and attachment.form_token != form_token:
+        if form_token and attachment.draft_uid and attachment.draft_uid != form_token:
             messages.error(request, "Attachment token mismatch. Refresh and try again.")
             return HttpResponseRedirect(reverse("ui:master-entry-public-create"))
         _delete_application_attachment_file(attachment)
@@ -4458,48 +3847,46 @@ class InstitutionApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMi
         if not form.is_valid():
             messages.error(request, "; ".join(form.errors.get("file", []) + form.errors.get("file_name", [])) or "Choose a valid file before uploading.")
             if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
-            return HttpResponseRedirect(target_url)
-
-        attachments_qs = models.ApplicationAttachment.objects.filter(
-            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
-            institution_application_number=application_number,
-        )
-        existing_count = attachments_qs.count()
-        if existing_count >= ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION:
-            messages.error(request, f"Maximum {ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION} files are allowed for one application.")
-            if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
+                return JsonResponse({"ok": False, "refresh_url": target_url, "message": "Choose a valid file before uploading."}, status=400)
             return HttpResponseRedirect(target_url)
 
         uploaded = form.cleaned_data["file"]
         display_name = _prefixed_attachment_name(application_number, uploaded.name, form.cleaned_data.get("file_name") or "")
-        if _attachment_name_exists(attachments_qs, display_name):
-            messages.error(request, "A file with this name already exists for this application. Please rename it before uploading.")
-            if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
-            return HttpResponseRedirect(target_url)
         try:
-            _save_application_attachment(
+            ok, error_message = _save_linked_attachment_upload(
+                request=request,
                 uploaded=uploaded,
-                display_name=display_name,
                 application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
-                institution_application_number=application_number,
-                uploaded_by=request.user,
+                display_name=display_name,
+                queryset_filters={
+                    "application_type": models.ApplicationAttachmentTypeChoices.INSTITUTION,
+                    "institution_application_number": application_number,
+                    "status": models.ApplicationAttachmentStatusChoices.LINKED,
+                },
+                save_kwargs={"institution_application_number": application_number},
             )
+            if not ok:
+                messages.error(request, error_message)
+                if is_ajax:
+                    return JsonResponse({"ok": False, "refresh_url": target_url, "message": error_message}, status=400)
+                return HttpResponseRedirect(target_url)
         except Exception:
             logger.exception("Attachment upload failed for institution=%s", application_number)
-            if not google_drive.is_configured():
-                messages.error(
-                    request,
+            if not drive_service.is_configured():
+                error_message = (
                     "Google Drive is not configured for uploads in this environment. "
                     "Set GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID, GOOGLE_DRIVE_CLIENT_ID, "
                     "GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_DRIVE_REFRESH_TOKEN."
                 )
+                messages.error(
+                    request,
+                    error_message
+                )
             else:
-                messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
+                error_message = "Attachment upload failed. Please check Google Drive configuration and try again."
+                messages.error(request, error_message)
             if is_ajax:
-                return JsonResponse({"ok": False, "refresh_url": target_url}, status=500)
+                return JsonResponse({"ok": False, "refresh_url": target_url, "message": error_message}, status=500)
             return HttpResponseRedirect(target_url)
         messages.success(request, "Attachment uploaded.")
         if is_ajax:
@@ -4516,13 +3903,16 @@ class InstitutionApplicationAttachmentTempUploadView(LoginRequiredMixin, WriteRo
         form_token = (request.POST.get("attachment_form_token") or "").strip() or _ensure_attachment_form_token(
             request, models.ApplicationAttachmentTypeChoices.INSTITUTION
         )
-        _save_temp_attachment_upload(
+        success = _save_temp_attachment_upload(
             request=request,
             application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
             form_token=form_token,
         )
         if is_ajax:
-            return JsonResponse({"ok": True, "refresh_url": reverse("ui:master-entry-institution-create")})
+            return JsonResponse(
+                {"ok": bool(success), "refresh_url": reverse("ui:master-entry-institution-create"), "message": "" if success else "Attachment upload failed."},
+                status=200 if success else 400,
+            )
         return HttpResponseRedirect(reverse("ui:master-entry-institution-create"))
 
 
@@ -4556,7 +3946,7 @@ class InstitutionApplicationAttachmentTempDeleteView(LoginRequiredMixin, WriteRo
             status=models.ApplicationAttachmentStatusChoices.TEMP,
             uploaded_by=request.user,
         )
-        if form_token and attachment.form_token and attachment.form_token != form_token:
+        if form_token and attachment.draft_uid and attachment.draft_uid != form_token:
             messages.error(request, "Attachment token mismatch. Refresh and try again.")
             return HttpResponseRedirect(reverse("ui:master-entry-institution-create"))
         _delete_application_attachment_file(attachment)

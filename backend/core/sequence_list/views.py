@@ -23,8 +23,12 @@ from core.shared.export import _sequence_final_export_rows
 from core.shared.export import _sequence_project_rows
 from core.shared.export import _sequence_seat_allocation_integrity
 from core.shared.phase2 import _phase2_export_rows
+from core.shared.phase2 import _phase2_build_rows_from_master_export_rows
+from core.shared.phase2 import _phase2_get_or_create_default_session
 from core.shared.phase2 import _phase2_normalize_text
 from core.shared.phase2 import _phase2_parse_number
+from core.shared.phase2 import _phase2_preserve_existing_split_state
+from core.shared.phase2 import _phase2_replace_session_rows
 from core.shared.phase2 import _phase2_selected_session
 from core.shared.permissions import RoleRequiredMixin
 
@@ -393,15 +397,34 @@ class SequenceListView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
 
     def post(self, request, *args, **kwargs):
         session = _phase2_selected_session(request)
+        action = (request.POST.get("action") or "").strip()
+        if action == "sync_data" and not session:
+            session = _phase2_get_or_create_default_session()
         if not session:
             messages.error(request, "Create or select a session first.")
             return HttpResponseRedirect(reverse("ui:sequence-list"))
         if not request.user.has_module_permission(self.module_key, "create_edit"):
             messages.error(request, "You do not have permission to update sequence rows.")
             return HttpResponseRedirect(f'{reverse("ui:sequence-list")}?session={session.pk}')
-
-        action = (request.POST.get("action") or "").strip()
         start_from = _phase2_parse_number(request.POST.get("start_from")) or 1
+
+        if action == "sync_data":
+            source_rows = _phase2_master_export_rows()
+            upload_result = _phase2_build_rows_from_master_export_rows(source_rows, source_file_name="master-entry-db")
+            preserve_result = _phase2_preserve_existing_split_state(session, upload_result["rows"])
+            _phase2_replace_session_rows(
+                session,
+                preserve_result["rows"],
+                source_file_name="master-entry-db",
+                user=request.user,
+                reconciliation=upload_result,
+            )
+            messages.success(
+                request,
+                f"Synced {upload_result['source_row_count']} master row(s) into {upload_result['grouped_row_count']} seat-allocation working row(s). "
+                f"Preserved {preserve_result['preserved_count']} existing split row(s), added {preserve_result['new_count']}, removed {preserve_result['removed_count']}.",
+            )
+            return HttpResponseRedirect(f'{reverse("ui:sequence-list")}?session={session.pk}')
 
         if action == "parse_upload":
             uploaded_file = request.FILES.get("file")

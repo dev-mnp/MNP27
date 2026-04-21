@@ -20,6 +20,7 @@ from core.labels.services import _labels_audit_download
 from core.labels.services import _labels_available_requested_items
 from core.labels.services import _labels_download_filename
 from core.labels.services import _labels_expand_entries
+from core.labels.services import _labels_article_name
 from core.labels.services import _labels_has_generated_tokens
 from core.labels.services import _labels_latest_source_marker
 from core.labels.services import _labels_normalize_dataset
@@ -84,7 +85,7 @@ class LabelGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
 
         def sort_by_item_and_start(row):
             return (
-                str(row.get("Token Name") or row.get("Requested Item") or "").strip(),
+                _labels_article_name(row),
                 str(row.get("Names") or "").strip(),
                 _phase2_parse_number(row.get("Start Token No")) or 0,
             )
@@ -99,7 +100,7 @@ class LabelGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             entries = _labels_expand_entries(
                 rows,
                 row_filter=lambda row: is_printable_article(row) and str(row.get("Requested Item") or "").strip() not in large_items,
-                group_by=lambda row: str(row.get("Token Name") or row.get("Requested Item") or "").strip(),
+                group_by=lambda row: _labels_article_name(row),
             )
             label_buffer = services.generate_mnp_labels_pdf(entries, layout="12L", mode="separate")
             filename = _labels_download_filename("1_Article_Labels_S")
@@ -160,7 +161,7 @@ class LabelGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             entries = _labels_expand_entries(
                 rows,
                 row_filter=lambda row: token_qty(row) > 0,
-                group_by=lambda row: str(row.get("Token Name") or row.get("Requested Item") or "").strip(),
+                group_by=lambda row: _labels_article_name(row),
             )
             label_buffer = services.generate_mnp_labels_pdf(entries, layout="12L", mode="separate")
             filename = _labels_download_filename("Chair_Labels_S")
@@ -230,11 +231,15 @@ class LabelGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         if not session:
             messages.error(request, "Create or select a session first.")
             return HttpResponseRedirect(reverse("ui:labels"))
-        if not request.user.has_module_permission(self.module_key, "create_edit"):
+        action = (request.POST.get("action") or "").strip()
+        if action in {"download_custom_labels", "preview_custom_labels"}:
+            if not request.user.has_module_permission(self.module_key, "export"):
+                messages.error(request, "You do not have permission to download labels.")
+                return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
+        elif not request.user.has_module_permission(self.module_key, "create_edit"):
             messages.error(request, "You do not have permission to update label data.")
             return HttpResponseRedirect(f'{reverse("ui:labels")}?session={session.pk}')
 
-        action = (request.POST.get("action") or "").strip()
         if action == "sync_data":
             dataset = _labels_source_dataset(session)
             _labels_store_dataset(
@@ -304,10 +309,11 @@ class LabelGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                     if not line:
                         continue
                     parts = [part.strip() for part in line.split(",")]
-                    if len(parts) < 2:
+                    if len(parts) < 1:
                         continue
                     text_value = parts[0]
-                    count_value = _phase2_parse_number(parts[1]) or 0
+                    count_value = _phase2_parse_number(parts[1]) if len(parts) >= 2 else 1
+                    count_value = count_value or 1
                     font_size_value = _phase2_parse_number(parts[2]) if len(parts) >= 3 else default_font_size
                     font_size_value = max(8, min(int(font_size_value or default_font_size), 120))
                     line_spacing_value = _phase2_parse_number(parts[3]) if len(parts) >= 4 else None
@@ -371,10 +377,11 @@ class LabelGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                     if not line:
                         continue
                     parts = [part.strip() for part in line.split(",")]
-                    if len(parts) < 2:
+                    if len(parts) < 1:
                         continue
                     text_value = parts[0]
-                    count_value = _phase2_parse_number(parts[1]) or 0
+                    count_value = _phase2_parse_number(parts[1]) if len(parts) >= 2 else 1
+                    count_value = count_value or 1
                     font_size_value = _phase2_parse_number(parts[2]) if len(parts) >= 3 else default_font_size
                     font_size_value = max(8, min(int(font_size_value or default_font_size), 120))
                     line_spacing_value = _phase2_parse_number(parts[3]) if len(parts) >= 4 else None

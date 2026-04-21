@@ -20,7 +20,6 @@
           <div class="status-pill status-{{ application_status }}" style="margin-top: 10px;">{{ application_status|title }}</div>
         {% endif %}
       </div>
-      <a class="btn" href="{% url 'ui:master-entry' %}?type=institutions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/><path d="M21 12H9"/></svg><span>Back</span></a>
     </div>
 
     {% if form_errors %}
@@ -131,7 +130,7 @@
                   <option value="">Select Item</option>
                   <option value="__create_new__">+ Add New Article</option>
                   {% for article in articles_master_list %}
-                    <option value="{{ article.id }}" data-type="{{ article.item_type }}" data-cost="{{ article.cost_per_unit }}" data-short-label="{{ article.article_name }}" data-long-label="{{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}" {% if row.article_id == article.id|stringformat:"s" %}selected{% endif %}>
+                    <option value="{{ article.id }}" data-type="{{ article.item_type }}" data-cost="{{ article.cost_per_unit }}" data-manual-price="{{ article.allow_manual_price|yesno:'true,false' }}" data-short-label="{{ article.article_name }}" data-long-label="{{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}" {% if row.article_id == article.id|stringformat:"s" %}selected{% endif %}>
                       {{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}
                     </option>
                   {% endfor %}
@@ -213,7 +212,7 @@
               <option value="">Select Item</option>
               <option value="__create_new__">+ Add New Article</option>
               {% for article in articles_master_list %}
-                <option value="{{ article.id }}" data-type="{{ article.item_type }}" data-cost="{{ article.cost_per_unit }}" data-short-label="{{ article.article_name }}" data-long-label="{{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}">
+                <option value="{{ article.id }}" data-type="{{ article.item_type }}" data-cost="{{ article.cost_per_unit }}" data-manual-price="{{ article.allow_manual_price|yesno:'true,false' }}" data-short-label="{{ article.article_name }}" data-long-label="{{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}">
                   {{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}
                 </option>
               {% endfor %}
@@ -326,30 +325,37 @@
                   <td>{{ attachment.created_at|date:"d/m/Y H:i" }}</td>
                   <td>
                     <div class="actions-inline">
-                      <button class="btn icon-btn js-attachment-preview" type="button" onclick="return window.openAttachmentPreviewFromButton(this);" data-preview-url="{% url 'ui:application-attachment-download' attachment.id %}" data-preview-title="{{ attachment.file_name }}" data-preview-source="{% if attachment.file %}{{ attachment.file.name|lower }}{% else %}{{ attachment.file_name|lower }}{% endif %}" data-download-url="{% url 'ui:application-attachment-download' attachment.id %}?download=1" data-preview-items-b64="{{ attachment_preview_items_b64 }}" title="Preview file" aria-label="Preview file">
+                      <button class="btn icon-btn js-attachment-preview" type="button" onclick="return window.openAttachmentPreviewFromButton(this);" data-preview-url="{% url 'ui:application-attachment-download' attachment.id %}" data-preview-title="{{ attachment.file_name }}" data-preview-source="{% if attachment.file %}{{ attachment.file.name|lower }}{% else %}{{ attachment.file_name|lower }}{% endif %}" data-preview-kind="{% if attachment.drive_mime_type == 'application/pdf' %}pdf{% elif 'image/' in attachment.drive_mime_type|default:'' %}image{% else %}unsupported{% endif %}" data-download-url="{% url 'ui:application-attachment-download' attachment.id %}?download=1" data-preview-items-b64="{{ attachment_preview_items_b64 }}" title="Preview file" aria-label="Preview file">
                         <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/></svg>
                       </button>
-                      <a class="btn icon-btn" href="{% url 'ui:application-attachment-download' attachment.id %}" target="_blank" rel="noopener" title="Open file in new tab" aria-label="Open file in new tab">
-                        <svg viewBox="0 0 24 24"><path d="M14 3h7v7"/><path d="M10 14L21 3"/><path d="M21 14v6H3V2h6"/></svg>
-                      </a>
                       <a class="btn icon-btn" href="{% url 'ui:application-attachment-download' attachment.id %}?download=1" title="Download file" aria-label="Download file">
                         <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
                       </a>
                       {% if attachment.status == 'temp' %}
-                        <form method="post" action="{% url 'ui:institution-attachment-temp-delete' attachment.id %}" style="display: inline;">
-                          {% csrf_token %}
-                          <input type="hidden" name="attachment_form_token" value="{{ attachment_form_token|default:'' }}">
-                          <button class="btn btn-danger icon-btn" type="submit" title="Delete file" aria-label="Delete file" onclick="return window.confirm('Delete this attachment?');">
-                            <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-                          </button>
-                        </form>
+                        <button
+                          class="btn btn-danger icon-btn js-attachment-delete"
+                          type="button"
+                          data-delete-url="{% url 'ui:institution-attachment-temp-delete' attachment.id %}"
+                          data-attachment-card-id="institution-attachments-card"
+                          data-attachment-form-token="{{ attachment_form_token|default:'' }}"
+                          title="Delete file"
+                          aria-label="Delete file"
+                          onclick="return window.confirm('Delete this attachment?');"
+                        >
+                          <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                        </button>
                       {% else %}
-                        <form method="post" action="{% url 'ui:institution-attachment-delete' institution_application_number attachment.id %}" style="display: inline;">
-                          {% csrf_token %}
-                          <button class="btn btn-danger icon-btn" type="submit" title="Delete file" aria-label="Delete file" onclick="return window.confirm('Delete this attachment?');">
-                            <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-                          </button>
-                        </form>
+                        <button
+                          class="btn btn-danger icon-btn js-attachment-delete"
+                          type="button"
+                          data-delete-url="{% url 'ui:institution-attachment-delete' institution_application_number attachment.id %}"
+                          data-attachment-card-id="institution-attachments-card"
+                          title="Delete file"
+                          aria-label="Delete file"
+                          onclick="return window.confirm('Delete this attachment?');"
+                        >
+                          <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                        </button>
                       {% endif %}
                     </div>
                   </td>
@@ -362,7 +368,7 @@
       {% endif %}
     </div>
     <div class="toolbar" style="justify-content: flex-end; margin-top: 20px;">
-      <a class="btn" id="institution-cancel-link" href="{% url 'ui:master-entry' %}?type=institutions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg><span>Cancel</span></a>
+      <a class="btn btn-light-soft" id="institution-cancel-link" href="{% url 'ui:master-entry' %}?type=institutions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg><span>Cancel</span></a>
       <button class="btn js-save-button{% if request.resolver_match.url_name == 'master-entry-institution-edit' %} btn-disabled{% endif %}" type="submit" name="action" value="draft" form="institution-entry-form" {% if request.resolver_match.url_name == 'master-entry-institution-edit' %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v6h6V3"/><path d="M9 17h6"/></svg><span>Save as Draft</span></button>
       <button class="btn js-submit-button" type="submit" name="action" value="submit" form="institution-entry-form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Submit</span></button>
     </div>
@@ -391,6 +397,7 @@
           <div>
             <label>Cost per unit</label>
             <input class="input" type="number" name="cost_per_unit" min="0" step="0.01" required>
+            <div class="field-hint">Keep this at 0 only if the value is not known yet. Use the pricing rule below to decide fixed vs manual behavior.</div>
           </div>
           <div>
             <label>Item type</label>
@@ -406,6 +413,10 @@
           <div>
             <label>Super Category</label>
             <input class="input" type="text" name="master_category" list="article-modal-master-category-options">
+          </div>
+          <div style="grid-column: span 2;">
+            <label><input type="checkbox" name="allow_manual_price"> User enters price manually</label>
+            <div class="field-hint">Enable this for variable-price items like Aid or any article where the operator should type the amount during entry. Leave unchecked for fixed-price items.</div>
           </div>
         </div>
         <datalist id="article-modal-category-options">
@@ -423,7 +434,7 @@
           <label><input type="checkbox" name="combo"> Combo</label>
         </div>
         <div class="toolbar" style="margin-top: 14px; justify-content: flex-end; gap: 10px;">
-          <button class="btn" type="button" id="article-create-cancel">Cancel</button>
+          <button class="btn btn-light-soft" type="button" id="article-create-cancel">Cancel</button>
           <button class="btn" type="submit" id="article-create-save">Save</button>
         </div>
       </form>
@@ -467,8 +478,13 @@
       }
 
       const form = document.getElementById("institution-entry-form");
-      const saveButtons = Array.from(form.querySelectorAll(".js-save-button"));
-      const submitButton = form.querySelector(".js-submit-button");
+      const formId = form ? form.id : "institution-entry-form";
+      const saveButtons = Array.from(document.querySelectorAll(".js-save-button")).filter(function(button) {
+        return button.form === form || button.getAttribute("form") === formId || form.contains(button);
+      });
+      const submitButton = Array.from(document.querySelectorAll(".js-submit-button")).find(function(button) {
+        return button.form === form || button.getAttribute("form") === formId || form.contains(button);
+      }) || null;
       const itemsBody = document.getElementById("institution-items-body");
       const rowTemplate = document.getElementById("institution-item-row-template");
       const pickerSearch = document.getElementById("institution-picker-search");
@@ -508,6 +524,7 @@
         }
         option.dataset.type = article.item_type || "";
         option.dataset.cost = article.cost_per_unit;
+        option.dataset.manualPrice = article.allow_manual_price ? "true" : "false";
         option.dataset.shortLabel = article.article_name;
         option.dataset.longLabel = article.article_name + " - Rs." + Number(article.cost_per_unit || 0).toLocaleString("en-IN", {
           maximumFractionDigits: 2,
@@ -700,6 +717,7 @@
           const selected = articleSelect.options[articleSelect.selectedIndex];
           const itemType = selected?.dataset.type || "";
           const articleCost = Number(selected?.dataset.cost || 0);
+          const allowManualPrice = selected?.dataset.manualPrice === "true";
           const selectedArticleId = selected?.value || "";
           const articleChanged = selectedArticleId !== lastArticleId;
           const hasSelection = !!selectedArticleId && selectedArticleId !== "__create_new__";
@@ -752,14 +770,14 @@
               articleSelect.hidden = false;
             }
           }
-          if (articleCost > 0) {
+          if (!allowManualPrice) {
             if (articleChanged || !unitCostInput.value.trim()) {
               unitCostInput.value = formatInputNumber(articleCost);
             }
             unitCostInput.readOnly = true;
           } else {
             if (articleChanged) {
-              unitCostInput.value = initialUnitCostValue || "0";
+              unitCostInput.value = formatInputNumber(articleCost);
             }
             unitCostInput.readOnly = false;
           }

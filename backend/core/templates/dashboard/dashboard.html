@@ -314,14 +314,14 @@
           <div class="hero-card-title">Total Accrued</div>
           <div class="hero-card-value">Rs.{{ metrics.overall.actual_total_value_accrued|rupees_round }}</div>
           <div class="stat-muted" style="margin-top: 6px;">
-            <strong>{{ metrics.overall.district_variance_signed.sign }} Rs.{{ metrics.overall.district_variance_signed.amount|rupees_round }}</strong> (District Contribution)
+            <strong>Incl. Rs.{{ metrics.overall.district_variance_signed.amount|rupees_round }}</strong> District Contribution
           </div>
         </div>
         <div class="hero-card" style="background: #e9d5ff; color: #3b1f5e;">
           <div class="hero-card-title">Planning Total</div>
           <div class="hero-card-value">Rs.{{ metrics.overall.total_value_accrued|rupees_round }}</div>
           <div class="stat-muted" style="margin-top: 6px;">
-            <strong>{{ metrics.overall.district_contribution_signed.sign }} Rs.{{ metrics.overall.district_contribution_signed.amount|rupees_round }}</strong> (District Contribution)
+            <strong>Excl. Rs.{{ metrics.overall.district_contribution_signed.amount|rupees_round }}</strong> District Contribution
           </div>
         </div>
         <div class="hero-card" style="background: #d8ecff; color: #163250;">
@@ -359,7 +359,7 @@
             </div>
             <div class="stat-line">
               <div class="stat-line-label">Net (Over - Under)</div>
-              <div class="variance-value" style="margin-top: 2px;">{{ metrics.overall.district_variance_signed.sign }} Rs.{{ metrics.overall.district_variance_signed.amount|rupees_round }}</div>
+              <div class="variance-value" style="margin-top: 2px;">{{ metrics.district.net_variance_signed.sign }} Rs.{{ metrics.district.net_variance_signed.amount|rupees_round }}</div>
               <div class="stat-muted" style="margin-top: 2px; visibility: hidden;">0 districts</div>
             </div>
           </div>

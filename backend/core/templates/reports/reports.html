@@ -545,7 +545,7 @@
         <input type="hidden" name="tab" value="{{ active_report_tab }}">
         <input id="reports-shared-logo-input" type="file" name="shared_logo" accept=".png,.jpg,.jpeg,.webp" style="display:none;" onchange="this.form.submit();" />
         <input type="hidden" name="action" value="upload_shared_logo" />
-        <button class="btn report-download-trigger" type="button" onclick="document.getElementById('reports-shared-logo-input').click();">Upload Logo</button>
+        <button class="btn btn-light-soft report-download-trigger" type="button" onclick="document.getElementById('reports-shared-logo-input').click();">Upload Logo</button>
         {% if reports_shared_logo.logo_name %}
           <span class="small" style="color: var(--text-secondary);">{{ reports_shared_logo.logo_name }}</span>
         {% endif %}
@@ -625,7 +625,7 @@
                 </select>
               </div>
               <div class="segregation-filter-actions">
-                <a class="btn" href="{% url 'ui:reports' %}?tab=reports-home" style="text-decoration:none;">Reset</a>
+                <a class="btn btn-light-soft" href="{% url 'ui:reports' %}?tab=reports-home" style="text-decoration:none;">Reset</a>
                 <noscript>
                   <button class="btn report-download-trigger" type="submit">Apply</button>
                 </noscript>
@@ -804,9 +804,6 @@
         <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
           <div>
             <h3 style="margin: 0 0 8px;">Token Lookup</h3>
-            <p style="margin: 0; color: var(--text-secondary); max-width: 920px;">
-              Sync the final Token Generation file or upload a CSV / Excel file, then search by token number, application number, beneficiary name, district, or item.
-            </p>
           </div>
           <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
             <form method="post" style="margin: 0;">
@@ -880,8 +877,8 @@
               </label>
             </div>
             <div class="toolbar" style="justify-content: flex-end; margin-top: 12px; margin-bottom: 0; gap: 8px;">
-              <button class="btn report-download-trigger" type="submit">Search</button>
-              <button class="btn report-download-trigger" type="submit" name="action" value="clear_token_lookup_filters">Clear</button>
+              <button class="btn btn-light-soft report-download-trigger" type="submit">Search</button>
+              <button class="btn btn-light-soft report-download-trigger" type="submit" name="action" value="clear_token_lookup_filters">Clear</button>
             </div>
           </div>
         </form>
@@ -1195,7 +1192,6 @@
           <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
             <div>
               <h4 style="margin: 0 0 6px;">District Signature</h4>
-              <div class="text-muted" style="font-size: 14px; margin-bottom: 6px;">District-wise grouped signature sheet with mandatory columns for total quantity, token quantity, start token, end token, and signature.</div>
             </div>
             <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
               <form method="post" style="margin: 0;">
@@ -1258,9 +1254,6 @@
         <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
           <div>
             <h3 style="margin: 0 0 8px;">Waiting Hall Acknowledgment</h3>
-            <p style="margin: 0; color: var(--text-secondary); max-width: 920px;">
-              Use the final Token Generation file or upload a CSV / Excel file, then choose any waiting-hall rows to ignore before downloading the report.
-            </p>
           </div>
           <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
             <form method="post" style="margin: 0;">
@@ -1403,9 +1396,6 @@
         <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
           <div>
             <h3 style="margin: 0 0 8px;">Public Acknowledgment Form</h3>
-            <p style="margin: 0; color: var(--text-secondary); max-width: 920px;">
-              Sync from the final Token Generation file or upload a CSV / Excel file, upload the fillable PDF template, map the fields, and download the filled acknowledgments.
-            </p>
           </div>
           <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
             <form method="post" style="margin: 0;">

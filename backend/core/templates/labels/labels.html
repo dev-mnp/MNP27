@@ -348,8 +348,6 @@
     {% if label_sync_required %}
       <div class="token-muted">Token Generation has changed since the last label sync. Click <strong>Sync Data</strong> before downloading labels.</div>
     {% endif %}
-    <div class="token-muted">Sync Data checks whether each label set is ready. The PDF itself is generated only when you click <strong>Download</strong>.</div>
-
     <div class="labels-table">
       <section class="labels-row">
         <div class="labels-row-main">
@@ -661,7 +659,6 @@ Mixi,10"></textarea>
             </div>
             <div class="labels-custom-actions">
               <button id="custom-label-add" class="btn btn-subtle" type="button">Add Row</button>
-              <button class="btn labels-preview-btn js-label-pdf-preview" type="button" data-preview-form="closest" data-preview-action="preview_custom_labels" data-preview-title="Custom Labels Preview" data-preview-source="custom_labels_preview.pdf" {% if not can_export %}disabled{% endif %}>Preview</button>
               <button class="btn" type="submit" {% if not can_export %}disabled{% endif %}>Download</button>
             </div>
           </form>

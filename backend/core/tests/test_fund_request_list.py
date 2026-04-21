@@ -83,6 +83,25 @@ class FundRequestListRegressionTests(TestCase):
             created_by=self.user,
         )
 
+    def _create_public_aid_entry(self, *, aadhaar_status, aadhar_number="123456789012"):
+        return models.PublicBeneficiaryEntry.objects.create(
+            application_number="P001",
+            name="Public Alpha",
+            mobile="9876543210",
+            address="Chennai",
+            article=self.aid_article,
+            article_cost_per_unit=Decimal("8000.00"),
+            quantity=1,
+            total_amount=Decimal("8000.00"),
+            aadhar_number=aadhar_number if aadhaar_status == models.AadhaarVerificationStatusChoices.VERIFIED else "",
+            aadhaar_status=aadhaar_status,
+            name_of_institution="",
+            cheque_rtgs_in_favour="Public Payee",
+            notes="Medical aid",
+            status=models.BeneficiaryStatusChoices.SUBMITTED,
+            created_by=self.user,
+        )
+
     def test_submitted_list_shows_each_fund_request_once_with_multiple_recipients(self):
         fr5 = self._create_fund_request(number="FR-005", created_at=timezone.now())
         self._add_recipients(fr5, 4, details_prefix="Medical detail")
@@ -223,3 +242,57 @@ class FundRequestListRegressionTests(TestCase):
         self.assertEqual(form["article_name"].value(), self.article.article_name)
         self.assertIn((self.article.article_name, self.article.article_name), list(form.fields["article_name"].choices))
         self.assertContains(response, self.article.article_name)
+
+    def test_public_aid_options_exclude_aadhaar_not_available_entries(self):
+        self._create_public_aid_entry(aadhaar_status=models.AadhaarVerificationStatusChoices.NOT_AVAILABLE, aadhar_number="")
+
+        response = self.client.get(
+            reverse("ui:fund-request-aid-options"),
+            {
+                "aid_type": self.aid_article.article_name,
+                "beneficiary_type": models.RecipientTypeChoices.PUBLIC,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["options"], [])
+
+    def test_public_aid_submit_blocks_aadhaar_not_available_without_number(self):
+        entry = self._create_public_aid_entry(aadhaar_status=models.AadhaarVerificationStatusChoices.NOT_AVAILABLE, aadhar_number="")
+
+        response = self.client.post(
+            reverse("ui:fund-request-create"),
+            {
+                "fund_request_type": models.FundRequestTypeChoices.AID,
+                "aid_type": self.aid_article.article_name,
+                "action": "submit",
+                "recipients-TOTAL_FORMS": "1",
+                "recipients-INITIAL_FORMS": "0",
+                "recipients-MIN_NUM_FORMS": "0",
+                "recipients-MAX_NUM_FORMS": "1000",
+                "recipients-0-beneficiary_type": models.RecipientTypeChoices.PUBLIC,
+                "recipients-0-beneficiary": f"{entry.application_number} - {entry.name}",
+                "recipients-0-source_entry_id": str(entry.pk),
+                "recipients-0-recipient_name": entry.name,
+                "recipients-0-name_of_beneficiary": entry.name,
+                "recipients-0-name_of_institution": "Self",
+                "recipients-0-details": entry.notes,
+                "recipients-0-fund_requested": "8000",
+                "recipients-0-aadhar_number": "",
+                "recipients-0-address": entry.address,
+                "recipients-0-cheque_in_favour": entry.cheque_rtgs_in_favour,
+                "recipients-0-cheque_no": "",
+                "recipients-0-notes": entry.notes,
+                "recipients-0-district_name": "",
+                "articles-TOTAL_FORMS": "0",
+                "articles-INITIAL_FORMS": "0",
+                "articles-MIN_NUM_FORMS": "0",
+                "articles-MAX_NUM_FORMS": "1000",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        form = response.context["recipient_formset"].forms[0]
+        self.assertIn("beneficiary", form.errors)
+        self.assertIn("This application does not have a verified Aadhaar.", form.errors["beneficiary"][0])

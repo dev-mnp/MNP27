@@ -33,6 +33,14 @@ LABELS_DEFAULT_2L_ITEMS = [
     "Steel Cupboard 6 1/2'",
 ]
 
+
+def _labels_article_name(row):
+    token_name = str(row.get("Token Name") or "").strip()
+    if token_name:
+        return token_name
+    return str(row.get("Requested Item") or "").strip()
+
+
 LABEL_LAYOUTS = {
     "12L": {
         "page_size": portrait(A4),
@@ -384,7 +392,7 @@ def _labels_expand_entries(rows, *, row_filter=None, group_by=None, sort_key=Non
         if start <= 0 or end < start:
             continue
         name_value = str(row.get("Names") or row.get("Beneficiary Name") or "").strip()
-        article_value = str(row.get("Token Name") or row.get("Requested Item") or "").strip()
+        article_value = _labels_article_name(row)
         group_value = group_by(row) if group_by else ""
         for token in range(start, end + 1):
             entries.append(
@@ -415,7 +423,7 @@ def _labels_audit_download(rows, *, download_kind, large_items):
 
     def sort_by_item_and_start(row):
         return (
-            str(row.get("Token Name") or row.get("Requested Item") or "").strip(),
+            _labels_article_name(row),
             str(row.get("Names") or "").strip(),
             _phase2_parse_number(row.get("Start Token No")) or 0,
         )
@@ -428,7 +436,7 @@ def _labels_audit_download(rows, *, download_kind, large_items):
     if download_kind in {"article_12l_separate", "article_12l_continuous"}:
         row_filter = lambda row: is_printable_article(row) and str(row.get("Requested Item") or "").strip() not in large_items
         if download_kind == "article_12l_separate":
-            group_by = lambda row: str(row.get("Token Name") or row.get("Requested Item") or "").strip()
+            group_by = lambda row: _labels_article_name(row)
     elif download_kind == "article_2l_continuous":
         row_filter = lambda row: token_qty(row) > 0 and str(row.get("Requested Item") or "").strip() in large_items
         labels_per_page = 2
@@ -446,7 +454,7 @@ def _labels_audit_download(rows, *, download_kind, large_items):
     elif download_kind in {"chair_separate", "chair_continuous"}:
         if download_kind == "chair_separate":
             row_filter = lambda row: token_qty(row) > 0
-            group_by = lambda row: str(row.get("Token Name") or row.get("Requested Item") or "").strip()
+            group_by = lambda row: _labels_article_name(row)
         else:
             row_filter = lambda row: token_qty(row) > 0
     else:

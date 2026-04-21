@@ -71,9 +71,9 @@
       <div class="toolbar" style="margin-top: 16px;">
         <button class="btn" type="submit">Save</button>
         {% if popup_mode %}
-          <button class="btn" type="button" onclick="window.close();">Cancel</button>
+          <button class="btn btn-light-soft" type="button" onclick="window.close();">Cancel</button>
         {% else %}
-          <a class="btn" href="{% url 'ui:vendor-list' %}">Cancel</a>
+          <a class="btn btn-light-soft" href="{% url 'ui:vendor-list' %}">Cancel</a>
         {% endif %}
       </div>
     </form>

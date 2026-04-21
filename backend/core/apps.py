@@ -8,3 +8,7 @@ class CoreConfig(AppConfig):
     name = "core"
     verbose_name = "MNP Core Domain"
 
+    def ready(self):
+        from core.bootstrap_admin import register_bootstrap_admin_signal
+
+        register_bootstrap_admin_signal()

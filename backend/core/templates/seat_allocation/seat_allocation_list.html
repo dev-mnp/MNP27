@@ -28,7 +28,7 @@
             </form>
           {% endif %}
           {% if can_export and selected_session %}
-            <a class="btn seat-secondary-action seat-export-button" href="?session={{ selected_session.pk }}&export=1">
+            <a class="btn btn-subtle btn-light-soft seat-secondary-action seat-export-button" href="?session={{ selected_session.pk }}&export=1">
               <span>Export</span>
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12 5v14"></path>
@@ -139,7 +139,7 @@
             {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
             <button class="btn" type="submit">Apply Master Sync</button>
           </form>
-          <a class="btn btn-subtle" href="{{ clear_preview_url }}">Cancel</a>
+          <a class="btn btn-subtle btn-light-soft" href="{{ clear_preview_url }}">Cancel</a>
         </div>
       </div>
     {% endif %}
@@ -288,7 +288,7 @@
         </div>
         <div style="display: flex; align-items: end; gap: 8px;">
           {% if selected_session %}
-            <a class="btn btn-subtle" href="?session={{ selected_session.pk }}">Clear</a>
+            <a class="btn btn-subtle btn-light-soft" href="?session={{ selected_session.pk }}">Clear</a>
           {% endif %}
         </div>
       </form>

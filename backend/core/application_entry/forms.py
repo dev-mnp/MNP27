@@ -39,7 +39,7 @@ class DistrictBeneficiaryEntryForm(forms.ModelForm):
         article = cleaned.get("article")
         quantity = cleaned.get("quantity") or 0
         unit_cost = cleaned.get("article_cost_per_unit")
-        if article and unit_cost in (None, 0):
+        if article and not article.allow_manual_price:
             unit_cost = article.cost_per_unit
             cleaned["article_cost_per_unit"] = unit_cost
         if unit_cost is not None:
@@ -89,7 +89,7 @@ class PublicBeneficiaryEntryForm(forms.ModelForm):
         article = cleaned.get("article")
         quantity = cleaned.get("quantity") or 0
         unit_cost = cleaned.get("article_cost_per_unit")
-        if article and unit_cost in (None, 0):
+        if article and not article.allow_manual_price:
             unit_cost = article.cost_per_unit
             cleaned["article_cost_per_unit"] = unit_cost
         if unit_cost is not None:
@@ -134,7 +134,7 @@ class InstitutionsBeneficiaryEntryForm(forms.ModelForm):
         article = cleaned.get("article")
         quantity = cleaned.get("quantity") or 0
         unit_cost = cleaned.get("article_cost_per_unit")
-        if article and unit_cost in (None, 0):
+        if article and not article.allow_manual_price:
             unit_cost = article.cost_per_unit
             cleaned["article_cost_per_unit"] = unit_cost
         if unit_cost is not None:
@@ -144,6 +144,18 @@ class InstitutionsBeneficiaryEntryForm(forms.ModelForm):
 
 class ApplicationAttachmentUploadForm(forms.Form):
     ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "webp", "doc", "docx", "xls", "xlsx", "csv"}
+    ALLOWED_CONTENT_TYPES = {
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "text/csv",
+        "application/csv",
+    }
     MAX_FILE_SIZE = 10 * 1024 * 1024
     MAX_FILES_PER_APPLICATION = 2
 
@@ -175,6 +187,9 @@ class ApplicationAttachmentUploadForm(forms.Form):
             raise ValidationError(f"Unsupported file type. Allowed types: {allowed}.")
         if uploaded.size > self.MAX_FILE_SIZE:
             raise ValidationError("File size must be 10 MB or less.")
+        content_type = str(getattr(uploaded, "content_type", "") or "").strip().lower()
+        if content_type and content_type not in self.ALLOWED_CONTENT_TYPES:
+            raise ValidationError("Unsupported file content type.")
         return uploaded
 
     def clean_file_name(self):

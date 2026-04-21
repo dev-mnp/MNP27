@@ -7,7 +7,7 @@
     <form method="post" data-confirm-message="Delete this purchase order?">
       {% csrf_token %}
       <button class="btn btn-danger" type="submit">Delete</button>
-      <a class="btn" href="{% url 'ui:purchase-order-list' %}">Cancel</a>
+      <a class="btn btn-light-soft" href="{% url 'ui:purchase-order-list' %}">Cancel</a>
     </form>
   </section>
 {% endblock %}

@@ -277,7 +277,7 @@ class SeatAllocationListView(LoginRequiredMixin, RoleRequiredMixin, TemplateView
                 _phase2_redirect_url(request, "ui:seat-allocation-list", session, filter_keys=self.preserved_filter_keys)
             )
 
-        if not session and action in {"upload_csv", "use_existing", "save_splits", "submit_splits", "reset_splits", "reset_filtered_splits", "bulk_waiting_full", "bulk_waiting_zero"}:
+        if not session and action in {"upload_csv", "use_existing", "sync_data", "save_splits", "submit_splits", "reset_splits", "reset_filtered_splits", "bulk_waiting_full", "bulk_waiting_zero"}:
             session = _phase2_get_or_create_default_session()
 
         if action == "activate_session":
@@ -335,7 +335,7 @@ class SeatAllocationListView(LoginRequiredMixin, RoleRequiredMixin, TemplateView
                 )
             )
 
-        if action == "use_existing":
+        if action in {"use_existing", "sync_data"}:
             if not request.user.has_module_permission(self.module_key, "upload_replace"):
                 messages.error(request, "You do not have permission to load existing master-entry data.")
                 return HttpResponseRedirect(

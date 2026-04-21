@@ -8,10 +8,11 @@ import json
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
-from django.db.models import Q
+from django.db.models import DecimalField, ExpressionWrapper, F, Q, Value
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.urls import reverse_lazy
 from django.utils import timezone
+from django.views import View
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from core import models
@@ -116,6 +117,7 @@ class ArticleListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
                 "Article Name",
                 "Token Name",
                 "Cost Per Unit",
+                "Price Mode",
                 "Item Type",
                 "Category",
                 "Super Category",
@@ -131,6 +133,7 @@ class ArticleListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
                     article.article_name,
                     article.article_name_tk or "",
                     article.cost_per_unit,
+                    "Manual" if article.allow_manual_price else "Fixed",
                     article.get_item_type_display(),
                     article.category or "",
                     article.master_category or "",
@@ -168,6 +171,7 @@ class ArticleCreateView(LoginRequiredMixin, WriteRoleMixin, CreateView):
                         "id": self.object.id,
                         "article_name": self.object.article_name,
                         "cost_per_unit": str(self.object.cost_per_unit),
+                        "allow_manual_price": self.object.allow_manual_price,
                         "item_type": self.object.item_type,
                     },
                 }
@@ -178,6 +182,7 @@ class ArticleCreateView(LoginRequiredMixin, WriteRoleMixin, CreateView):
                     "id": self.object.id,
                     "article_name": self.object.article_name,
                     "cost_per_unit": str(self.object.cost_per_unit),
+                    "allow_manual_price": self.object.allow_manual_price,
                     "item_type": self.object.item_type,
                 }
             ).replace("</", "<\\/")
@@ -224,11 +229,111 @@ class ArticleUpdateView(LoginRequiredMixin, WriteRoleMixin, UpdateView):
         context["popup_mode"] = False
         context["category_suggestions"] = get_article_text_suggestions("category")
         context["master_category_suggestions"] = get_article_text_suggestions("master_category")
+        context["price_impact_preview_url"] = reverse_lazy("ui:article-price-impact", kwargs={"pk": self.object.pk})
         return context
 
     def form_valid(self, form):
+        original = (
+            models.Article.objects.filter(pk=self.object.pk)
+            .values("cost_per_unit", "allow_manual_price")
+            .first()
+        )
         messages.success(self.request, "Article updated.")
-        return super().form_valid(form)
+        response = super().form_valid(form)
+        self._apply_price_update_scope(original=original)
+        return response
+
+    def _apply_price_update_scope(self, *, original):
+        if not original:
+            return
+        price_changed = original["cost_per_unit"] != self.object.cost_per_unit
+        mode_changed = original["allow_manual_price"] != self.object.allow_manual_price
+        if not price_changed and not mode_changed:
+            return
+
+        update_scope = (self.request.POST.get("price_update_scope") or "future_only").strip().lower()
+        if update_scope != "existing_and_future":
+            return
+
+        total_expression = ExpressionWrapper(
+            F("quantity") * Value(self.object.cost_per_unit),
+            output_field=DecimalField(max_digits=16, decimal_places=2),
+        )
+        for entry_model in (
+            models.DistrictBeneficiaryEntry,
+            models.PublicBeneficiaryEntry,
+            models.InstitutionsBeneficiaryEntry,
+        ):
+            entry_model.objects.filter(article=self.object).update(
+                article_cost_per_unit=self.object.cost_per_unit,
+                total_amount=total_expression,
+            )
+
+
+class ArticlePriceImpactPreviewView(LoginRequiredMixin, WriteRoleMixin, View):
+    module_key = models.ModuleKeyChoices.ARTICLE_MANAGEMENT
+    permission_action = "create_edit"
+
+    def get(self, request, *args, **kwargs):
+        article = models.Article.objects.filter(pk=kwargs["pk"]).first()
+        if article is None:
+            return JsonResponse({"ok": False, "message": "Article not found."}, status=404)
+
+        raw_cost = (request.GET.get("cost_per_unit") or "").strip()
+        try:
+            new_cost = article.cost_per_unit if raw_cost == "" else article.cost_per_unit.__class__(raw_cost)
+        except Exception:
+            return JsonResponse({"ok": False, "message": "Enter a valid cost per unit."}, status=400)
+
+        allow_manual_price = str(request.GET.get("allow_manual_price") or "").strip().lower() in {"1", "true", "yes", "on"}
+        price_changed = article.cost_per_unit != new_cost
+        mode_changed = article.allow_manual_price != allow_manual_price
+
+        impact = {
+            "district": _article_price_impact_summary(
+                models.DistrictBeneficiaryEntry.objects.filter(article=article),
+                label_field="application_number",
+            ),
+            "public": _article_price_impact_summary(
+                models.PublicBeneficiaryEntry.objects.filter(article=article),
+                label_field="application_number",
+            ),
+            "institution": _article_price_impact_summary(
+                models.InstitutionsBeneficiaryEntry.objects.filter(article=article),
+                label_field="application_number",
+            ),
+        }
+        total_count = sum(bucket["count"] for bucket in impact.values())
+        recommended_scope = "future_only" if allow_manual_price or article.allow_manual_price else "existing_and_future"
+
+        return JsonResponse(
+            {
+                "ok": True,
+                "has_change": price_changed or mode_changed,
+                "price_changed": price_changed,
+                "mode_changed": mode_changed,
+                "impact": impact,
+                "total_count": total_count,
+                "old_cost_per_unit": str(article.cost_per_unit),
+                "new_cost_per_unit": str(new_cost),
+                "old_allow_manual_price": article.allow_manual_price,
+                "new_allow_manual_price": allow_manual_price,
+                "recommended_scope": recommended_scope,
+                "warning": (
+                    "This article uses manual pricing. Existing saved rows may contain user-entered prices."
+                    if allow_manual_price or article.allow_manual_price
+                    else ""
+                ),
+            }
+        )
+
+
+def _article_price_impact_summary(queryset, *, label_field):
+    labels = [value for value in queryset.order_by("application_number", "pk").values_list(label_field, flat=True)[:5] if value]
+    return {
+        "count": queryset.count(),
+        "sample_labels": labels,
+    }
 
 
 class ArticleDeleteView(LoginRequiredMixin, AdminRequiredMixin, DeleteView):

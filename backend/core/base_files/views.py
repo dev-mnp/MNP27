@@ -8,6 +8,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse, HttpResponseRedirect
+from django.utils import timezone
 from django.views import View
 from django.views.generic import TemplateView
 
@@ -61,6 +62,8 @@ class MasterDataBaseView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 "records": kwargs.get("records") if kwargs.get("records") is not None else self.get_records(),
                 "summary": self.get_summary(),
                 "replace_supported": self.data_key == "history",
+                "can_export_updated_history": self.data_key == "history"
+                and self.request.user.has_module_permission(self.module_key, "export"),
             }
         )
         return context
@@ -120,6 +123,20 @@ class MasterDataHistoryView(MasterDataBaseView):
     upload_help = "Upload the past district/public beneficiary file. This is used for Aadhaar warnings and reference checks during entry."
 
 
+class UpdatedPastBeneficiaryExportView(LoginRequiredMixin, RoleRequiredMixin, View):
+    module_key = models.ModuleKeyChoices.BASE_FILES
+    permission_action = "export"
+
+    def get(self, request, *args, **kwargs):
+        year = timezone.localdate().year
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{_updated_past_beneficiary_filename(year)}"'
+        writer = csv.DictWriter(response, fieldnames=_UPDATED_PAST_BENEFICIARY_HEADERS)
+        writer.writeheader()
+        writer.writerows(_updated_past_beneficiary_rows(year))
+        return response
+
+
 def _import_district_master_csv(uploaded_file):
     inserted = 0
     updated = 0
@@ -163,6 +180,9 @@ def _import_article_master_csv(uploaded_file):
             article_name=article_name,
             defaults={
                 "cost_per_unit": cost_per_unit,
+                "allow_manual_price": _parse_bool(row.get("allow_manual_price"))
+                if str(row.get("allow_manual_price") or "").strip()
+                else cost_per_unit == 0,
                 "item_type": item_type,
                 "category": (row.get("category") or "").strip() or None,
                 "master_category": (row.get("master_category") or "").strip() or None,
@@ -190,11 +210,14 @@ def _import_public_history_csv(uploaded_file, *, replace_existing=False):
             application_number=(row.get("application_number") or "").strip() or None,
             comments=(row.get("comments") or "").strip() or None,
             is_handicapped=_parse_bool(row.get("is_handicapped")),
+            handicapped_status=(row.get("Handicapped Status") or "").strip() or None,
             address=(row.get("address") or "").strip() or None,
             mobile=(row.get("mobile") or "").strip() or None,
             aadhar_number_sp=(row.get("aadhar_number_sp") or "").strip() or None,
             is_selected=_parse_bool(row.get("is_selected")),
             category=(row.get("category") or "").strip() or None,
+            gender=(row.get("Gender") or "").strip() or None,
+            gender_status=(row.get("Gender Status") or "").strip() or None,
         )
         inserted += 1
     return inserted, 0
@@ -207,3 +230,250 @@ def _parse_bool(value):
     if text in {"false", "0", "no"}:
         return False
     return None
+
+
+_UPDATED_PAST_BENEFICIARY_HEADERS = [
+    "aadhar_number",
+    "name",
+    "year",
+    "article_name",
+    "application_number",
+    "comments",
+    "is_handicapped",
+    "Handicapped Status",
+    "address",
+    "mobile",
+    "is_selected",
+    "category",
+    "Gender",
+    "Gender Status",
+]
+
+
+def _updated_past_beneficiary_filename(year: int) -> str:
+    return f"21_{year % 100:02d}_Past beneficiaries.csv"
+
+
+def _updated_past_beneficiary_rows(year: int):
+    rows = []
+    seen = set()
+
+    for history_row in (
+        models.PublicBeneficiaryHistory.objects.order_by("year", "application_number", "article_name", "pk").values(
+            "aadhar_number",
+            "name",
+            "year",
+            "article_name",
+            "application_number",
+            "comments",
+            "is_handicapped",
+            "handicapped_status",
+            "address",
+            "mobile",
+            "is_selected",
+            "category",
+            "gender",
+            "gender_status",
+        )
+    ):
+        row = {
+            "aadhar_number": _clean_export_value(history_row.get("aadhar_number")),
+            "name": _clean_export_value(history_row.get("name")),
+            "year": history_row.get("year") or "",
+            "article_name": _clean_export_value(history_row.get("article_name")),
+            "application_number": _clean_export_value(history_row.get("application_number")),
+            "comments": _clean_export_value(history_row.get("comments")),
+            "is_handicapped": _bool_to_yes_no(history_row.get("is_handicapped")),
+            "Handicapped Status": _clean_export_value(history_row.get("handicapped_status")),
+            "address": _clean_export_value(history_row.get("address")),
+            "mobile": _clean_export_value(history_row.get("mobile")),
+            "is_selected": _bool_to_yes_no(history_row.get("is_selected")),
+            "category": _clean_export_value(history_row.get("category")),
+            "Gender": _clean_export_value(history_row.get("gender")),
+            "Gender Status": _clean_export_value(history_row.get("gender_status")),
+        }
+        dedupe_key = _updated_past_beneficiary_dedupe_key(row)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        rows.append(row)
+
+    recipients = list(
+        models.FundRequestRecipient.objects.filter(
+            fund_request__fund_request_type=models.FundRequestTypeChoices.AID,
+            source_entry_id__isnull=False,
+            beneficiary_type__in=[
+                models.RecipientTypeChoices.DISTRICT,
+                models.RecipientTypeChoices.PUBLIC,
+                models.RecipientTypeChoices.INSTITUTIONS,
+            ],
+        )
+        .order_by("beneficiary_type", "source_entry_id", "pk")
+        .values(
+            "beneficiary_type",
+            "source_entry_id",
+            "details",
+            "aadhar_number",
+            "recipient_name",
+            "address",
+        )
+    )
+
+    recipient_ids_by_type = {
+        models.RecipientTypeChoices.DISTRICT: [],
+        models.RecipientTypeChoices.PUBLIC: [],
+        models.RecipientTypeChoices.INSTITUTIONS: [],
+    }
+    for recipient in recipients:
+        recipient_ids_by_type[recipient["beneficiary_type"]].append(recipient["source_entry_id"])
+
+    district_entries = {
+        row["id"]: row
+        for row in models.DistrictBeneficiaryEntry.objects.filter(pk__in=recipient_ids_by_type[models.RecipientTypeChoices.DISTRICT])
+        .values(
+            "id",
+            "application_number",
+            "notes",
+            "aadhar_number",
+            "article__article_name",
+            "district__district_name",
+            "district__mobile_number",
+        )
+    }
+    public_entries = {
+        row["id"]: row
+        for row in models.PublicBeneficiaryEntry.objects.filter(pk__in=recipient_ids_by_type[models.RecipientTypeChoices.PUBLIC])
+        .values(
+            "id",
+            "application_number",
+            "name",
+            "notes",
+            "aadhar_number",
+            "article__article_name",
+            "is_handicapped",
+            "address",
+            "mobile",
+            "gender",
+            "female_status",
+        )
+    }
+    institution_entries = {
+        row["id"]: row
+        for row in models.InstitutionsBeneficiaryEntry.objects.filter(
+            pk__in=recipient_ids_by_type[models.RecipientTypeChoices.INSTITUTIONS]
+        ).values(
+            "id",
+            "application_number",
+            "institution_name",
+            "notes",
+            "aadhar_number",
+            "article__article_name",
+            "address",
+            "mobile",
+        )
+    }
+
+    for recipient in recipients:
+        row = _build_updated_past_beneficiary_row(
+            recipient,
+            year=year,
+            district_entries=district_entries,
+            public_entries=public_entries,
+            institution_entries=institution_entries,
+        )
+        dedupe_key = _updated_past_beneficiary_dedupe_key(row)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        rows.append(row)
+    return rows
+
+
+def _build_updated_past_beneficiary_row(
+    recipient,
+    *,
+    year: int,
+    district_entries,
+    public_entries,
+    institution_entries,
+):
+    beneficiary_type = recipient["beneficiary_type"]
+    if beneficiary_type == models.RecipientTypeChoices.DISTRICT:
+        source = district_entries.get(recipient["source_entry_id"], {})
+        name = source.get("district__district_name") or recipient.get("recipient_name")
+        mobile = source.get("district__mobile_number") or ""
+        category = "District"
+        is_handicapped = ""
+        handicapped_status = ""
+        address = recipient.get("address") or ""
+        gender = ""
+        gender_status = ""
+    elif beneficiary_type == models.RecipientTypeChoices.PUBLIC:
+        source = public_entries.get(recipient["source_entry_id"], {})
+        name = source.get("name") or recipient.get("recipient_name")
+        mobile = source.get("mobile") or ""
+        category = "Public"
+        is_handicapped = source.get("is_handicapped") or ""
+        handicapped_status = source.get("is_handicapped") or ""
+        address = source.get("address") or recipient.get("address") or ""
+        gender = source.get("gender") or ""
+        gender_status = source.get("female_status") or ""
+    else:
+        source = institution_entries.get(recipient["source_entry_id"], {})
+        name = source.get("institution_name") or recipient.get("recipient_name")
+        mobile = source.get("mobile") or ""
+        category = "Institution"
+        is_handicapped = ""
+        handicapped_status = ""
+        address = source.get("address") or recipient.get("address") or ""
+        gender = ""
+        gender_status = ""
+
+    return {
+        "aadhar_number": _clean_export_value(recipient.get("aadhar_number") or ""),
+        "name": _clean_export_value(name),
+        "year": year,
+        "article_name": _clean_export_value(source.get("article__article_name") or ""),
+        "application_number": _clean_export_value(source.get("application_number") or ""),
+        "comments": _clean_export_value(recipient.get("details") or source.get("notes") or ""),
+        "is_handicapped": _handicapped_to_yes_no(is_handicapped),
+        "Handicapped Status": _clean_export_value(handicapped_status),
+        "address": _clean_export_value(address),
+        "mobile": _clean_export_value(mobile),
+        "is_selected": "Yes",
+        "category": category,
+        "Gender": _clean_export_value(gender),
+        "Gender Status": _clean_export_value(gender_status),
+    }
+
+
+def _clean_export_value(value):
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _bool_to_yes_no(value):
+    if value is True:
+        return "Yes"
+    if value is False:
+        return "No"
+    return ""
+
+
+def _handicapped_to_yes_no(value):
+    text = _clean_export_value(value).lower()
+    if not text:
+        return ""
+    return "No" if text == "no" else "Yes"
+
+
+def _updated_past_beneficiary_dedupe_key(row):
+    return (
+        _clean_export_value(row.get("year")),
+        _clean_export_value(row.get("aadhar_number")).lower(),
+        _clean_export_value(row.get("application_number")).lower(),
+        _clean_export_value(row.get("article_name")).lower(),
+        _clean_export_value(row.get("category")).lower(),
+        _clean_export_value(row.get("name")).lower(),
+    )

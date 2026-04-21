@@ -19,6 +19,7 @@ class ArticleForm(forms.ModelForm):
             "article_name",
             "article_name_tk",
             "cost_per_unit",
+            "allow_manual_price",
             "item_type",
             "category",
             "master_category",
@@ -32,4 +33,7 @@ class ArticleForm(forms.ModelForm):
             "item_type": forms.Select(attrs={"class": "input"}),
             "category": forms.TextInput(attrs={"class": "input"}),
             "master_category": forms.TextInput(attrs={"class": "input"}),
+        }
+        labels = {
+            "allow_manual_price": "User enters price manually",
         }

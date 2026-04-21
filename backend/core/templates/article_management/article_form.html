@@ -1,6 +1,73 @@
 {% extends "base.html" %}
 
 {% block content %}
+  <style>
+    .price-impact-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(15, 23, 42, 0.45);
+    }
+    .price-impact-modal.is-open {
+      display: flex;
+    }
+    .price-impact-dialog {
+      width: min(720px, 100%);
+      border-radius: 20px;
+      background: #fff;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
+      overflow: hidden;
+    }
+    .price-impact-head,
+    .price-impact-body,
+    .price-impact-actions {
+      padding: 20px 22px;
+    }
+    .price-impact-head {
+      border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    }
+    .price-impact-body {
+      display: grid;
+      gap: 16px;
+    }
+    .price-impact-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .price-impact-card {
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      border-radius: 14px;
+      padding: 14px;
+      background: #f8fafc;
+    }
+    .price-impact-card strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+    .price-impact-warning {
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #fff7ed;
+      color: #9a3412;
+    }
+    .price-impact-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      border-top: 1px solid rgba(15, 23, 42, 0.08);
+    }
+    @media (max-width: 720px) {
+      .price-impact-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
   <section class="card">
     <div class="toolbar" style="justify-content: space-between;">
       <div>
@@ -16,8 +83,9 @@
     {% if popup_mode %}
       <div class="field-hint" style="margin-bottom: 16px;">After save, this window will close and the new article will be available in the application form.</div>
     {% endif %}
-    <form method="post" {% if object %}data-confirm-message="Save changes to this article?"{% endif %}>
+    <form method="post" {% if object %}data-confirm-message="Save changes to this article?" data-price-impact-form data-preview-url="{{ price_impact_preview_url }}" data-initial-cost="{{ object.cost_per_unit|floatformat:'-2' }}" data-initial-manual-price="{{ object.allow_manual_price|yesno:'true,false' }}"{% endif %}>
       {% csrf_token %}
+      <input type="hidden" name="price_update_scope" value="future_only" {% if object %}data-price-update-scope{% endif %}>
       <div class="grid2">
         <div>
           <label>Article name</label>
@@ -30,6 +98,11 @@
         <div>
           <label>Cost per unit</label>
           {{ form.cost_per_unit }}
+        </div>
+        <div>
+          <label style="display:block; margin-bottom: 8px;">Pricing rule</label>
+          <label>{{ form.allow_manual_price }} {{ form.allow_manual_price.label }}</label>
+          <div class="field-hint">Enable this for user-defined price items. Disable it for fixed-price items that should follow Article Management.</div>
         </div>
         <div>
           <label>Item type</label>
@@ -62,12 +135,157 @@
       </div>
       <div class="toolbar" style="margin-top: 16px; justify-content: flex-end;">
         {% if popup_mode %}
-          <button class="btn" type="button" onclick="window.close()">Cancel</button>
+          <button class="btn btn-light-soft" type="button" onclick="window.close()">Cancel</button>
         {% else %}
-          <a class="btn" href="{% url 'ui:article-list' %}">Cancel</a>
+          <a class="btn btn-light-soft" href="{% url 'ui:article-list' %}">Cancel</a>
         {% endif %}
         <button class="btn" type="submit">Save</button>
       </div>
     </form>
   </section>
+  {% if object %}
+    <div class="price-impact-modal" id="price-impact-modal" aria-hidden="true">
+      <div class="price-impact-dialog" role="dialog" aria-modal="true" aria-labelledby="price-impact-title">
+        <div class="price-impact-head">
+          <h3 id="price-impact-title" style="margin:0 0 6px;">Price Change Impact</h3>
+          <p id="price-impact-summary" style="margin:0; color: var(--text-secondary);"></p>
+        </div>
+        <div class="price-impact-body">
+          <div id="price-impact-warning" class="price-impact-warning" hidden></div>
+          <div class="price-impact-grid">
+            <div class="price-impact-card">
+              <strong>District</strong>
+              <div id="price-impact-district-count">0 rows</div>
+              <div id="price-impact-district-samples" class="field-hint" style="margin-top:6px;"></div>
+            </div>
+            <div class="price-impact-card">
+              <strong>Public</strong>
+              <div id="price-impact-public-count">0 rows</div>
+              <div id="price-impact-public-samples" class="field-hint" style="margin-top:6px;"></div>
+            </div>
+            <div class="price-impact-card">
+              <strong>Institution</strong>
+              <div id="price-impact-institution-count">0 rows</div>
+              <div id="price-impact-institution-samples" class="field-hint" style="margin-top:6px;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="price-impact-actions">
+          <button type="button" class="btn btn-light-soft" data-price-impact-cancel>Cancel</button>
+          <button type="button" class="btn" data-price-impact-future>Update New Records Only</button>
+          <button type="button" class="btn btn-edit" data-price-impact-existing>Update Existing + New</button>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+  {% if object %}
+    <script>
+      (function() {
+        const form = document.querySelector("[data-price-impact-form]");
+        if (!form) return;
+        const previewUrl = form.dataset.previewUrl;
+        const initialCost = String(form.dataset.initialCost || "");
+        const initialManual = form.dataset.initialManualPrice === "true";
+        const costInput = form.querySelector('input[name="cost_per_unit"]');
+        const manualInput = form.querySelector('input[name="allow_manual_price"]');
+        const scopeInput = form.querySelector("[data-price-update-scope]");
+        const modal = document.getElementById("price-impact-modal");
+        const cancelBtn = modal.querySelector("[data-price-impact-cancel]");
+        const futureBtn = modal.querySelector("[data-price-impact-future]");
+        const existingBtn = modal.querySelector("[data-price-impact-existing]");
+        const warningNode = document.getElementById("price-impact-warning");
+        const summaryNode = document.getElementById("price-impact-summary");
+        let confirmed = false;
+
+        function normalizeNumberString(value) {
+          const numeric = Number(String(value || "").trim() || "0");
+          if (Number.isNaN(numeric)) return "";
+          return numeric.toFixed(2);
+        }
+
+        function closeModal() {
+          modal.classList.remove("is-open");
+          modal.setAttribute("aria-hidden", "true");
+        }
+
+        function openModal() {
+          modal.classList.add("is-open");
+          modal.setAttribute("aria-hidden", "false");
+        }
+
+        function renderBucket(prefix, bucket) {
+          document.getElementById("price-impact-" + prefix + "-count").textContent = (bucket.count || 0) + " rows";
+          const samples = bucket.sample_labels || [];
+          document.getElementById("price-impact-" + prefix + "-samples").textContent = samples.length ? samples.join(", ") : "No saved rows";
+        }
+
+        function currentHasPricingChange() {
+          const currentCost = normalizeNumberString(costInput.value);
+          const currentManual = !!manualInput.checked;
+          return currentCost !== normalizeNumberString(initialCost) || currentManual !== initialManual;
+        }
+
+        async function fetchPreview() {
+          const params = new URLSearchParams({
+            cost_per_unit: String(costInput.value || "").trim(),
+            allow_manual_price: manualInput.checked ? "1" : "0"
+          });
+          const response = await fetch(previewUrl + "?" + params.toString(), {
+            credentials: "same-origin",
+            headers: { "X-Requested-With": "XMLHttpRequest" }
+          });
+          const data = await response.json();
+          if (!response.ok || !data.ok) {
+            throw new Error(data.message || "Unable to preview impact.");
+          }
+          return data;
+        }
+
+        function submitWithScope(scope) {
+          scopeInput.value = scope;
+          confirmed = true;
+          closeModal();
+          form.requestSubmit();
+        }
+
+        cancelBtn.addEventListener("click", closeModal);
+        futureBtn.addEventListener("click", function() {
+          submitWithScope("future_only");
+        });
+        existingBtn.addEventListener("click", function() {
+          submitWithScope("existing_and_future");
+        });
+        modal.addEventListener("click", function(event) {
+          if (event.target === modal) closeModal();
+        });
+
+        form.addEventListener("submit", async function(event) {
+          if (confirmed || !currentHasPricingChange()) {
+            return;
+          }
+          event.preventDefault();
+          scopeInput.value = "future_only";
+          try {
+            const data = await fetchPreview();
+            if (!data.has_change) {
+              confirmed = true;
+              form.requestSubmit();
+              return;
+            }
+            summaryNode.textContent = "This update affects " + data.total_count + " saved application rows.";
+            renderBucket("district", data.impact.district || {count: 0, sample_labels: []});
+            renderBucket("public", data.impact.public || {count: 0, sample_labels: []});
+            renderBucket("institution", data.impact.institution || {count: 0, sample_labels: []});
+            warningNode.hidden = !data.warning;
+            warningNode.textContent = data.warning || "";
+            futureBtn.classList.toggle("btn-edit", data.recommended_scope === "future_only");
+            existingBtn.classList.toggle("btn-edit", data.recommended_scope === "existing_and_future");
+            openModal();
+          } catch (error) {
+            window.alert(error.message || "Unable to preview article impact.");
+          }
+        });
+      })();
+    </script>
+  {% endif %}
 {% endblock %}

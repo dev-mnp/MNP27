@@ -44,6 +44,16 @@ urlpatterns = [
         name="district-attachment-temp-upload",
     ),
     path(
+        "master-entry/district/attachments/temp/<int:attachment_id>/delete/",
+        views.DistrictApplicationAttachmentTempDeleteView.as_view(),
+        name="district-attachment-temp-delete",
+    ),
+    path(
+        "master-entry/district/attachments/temp/clear/",
+        views.DistrictApplicationAttachmentTempClearView.as_view(),
+        name="district-attachment-temp-clear",
+    ),
+    path(
         "master-entry/district/<int:district_id>/attachments/<int:attachment_id>/delete/",
         views.DistrictApplicationAttachmentDeleteView.as_view(),
         name="district-attachment-delete",

@@ -52,7 +52,7 @@
           </select>
         </div>
         <details class="export-menu export-menu-inline">
-          <summary class="btn compact-btn compact-btn-primary">Export</summary>
+          <summary class="btn btn-light-soft compact-btn compact-btn-soft">Export</summary>
           <div class="export-menu-panel">
             <a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort={{ sort_by|urlencode }}&dir={{ sort_dir|urlencode }}&export_scope=all">All Beneficiaries</a>
             <a href="?type={{ beneficiary_type }}&q={{ search_query|urlencode }}&date_from={{ date_from|urlencode }}&date_to={{ date_to|urlencode }}&status={{ status_filter|urlencode }}&sort={{ sort_by|urlencode }}&dir={{ sort_dir|urlencode }}&export_scope=district">District</a>
@@ -83,7 +83,7 @@
           </select>
         </div>
         <div class="filter-actions">
-          <a class="btn btn-subtle compact-btn master-reset-btn" href="?type={{ beneficiary_type }}">Clear All</a>
+          <a class="btn btn-subtle btn-light-soft compact-btn compact-btn-soft master-reset-btn" href="?type={{ beneficiary_type }}">Clear All</a>
         </div>
       </div>
       <div class="filter-hint">
@@ -168,6 +168,7 @@
 	                  data-preview-url="{{ row.attachment_preview_url }}"
 	                  data-preview-title="{{ row.attachment_title }}"
 	                  data-preview-source="{{ row.attachment_source }}"
+	                  data-preview-kind="{{ row.attachment_preview_kind }}"
 	                  data-download-url="{{ row.attachment_preview_url }}?download=1"
 	                  data-preview-items-b64="{{ row.attachment_preview_items_b64 }}"
 	                >
@@ -281,6 +282,7 @@
 	                  data-preview-url="{{ entry.attachment_preview_url }}"
 	                  data-preview-title="{{ entry.attachment_title }}"
 	                  data-preview-source="{{ entry.attachment_source }}"
+	                  data-preview-kind="{{ entry.attachment_preview_kind }}"
 	                  data-download-url="{{ entry.attachment_preview_url }}?download=1"
 	                  data-preview-items-b64="{{ entry.attachment_preview_items_b64 }}"
 	                >
@@ -379,6 +381,7 @@
 	                  data-preview-url="{{ row.attachment_preview_url }}"
 	                  data-preview-title="{{ row.attachment_title }}"
 	                  data-preview-source="{{ row.attachment_source }}"
+	                  data-preview-kind="{{ row.attachment_preview_kind }}"
 	                  data-download-url="{{ row.attachment_preview_url }}?download=1"
 	                  data-preview-items-b64="{{ row.attachment_preview_items_b64 }}"
 	                >
@@ -560,15 +563,21 @@
       background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
       border-color: #93c5fd;
     }
+    .compact-btn-soft {
+      background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+      border-color: #c7d7f2;
+      color: #275293;
+    }
+    .compact-btn-soft:hover {
+      background: linear-gradient(180deg, #eef5ff 0%, #e1edff 100%);
+      border-color: #aac4ef;
+      color: #1d4a8c;
+    }
     .master-reset-btn {
-      background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
-      border-color: #93c5fd;
-      color: #ffffff;
+      color: #275293;
     }
     .master-reset-btn:hover {
-      background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
-      border-color: var(--accent-hover);
-      color: #ffffff;
+      color: #1d4a8c;
     }
     .filter-hint {
       margin-top: 8px;

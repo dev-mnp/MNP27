@@ -442,11 +442,16 @@
         <h1 style="margin: 0;">Sequence List</h1>
       </div>
       <div class="sequence-header-actions">
-        <button class="btn" id="sequence-load-db" type="button">Sync Data</button>
+        <form method="post" style="margin: 0;">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="sync_data">
+          {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+          <button class="btn" type="submit">Sync Data</button>
+        </form>
         <input class="sequence-file-input" id="sequence-file-input" type="file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsm,application/vnd.ms-excel.sheet.macroEnabled.12">
         <button class="btn" id="sequence-upload-csv" type="button">Upload</button>
         <details class="sequence-export-menu">
-          <summary class="btn btn-subtle sequence-export-trigger">
+          <summary class="btn btn-subtle btn-light-soft sequence-export-trigger">
             <span>Export</span>
             <span aria-hidden="true">▾</span>
           </summary>
@@ -563,8 +568,8 @@
               </select>
             </div>
             <div class="sequence-panel-tools-group is-spacer">
-              <button class="btn btn-subtle" id="sequence-undo" type="button" disabled>Undo</button>
-              <button class="btn btn-subtle" id="sequence-reset" type="button">Reset</button>
+              <button class="btn btn-subtle btn-light-soft" id="sequence-undo" type="button" disabled>Undo</button>
+              <button class="btn btn-subtle btn-light-soft" id="sequence-reset" type="button">Reset</button>
               {% if can_create_edit %}
                 <button class="btn" id="sequence-save" type="button">Save and Reconcile</button>
               {% endif %}
@@ -723,6 +728,13 @@
         if (!summary.missingInSeatAllocation.length && !summary.extraInSeatAllocation.length && !summary.newToSequence.length) {
           syncStatus.classList.add('is-ok');
           syncStatus.textContent = dbSourceIsUploaded ? `${syncPrefix}Uploaded Seat Allocation working copy is ready for sequencing. Current Master Data also matches ${summary.masterCount} item(s).` : `${syncPrefix}Seat Allocation and Sequence List are aligned with current Master Data. ${summary.masterCount} item(s) matched.`;
+          return;
+        }
+        if (!summary.missingInSeatAllocation.length && !summary.extraInSeatAllocation.length && summary.newToSequence.length) {
+          const preview = summary.newToSequence.slice(0, 5).join(', ');
+          const more = summary.newToSequence.length - 5;
+          syncStatus.classList.add('is-neutral');
+          syncStatus.textContent = `${syncPrefix}Seat Allocation is in sync with current Master Data. ${summary.newToSequence.length} item(s) are new to Sequence List: ${preview}${more > 0 ? ` and ${more} more` : ''}. Assign sequence numbers and save to complete reconciliation.`;
           return;
         }
         const parts = [];

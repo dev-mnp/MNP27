@@ -181,6 +181,27 @@
       border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 999px; padding: 8px 14px; text-decoration: none; color: #1d4ed8;
     }
     .btn-subtle:hover { background: #dbeafe; color: #1e40af; }
+    .btn-light-soft {
+      border: 1px solid #dbe7f5;
+      background: linear-gradient(180deg, #f9fbfd 0%, #eef4fa 100%);
+      color: #36506b;
+      box-shadow: none;
+    }
+    .btn-light-soft:hover {
+      background: linear-gradient(180deg, #f2f7fb 0%, #e4edf6 100%);
+      border-color: #c8d6e5;
+      color: #21364d;
+    }
+    .btn-light-soft:disabled,
+    .btn-light-soft.is-disabled,
+    .btn-light-soft[aria-disabled="true"] {
+      background: #f4f7fa;
+      border-color: #e2e8f0;
+      color: #94a3b8;
+      cursor: not-allowed;
+      pointer-events: none;
+      opacity: 1;
+    }
     .app-content { padding: 12px; min-width: 0; }
     .wrap { width: 100%; max-width: none; margin: 0; }
 
@@ -1293,6 +1314,8 @@
 
     function previewKindFromSource(source) {
       var lower = String(source || "").toLowerCase();
+      if (lower === "pdf" || lower === "application/pdf") return "pdf";
+      if (lower === "image" || lower.indexOf("image/") === 0) return "image";
       if (lower.endsWith(".pdf")) return "pdf";
       if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp") || lower.endsWith(".gif")) return "image";
       return "unsupported";
@@ -1582,9 +1605,10 @@
       var url = item.preview_url || "";
       var title = item.title || "File preview";
       var sourceName = item.source || "";
+      var sourceKind = item.preview_kind || "";
       var downloadUrl = item.download_url || "";
       if (!previewModal || !previewFrame) return;
-      var kind = previewKindFromSource(sourceName);
+      var kind = previewKindFromSource(sourceKind || sourceName);
       previewTitle.textContent = title || "File preview";
       previewFrame.style.display = "none";
       previewFrame.removeAttribute("src");
@@ -1646,6 +1670,7 @@
         preview_url: url || "",
         title: title || "File preview",
         source: sourceName || "",
+        preview_kind: "",
         download_url: downloadUrl || "",
       }];
       currentPreviewIndex = 0;
@@ -1707,6 +1732,7 @@
                   preview_url: item && item.preview_url ? String(item.preview_url) : "",
                   title: item && item.title ? String(item.title) : "",
                   source: item && item.source ? String(item.source) : "",
+                  preview_kind: item && item.preview_kind ? String(item.preview_kind) : "",
                   download_url: item && item.download_url ? String(item.download_url) : "",
                 };
               })
@@ -1719,7 +1745,7 @@
       openPreviewModal(
         button.getAttribute("data-preview-url"),
         button.getAttribute("data-preview-title"),
-        button.getAttribute("data-preview-source"),
+        button.getAttribute("data-preview-kind") || button.getAttribute("data-preview-source"),
         button.getAttribute("data-download-url"),
         previewItems,
         button.getAttribute("data-preview-url")
@@ -1811,9 +1837,34 @@
       return true;
     }
 
+    function showAttachmentUploadError(cardId, messageText) {
+      var card = cardId ? document.getElementById(cardId) : null;
+      var message = messageText || "Attachment upload failed. Please try again.";
+      if (!card) {
+        window.alert(message);
+        return;
+      }
+      var existing = card.querySelector(".js-attachment-upload-error");
+      if (existing) {
+        existing.textContent = message;
+        return;
+      }
+      var hint = document.createElement("div");
+      hint.className = "field-hint js-attachment-upload-error";
+      hint.style.marginTop = "8px";
+      hint.style.color = "#b91c1c";
+      hint.textContent = message;
+      var toolbar = card.querySelector(".toolbar");
+      if (toolbar && toolbar.parentNode) {
+        toolbar.parentNode.insertBefore(hint, toolbar.nextSibling);
+      } else {
+        card.appendChild(hint);
+      }
+    }
+
     function postAttachmentFormData(url, formData, cardId) {
       if (!url || typeof fetch !== "function") {
-        return Promise.resolve(false);
+        return Promise.resolve({ updated: false, message: "Attachment upload URL is missing." });
       }
       return fetch(url, {
         method: "POST",
@@ -1825,20 +1876,50 @@
           var contentType = (response.headers.get("content-type") || "").toLowerCase();
           if (contentType.indexOf("application/json") >= 0) {
             return response.json().then(function(data) {
+              if (data && data.ok === false) {
+                return {
+                  updated: false,
+                  message: (data && data.message) ? String(data.message) : "Attachment upload failed. Please check the file and try again.",
+                };
+              }
               var refreshUrl = data && data.refresh_url ? String(data.refresh_url) : "";
-              if (!refreshUrl) return false;
+              if (!refreshUrl) {
+                return {
+                  updated: false,
+                  message: "Attachment upload response is missing refresh URL.",
+                };
+              }
               return fetch(refreshUrl, {
                 method: "GET",
                 credentials: "same-origin",
                 headers: { "X-Requested-With": "XMLHttpRequest" },
               })
                 .then(function(refreshResponse) { return refreshResponse.text(); })
-                .then(function(html) { return replaceAttachmentCardFromHtml(cardId, html); });
+                .then(function(html) {
+                  var replaced = replaceAttachmentCardFromHtml(cardId, html);
+                  if (replaced) {
+                    return { updated: true, message: "" };
+                  }
+                  // Upload may already be successful; if card replacement fails, do a full refresh.
+                  window.location.assign(refreshUrl);
+                  return { updated: true, message: "" };
+                });
             });
           }
-          return response.text().then(function(html) { return replaceAttachmentCardFromHtml(cardId, html); });
+          return response.text().then(function(html) {
+            var replaced = replaceAttachmentCardFromHtml(cardId, html);
+            return {
+              updated: replaced,
+              message: replaced ? "" : "Attachment update response could not refresh this section.",
+            };
+          });
         })
-        .catch(function() { return false; });
+        .catch(function(error) {
+          return {
+            updated: false,
+            message: (error && error.message) ? String(error.message) : "Attachment request failed. Please try again.",
+          };
+        });
     }
 
     function submitDistrictAttachmentUpload(button) {
@@ -1861,9 +1942,24 @@
       if (fileInput.files && fileInput.files[0]) {
         formData.append("file", fileInput.files[0]);
       }
+      var label = button.querySelector("span");
+      var originalLabel = label ? label.textContent : "";
       button.disabled = true;
-      postAttachmentFormData(uploadUrl, formData, cardId).finally(function() {
+      button.setAttribute("aria-busy", "true");
+      button.classList.add("btn-disabled");
+      if (label) label.textContent = "Uploading...";
+      postAttachmentFormData(uploadUrl, formData, cardId).then(function(result) {
+        if (!result || !result.updated) {
+          showAttachmentUploadError(
+            cardId,
+            (result && result.message) ? result.message : "Attachment upload failed. Please check the file and try again."
+          );
+        }
+      }).finally(function() {
         button.disabled = false;
+        button.removeAttribute("aria-busy");
+        button.classList.remove("btn-disabled");
+        if (label) label.textContent = originalLabel || "Upload";
       });
       return true;
     }
@@ -1876,8 +1972,40 @@
       var formData = new FormData(form);
       var submitButton = form.querySelector('button[type="submit"]');
       if (submitButton) submitButton.disabled = true;
-      postAttachmentFormData(uploadUrl, formData, cardId).finally(function() {
+      postAttachmentFormData(uploadUrl, formData, cardId).then(function(result) {
+        if (!result || !result.updated) {
+          showAttachmentUploadError(
+            cardId,
+            (result && result.message) ? result.message : "Attachment upload failed. Please check the file and try again."
+          );
+        }
+      }).finally(function() {
         if (submitButton) submitButton.disabled = false;
+      });
+      return true;
+    }
+
+    function submitAttachmentDelete(button) {
+      if (!button || button.disabled) return false;
+      var deleteUrl = button.getAttribute("data-delete-url") || "";
+      var cardId = button.getAttribute("data-attachment-card-id") || "";
+      if (!deleteUrl || !cardId) return false;
+      var formData = new FormData();
+      formData.append("csrfmiddlewaretoken", findCsrfToken(document));
+      var formToken = button.getAttribute("data-attachment-form-token") || "";
+      if (formToken) {
+        formData.append("attachment_form_token", formToken);
+      }
+      button.disabled = true;
+      postAttachmentFormData(deleteUrl, formData, cardId).then(function(result) {
+        if (!result || !result.updated) {
+          showAttachmentUploadError(
+            cardId,
+            (result && result.message) ? result.message : "Attachment delete failed. Please try again."
+          );
+        }
+      }).finally(function() {
+        button.disabled = false;
       });
       return true;
     }
@@ -1926,6 +2054,13 @@
         event.preventDefault();
         event.stopPropagation();
         submitDistrictAttachmentUpload(districtUploadTrigger);
+        return;
+      }
+      var attachmentDeleteTrigger = event.target.closest(".js-attachment-delete");
+      if (attachmentDeleteTrigger) {
+        event.preventDefault();
+        event.stopPropagation();
+        submitAttachmentDelete(attachmentDeleteTrigger);
         return;
       }
       if (event.target === previewModal) {

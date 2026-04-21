@@ -63,6 +63,10 @@
       color: #15803d;
       font-weight: 700;
     }
+    .token-completed {
+      color: #15803d;
+      font-weight: 700;
+    }
     .token-status-warn {
       color: #b45309;
       font-weight: 700;
@@ -304,7 +308,7 @@
           </form>
         {% endif %}
         {% if can_export %}
-          <a class="btn btn-subtle {% if not token_is_generated %}is-disabled{% endif %}" href="{% if token_is_generated %}{% url 'ui:token-generation' %}?export=1{% if selected_session %}&session={{ selected_session.pk }}{% endif %}{% else %}#{% endif %}">Export</a>
+          <a class="btn btn-subtle btn-light-soft {% if not token_is_generated %}is-disabled{% endif %}" href="{% if token_is_generated %}{% url 'ui:token-generation' %}?export=1{% if selected_session %}&session={{ selected_session.pk }}{% endif %}{% else %}#{% endif %}">Export</a>
         {% endif %}
       </div>
     </div>
@@ -371,7 +375,7 @@
                 </div>
               </div>
               <div class="token-step-actions">
-                <button class="btn btn-subtle" type="submit">Filter Rows</button>
+                <button class="btn btn-subtle btn-light-soft" type="submit">Filter Rows</button>
               </div>
             </form>
 
@@ -423,14 +427,20 @@
       <summary>
         <div class="token-step-header" style="width:100%;">
           <div>
-            <h2>Step 1: Data Prep</h2>
+            <h2>Step 1: Data Prep {% if token_is_prepared %}<span class="token-completed">(Completed)</span>{% endif %}</h2>
             <p>Prepare the loaded data for token generation by improving completeness, checking quality, and organizing it into the correct working order.</p>
           </div>
           {% if can_create_edit %}
-            <form method="post" onclick="event.stopPropagation();">
+            <form method="post" id="token-step1-form" onclick="event.stopPropagation();">
               {% csrf_token %}
               <input type="hidden" name="action" value="run_data_prep">
               {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+              <input type="hidden" name="approve_empty_fill" id="token-approve-empty-fill" value="{% if token_empty_fill_approved %}1{% else %}0{% endif %}">
+              {% if token_blank_summary and token_show_empty_fill_approval %}
+                <button class="btn btn-subtle" id="token-approve-btn" type="button" style="margin-bottom: 6px; background: #e5e7eb; border-color: #d1d5db; color: #374151;">
+                  {% if token_empty_fill_approved %}Approved{% else %}Approve{% endif %}
+                </button>
+              {% endif %}
               <button class="btn" type="submit" {% if not token_row_count or token_sync_required %}disabled{% endif %}>Run Data Prep</button>
             </form>
           {% endif %}
@@ -447,27 +457,22 @@
           </li>
         {% endfor %}
       </ul>
-      {% if token_is_prepared and token_blank_summary %}
+      {% if token_blank_summary and token_show_empty_fill_approval %}
         <div style="margin-top: 14px;" class="token-muted">
-          Filled during prep:
+          Current empty values by column (before Step 1 fill):
           {% for entry in token_blank_summary %}
-            {{ entry.column }} ({{ entry.count }}{% if not forloop.last %}), {% else %}){% endif %}
+            {{ entry.column }} ({{ entry.count }}){% if not forloop.last %}, {% endif %}
           {% endfor %}
+          .
         </div>
-      {% elif token_prep_validation_summary %}
+      {% endif %}
+      {% if token_prep_validation_summary %}
         <div style="margin-top: 14px;" class="token-muted">
           After filling empty values, Step 1 found values below 1 in:
           {% for entry in token_prep_validation_summary %}
             {{ entry.label }} ({{ entry.count }}{% if not forloop.last %}), {% else %}){% endif %}
           {% endfor %}
           . Fix these rows before running Step 1.
-        </div>
-      {% elif token_blank_summary %}
-        <div style="margin-top: 14px;" class="token-muted">
-          Empty values currently present:
-          {% for entry in token_blank_summary %}
-            {{ entry.column }} ({{ entry.count }}{% if not forloop.last %}), {% else %}){% endif %}
-          {% endfor %}
         </div>
       {% endif %}
       </div>
@@ -479,9 +484,14 @@
       <summary>
         <div class="token-step-header" style="width:100%;">
           <div>
-            <h2>Step 2: Name and Token Name Adjustments</h2>
+            <h2>Step 2: Name and Token Name Adjustments {% if token_is_sorted %}<span class="token-completed">(Completed)</span>{% endif %}</h2>
             <p>Review only the long unique Names and Token Names here.</p>
           </div>
+          {% if can_create_edit %}
+            <div class="token-step-actions" style="margin-top:0;" onclick="event.stopPropagation();">
+              <button class="btn" type="submit" form="token-step2-form" {% if not token_is_prepared or token_sync_required %}disabled{% endif %}>Save Adjustments</button>
+            </div>
+          {% endif %}
         </div>
       </summary>
       <div class="token-step-body">
@@ -501,7 +511,7 @@
             <strong id="name_limit_value">{{ token_name_length_limit }}</strong>
           </form>
 
-          <form method="post">
+          <form method="post" id="token-step2-form">
             {% csrf_token %}
             <input type="hidden" name="action" value="save_adjustments">
             {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
@@ -558,10 +568,6 @@
                 </table>
               </div>
             </div>
-
-            <div class="token-step-actions">
-              <button class="btn" type="submit" {% if not token_is_prepared or token_sync_required %}disabled{% endif %}>Save Adjustments</button>
-            </div>
           </form>
         </div>
       </div>
@@ -574,13 +580,18 @@
       <summary>
         <div class="token-step-header" style="width:100%;">
           <div>
-            <h2>Step 3: Token Print for Article</h2>
+            <h2>Step 3: Token Print for Article {% if token_step3_saved %}<span class="token-completed">(Completed)</span>{% endif %}</h2>
             <p>Marked items are currently set to skip label sticking. This comes from the saved token-print choice or the default article logic from Step 1.</p>
           </div>
+          {% if can_create_edit %}
+            <div class="token-step-actions" style="margin-top:0;" onclick="event.stopPropagation();">
+              <button class="btn btn-subtle" type="submit" form="token-step3-form" {% if not token_is_prepared or token_sync_required %}disabled{% endif %}>Save Token Print</button>
+            </div>
+          {% endif %}
         </div>
       </summary>
       <div class="token-step-body">
-      <form method="post">
+      <form method="post" id="token-step3-form">
         {% csrf_token %}
         <input type="hidden" name="action" value="save_token_print">
         {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
@@ -615,10 +626,6 @@
             </div>
           </div>
         </details>
-
-        <div class="token-step-actions">
-          <button class="btn btn-subtle" type="submit" {% if not token_is_prepared or token_sync_required %}disabled{% endif %}>Save Token Print</button>
-        </div>
       </form>
       </div>
     </details>
@@ -629,7 +636,7 @@
       <summary>
         <div class="token-step-header" style="width:100%;">
           <div>
-            <h2>Step 4: Generate Token</h2>
+            <h2>Step 4: Generate Token {% if token_is_generated %}<span class="token-completed">(Completed)</span>{% endif %}</h2>
             <p>Generate the final token numbers only after Step 1, Step 2, and Step 3 are complete.</p>
           </div>
           <div class="token-step-actions" style="margin-top:0;" onclick="event.stopPropagation();">
@@ -668,6 +675,9 @@
       const uploadTrigger = document.getElementById('token-upload-trigger');
       const uploadForm = document.getElementById('token-upload-form');
       const toggleAllCheckbox = document.getElementById('token-toggle-all');
+      const approveButton = document.getElementById('token-approve-btn');
+      const approveEmptyFill = document.getElementById('token-approve-empty-fill');
+      const step1Form = document.getElementById('token-step1-form');
       if (uploadInput && uploadTrigger && uploadForm) {
         uploadTrigger.addEventListener('click', () => uploadInput.click());
         uploadInput.addEventListener('change', () => {
@@ -711,6 +721,16 @@
           input.name = 'replace_token_name__' + raw.split('/').join('__SLASH__');
         }
       });
+
+      if (approveButton && approveEmptyFill) {
+        approveButton.addEventListener('click', () => {
+          approveEmptyFill.value = '1';
+          approveButton.style.display = 'none';
+          if (step1Form) {
+            step1Form.submit();
+          }
+        });
+      }
     })();
   </script>
 {% endblock %}

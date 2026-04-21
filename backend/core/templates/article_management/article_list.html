@@ -63,7 +63,7 @@
       <div>
         <h2 style="margin: 0 0 6px;">Article Management</h2>
       </div>
-      <a class="btn" href="?{{ query_string_without_page }}{% if query_string_without_page %}&{% endif %}export=csv">Export</a>
+      <a class="btn btn-subtle btn-light-soft" href="?{{ query_string_without_page }}{% if query_string_without_page %}&{% endif %}export=csv">Export</a>
     </div>
 
     <form method="get" class="form-section-card article-filter-stack" id="article-filter-form" style="margin: 18px 0 16px;">
@@ -110,7 +110,7 @@
             {% endfor %}
           </select>
         </div>
-        <a class="btn" href="{% url 'ui:article-list' %}">Clear All</a>
+        <a class="btn btn-subtle btn-light-soft" href="{% url 'ui:article-list' %}">Clear All</a>
         {% if request.user.role == "admin" or request.user.role == "editor" %}
           <a class="btn" href="{% url 'ui:article-create' %}">Create</a>
         {% endif %}

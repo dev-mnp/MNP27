@@ -263,7 +263,7 @@
       </div>
       <div class="actions-inline">
         <details class="export-menu" style="position: relative;">
-          <summary class="btn" style="list-style:none; cursor:pointer;">Export</summary>
+          <summary class="btn btn-subtle btn-light-soft" style="list-style:none; cursor:pointer;">Export</summary>
           <div class="card" style="position:absolute; right:0; top:calc(100% + 8px); min-width:170px; padding:8px; display:grid; gap:6px; z-index:20;">
             <a class="btn" href="{% url 'ui:fund-request-list' %}?export=xlsx&export_status=draft{% if filters.q %}&q={{ filters.q|urlencode }}{% endif %}{% if filters.request_type %}&request_type={{ filters.request_type|urlencode }}{% endif %}">
               Draft
@@ -295,7 +295,7 @@
       </select>
       <input type="hidden" name="sort" value="{{ current_sort }}" />
       <input type="hidden" name="dir" value="{{ current_dir }}" />
-      <a class="btn" href="{% url 'ui:fund-request-list' %}">Clear All</a>
+      <a class="btn btn-subtle btn-light-soft" href="{% url 'ui:fund-request-list' %}">Clear All</a>
       </div>
     </form>
     <div class="toolbar" style="justify-content: space-between;">

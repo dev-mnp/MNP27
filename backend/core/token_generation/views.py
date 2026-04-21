@@ -69,6 +69,8 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             for row in preview_rows
         ]
         blank_summary = _token_generation_empty_value_summary(rows, dataset["headers"]) if rows else []
+        empty_fill_approved = bool(stage_state.get("empty_fill_approved"))
+        show_empty_fill_approval = bool(stage_state.get("show_empty_fill_approval"))
         quality_checks = _token_generation_quality_checks(rows) if rows else {
             "sequence_item_conflicts": [],
             "article_sequence_conflicts": [],
@@ -96,7 +98,7 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         token_end_no = max(generated_end_tokens) if generated_end_tokens else 0
         prep_checks = [
             {"label": "Names column created", "passed": token_is_prepared and all("Names" in row for row in rows)},
-            {"label": "Empty values filled", "passed": token_is_prepared},
+            {"label": "Empty-value review approved", "passed": (not blank_summary) or empty_fill_approved},
             {"label": "Sorted by sequence, beneficiary type, handicapped status, and names", "passed": token_is_prepared and is_sorted},
             {"label": "Quantity, Cost Per Unit, and Total Value are all greater than 0", "passed": token_is_prepared and not prep_validation_summary},
             {"label": "Duplicate row check complete", "passed": token_is_prepared},
@@ -118,6 +120,8 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 "token_quality_checks": quality_checks,
                 "token_column_count": len(dataset["headers"]),
                 "token_prep_checks": prep_checks,
+                "token_empty_fill_approved": empty_fill_approved,
+                "token_show_empty_fill_approval": show_empty_fill_approval,
                 "token_is_prepared": token_is_prepared,
                 "token_is_sorted": is_sorted,
                 "token_is_generated": is_generated,
@@ -178,6 +182,8 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 session,
                 token_print_saved=False,
                 source_sync_marker=_token_generation_latest_source_marker(session),
+                empty_fill_approved=False,
+                show_empty_fill_approval=False,
             )
             request.session["token_generation_open_section"] = ""
             messages.success(
@@ -218,6 +224,8 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 session,
                 token_print_saved=False,
                 source_sync_marker="",
+                empty_fill_approved=False,
+                show_empty_fill_approval=False,
             )
             request.session["token_generation_open_section"] = ""
             messages.success(
@@ -265,7 +273,13 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 source_name=saved_dataset["source_name"] or f"Rule-filtered Token Data ({session.session_name})",
                 user=request.user,
             )
-            _token_generation_set_stage_state(request, session, token_print_saved=False)
+            _token_generation_set_stage_state(
+                request,
+                session,
+                token_print_saved=False,
+                empty_fill_approved=False,
+                show_empty_fill_approval=False,
+            )
             request.session["token_generation_open_section"] = "transformations"
             messages.success(
                 request,
@@ -274,6 +288,16 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
 
         if action == "run_data_prep":
+            prefill_empty_summary = _token_generation_empty_value_summary(saved_dataset["rows"], saved_dataset["headers"])
+            approved = str(request.POST.get("approve_empty_fill") or "").strip() == "1"
+            if prefill_empty_summary and not approved:
+                request.session["token_generation_open_section"] = "step1"
+                _token_generation_set_stage_state(request, session, show_empty_fill_approval=True)
+                messages.warning(
+                    request,
+                    "Step 1 is waiting for your approval. Review the empty-value column counts and confirm to proceed with fill.",
+                )
+                return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
             prepared_dataset = _token_generation_prepare_dataset(saved_dataset["rows"], saved_dataset["headers"])
             invalid_value_summary = _token_generation_invalid_value_summary(prepared_dataset["rows"], saved_dataset["headers"])
             if invalid_value_summary:
@@ -294,7 +318,13 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 source_name=saved_dataset["source_name"] or f"Prepared Token Data ({session.session_name})",
                 user=request.user,
             )
-            _token_generation_set_stage_state(request, session, token_print_saved=False)
+            _token_generation_set_stage_state(
+                request,
+                session,
+                token_print_saved=False,
+                empty_fill_approved=True,
+                show_empty_fill_approval=False,
+            )
             request.session["token_generation_open_section"] = "step1"
             messages.success(request, "Step 1 data prep completed. Names, blanks, sorting, and duplicate checks are ready.")
             return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
@@ -332,7 +362,13 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 source_name=saved_dataset["source_name"] or f"Sorted Token Data ({session.session_name})",
                 user=request.user,
             )
-            _token_generation_set_stage_state(request, session, token_print_saved=False)
+            _token_generation_set_stage_state(
+                request,
+                session,
+                token_print_saved=False,
+                empty_fill_approved=False,
+                show_empty_fill_approval=False,
+            )
             request.session["token_generation_open_section"] = "step2"
             messages.success(request, f"Step 2 adjustments saved. {replacements_applied} replacement(s) were applied.")
             return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
@@ -361,7 +397,13 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 source_name=saved_dataset["source_name"] or f"Token Print Updated ({session.session_name})",
                 user=request.user,
             )
-            _token_generation_set_stage_state(request, session, token_print_saved=True)
+            _token_generation_set_stage_state(
+                request,
+                session,
+                token_print_saved=True,
+                empty_fill_approved=False,
+                show_empty_fill_approval=False,
+            )
             request.session["token_generation_open_section"] = "step3"
             messages.success(request, "Step 3 token print settings were saved.")
             return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')

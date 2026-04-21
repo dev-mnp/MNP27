@@ -1,11 +1,20 @@
 from __future__ import annotations
 
 import io
+import importlib.metadata as importlib_metadata
 import os
 from functools import lru_cache
 
 GOOGLE_DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
 GOOGLE_OAUTH_TOKEN_URI = "https://oauth2.googleapis.com/token"
+
+
+# Python 3.9 compatibility shim for newer google-auth/google-api-core internals.
+# Some environments call importlib.metadata.packages_distributions(), which may be absent.
+if not hasattr(importlib_metadata, "packages_distributions"):
+    def _packages_distributions_fallback():
+        return {}
+    importlib_metadata.packages_distributions = _packages_distributions_fallback
 
 
 def is_configured() -> bool:
@@ -62,15 +71,24 @@ def _root_folder_id() -> str:
     return folder_id
 
 
+def root_folder_info() -> dict[str, str]:
+    folder_id = _root_folder_id()
+    return {
+        "folder_id": folder_id,
+        "name": "MNP",
+        "view_url": f"https://drive.google.com/drive/folders/{folder_id}",
+    }
+
+
 def _folder_label(application_type: str) -> str:
     value = str(application_type or "").strip().casefold()
     if value == "district":
-        return "district"
+        return "District"
     if value == "public":
-        return "public"
+        return "Public"
     if value == "institution":
-        return "institution"
-    return "others"
+        return "Institution"
+    return "MNP"
 
 
 @lru_cache(maxsize=8)
@@ -113,6 +131,16 @@ def _ensure_child_folder(folder_name: str) -> str:
         .execute()
     )
     return str(created.get("id") or "").strip()
+
+
+def child_folder_info(application_type: str) -> dict[str, str]:
+    folder_name = _folder_label(application_type)
+    folder_id = _ensure_child_folder(folder_name)
+    return {
+        "folder_id": folder_id,
+        "name": folder_name,
+        "view_url": f"https://drive.google.com/drive/folders/{folder_id}",
+    }
 
 
 def upload_application_attachment(

@@ -257,8 +257,8 @@
           <option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
-      <button class="btn" type="submit">Filter</button>
-      <a class="btn" href="{% url 'ui:purchase-order-list' %}">Clear</a>
+      <button class="btn btn-light-soft" type="submit">Filter</button>
+      <a class="btn btn-light-soft" href="{% url 'ui:purchase-order-list' %}">Clear</a>
     </form>
 
     <div class="toolbar" style="justify-content: space-between; margin-bottom: 10px;">

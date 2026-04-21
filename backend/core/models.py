@@ -499,6 +499,7 @@ class Article(BaseTimestampedModel):
     article_name = models.CharField(max_length=255, unique=True)
     article_name_tk = models.CharField(max_length=255, blank=True, null=True)
     cost_per_unit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    allow_manual_price = models.BooleanField(default=False)
     item_type = models.CharField(max_length=20, choices=ItemTypeChoices.choices, default=ItemTypeChoices.ARTICLE)
     category = models.CharField(max_length=200, blank=True, null=True)
     master_category = models.CharField(max_length=200, blank=True, null=True)
@@ -1191,10 +1192,13 @@ class ApplicationAttachmentTypeChoices(models.TextChoices):
 class ApplicationAttachmentStatusChoices(models.TextChoices):
     TEMP = "temp", "Temp"
     LINKED = "linked", "Linked"
+    MISSING = "missing", "Missing"
 
 
 class ApplicationAttachment(BaseTimestampedModel):
     application_type = models.CharField(max_length=20, choices=ApplicationAttachmentTypeChoices.choices)
+    application_id = models.BigIntegerField(null=True, blank=True)
+    draft_uid = models.CharField(max_length=36, blank=True, null=True)
     district = models.ForeignKey(
         DistrictMaster,
         on_delete=models.CASCADE,
@@ -1210,6 +1214,9 @@ class ApplicationAttachment(BaseTimestampedModel):
         related_name="application_attachments",
     )
     institution_application_number = models.CharField(max_length=120, blank=True, null=True)
+    original_filename = models.CharField(max_length=255, blank=True)
+    display_filename = models.CharField(max_length=255, blank=True)
+    prefix = models.CharField(max_length=255, blank=True)
     file = models.FileField(upload_to="application_attachments/%Y/%m/%d", blank=True)
     file_name = models.CharField(max_length=255)
     drive_file_id = models.CharField(max_length=255, blank=True)
@@ -1236,6 +1243,8 @@ class ApplicationAttachment(BaseTimestampedModel):
         verbose_name_plural = "Application Attachments"
         indexes = [
             models.Index(fields=["application_type"]),
+            models.Index(fields=["application_type", "application_id"]),
+            models.Index(fields=["application_type", "draft_uid"]),
             models.Index(fields=["district"]),
             models.Index(fields=["public_entry"]),
             models.Index(fields=["institution_application_number"]),
@@ -1331,11 +1340,14 @@ class PublicBeneficiaryHistory(BaseTimestampedModel):
     application_number = models.CharField(max_length=120, blank=True, null=True)
     comments = models.TextField(blank=True, null=True)
     is_handicapped = models.BooleanField(blank=True, null=True)
+    handicapped_status = models.CharField(max_length=80, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
     mobile = models.CharField(max_length=50, blank=True, null=True)
     aadhar_number_sp = models.CharField(max_length=20, blank=True, null=True)
     is_selected = models.BooleanField(blank=True, null=True)
     category = models.CharField(max_length=120, blank=True, null=True)
+    gender = models.CharField(max_length=15, blank=True, null=True)
+    gender_status = models.CharField(max_length=80, blank=True, null=True)
 
     class Meta:
         db_table = "public_beneficiary_history"
