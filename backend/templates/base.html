@@ -181,27 +181,6 @@
       border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 999px; padding: 8px 14px; text-decoration: none; color: #1d4ed8;
     }
     .btn-subtle:hover { background: #dbeafe; color: #1e40af; }
-    .btn-light-soft {
-      border: 1px solid #dbe7f5;
-      background: linear-gradient(180deg, #f9fbfd 0%, #eef4fa 100%);
-      color: #36506b;
-      box-shadow: none;
-    }
-    .btn-light-soft:hover {
-      background: linear-gradient(180deg, #f2f7fb 0%, #e4edf6 100%);
-      border-color: #c8d6e5;
-      color: #21364d;
-    }
-    .btn-light-soft:disabled,
-    .btn-light-soft.is-disabled,
-    .btn-light-soft[aria-disabled="true"] {
-      background: #f4f7fa;
-      border-color: #e2e8f0;
-      color: #94a3b8;
-      cursor: not-allowed;
-      pointer-events: none;
-      opacity: 1;
-    }
     .app-content { padding: 12px; min-width: 0; }
     .wrap { width: 100%; max-width: none; margin: 0; }
 
@@ -230,6 +209,37 @@
       vertical-align: middle;
     }
     .btn:hover { background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%); border-color: var(--accent-hover); color: #ffffff; }
+    .btn.btn-light-soft,
+    .btn-subtle.btn-light-soft,
+    summary.btn-light-soft {
+      border: 1px solid #dbe7f5;
+      background: linear-gradient(180deg, #f9fbfd 0%, #eef4fa 100%);
+      color: #36506b;
+      box-shadow: none;
+    }
+    .btn.btn-light-soft:hover,
+    .btn-subtle.btn-light-soft:hover,
+    summary.btn-light-soft:hover {
+      background: linear-gradient(180deg, #f2f7fb 0%, #e4edf6 100%);
+      border-color: #c8d6e5;
+      color: #21364d;
+    }
+    .btn.btn-light-soft:disabled,
+    .btn.btn-light-soft.is-disabled,
+    .btn.btn-light-soft[aria-disabled="true"],
+    .btn-subtle.btn-light-soft:disabled,
+    .btn-subtle.btn-light-soft.is-disabled,
+    .btn-subtle.btn-light-soft[aria-disabled="true"],
+    summary.btn-light-soft:disabled,
+    summary.btn-light-soft.is-disabled,
+    summary.btn-light-soft[aria-disabled="true"] {
+      background: #f4f7fa;
+      border-color: #e2e8f0;
+      color: #94a3b8;
+      cursor: not-allowed;
+      pointer-events: none;
+      opacity: 1;
+    }
     .btn:not(.icon-btn),
     .btn-subtle:not(.icon-btn) {
       gap: 8px;

@@ -55,7 +55,10 @@ REPORTS_DISTRIBUTION_STATE_KEY = "reports_distribution"
 
 
 def _reports_active_session():
-    return models.EventSession.objects.filter(is_active=True).order_by("-event_year", "session_name").first()
+    session = models.EventSession.objects.filter(is_active=True).order_by("-event_year", "session_name", "-id").first()
+    if session:
+        return session
+    return models.EventSession.objects.order_by("-event_year", "session_name", "-id").first()
 
 
 def _reports_parse_date(raw_value: str | None) -> date:

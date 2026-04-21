@@ -9,7 +9,15 @@
       <div class="seat-header-actions">
         <div class="toolbar seat-top-actions" style="margin: 0; justify-content: flex-end;">
           {% if can_upload_replace %}
-            <a class="btn" href="{{ preview_sync_url }}">Sync Data</a>
+            {% if selected_session %}
+              <a class="btn" href="{{ preview_sync_url }}">Sync Data</a>
+            {% else %}
+              <form method="post" style="margin: 0;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="sync_data">
+                <button class="btn" type="submit">Sync Data</button>
+              </form>
+            {% endif %}
             <form method="post" enctype="multipart/form-data" class="seat-upload-form" style="margin: 0;">
               {% csrf_token %}
               <input type="hidden" name="action" value="upload_csv">

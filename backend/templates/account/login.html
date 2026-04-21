@@ -4,8 +4,8 @@
 {% block content %}
   <style>
     .login-stage {
-      min-height: calc(100vh - 44px);
-      margin: -22px 0 0;
+      min-height: 100vh;
+      margin: 0;
       background:
         radial-gradient(circle at 18% 28%, rgba(255, 214, 102, 0.34), transparent 34%),
         radial-gradient(circle at 62% 45%, rgba(255, 243, 199, 0.72), transparent 28%),
@@ -16,30 +16,24 @@
       background: #f8be34;
       border-bottom: 1px solid rgba(123, 74, 8, 0.12);
       box-shadow: 0 2px 10px rgba(84, 55, 0, 0.06);
-      padding: 10px 0 12px;
+      height: 76px;              /* slightly taller */
+      padding-top: 6px;          /* pushes content down */
+      display: flex;
+      align-items: center;
     }
 
     .login-header-inner {
       width: 100%;
-      max-width: none;
-      margin: 0;
       padding: 0 28px;
-      min-height: 0;
-      display: grid;
-      grid-template-columns: 420px 1fr;
+      display: flex;
+      justify-content: space-between;
       align-items: center;
-      gap: 20px;
     }
 
     .login-brand {
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 16px;
-      color: #17233b;
-      min-width: 0;
-      width: 100%;
-      align-self: center;
+      gap: 12px;
     }
 
     .login-brand img {
@@ -75,10 +69,8 @@
     .login-nav {
       display: flex;
       gap: 14px;
-      flex-wrap: wrap;
       justify-content: flex-end;
       align-items: center;
-      align-self: center;
     }
 
     .login-nav a {
@@ -218,7 +210,7 @@
       }
 
       .login-brand-title {
-        font-size: 18px;
+        line-height: 1;
       }
 
       .login-brand-subtitle {

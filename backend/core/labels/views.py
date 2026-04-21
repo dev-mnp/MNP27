@@ -32,6 +32,7 @@ from core.labels.services import _labels_store_dataset
 from core.labels.services import _labels_sync_required
 from core.shared.csv_utils import _tabular_rows_from_upload
 from core.shared.phase2 import _phase2_parse_number
+from core.shared.phase2 import _phase2_get_or_create_default_session
 from core.shared.phase2 import _phase2_selected_session
 from core.shared.permissions import RoleRequiredMixin
 
@@ -228,10 +229,12 @@ class LabelGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
 
     def post(self, request, *args, **kwargs):
         session = _phase2_selected_session(request)
+        action = (request.POST.get("action") or "").strip()
+        if not session and action in {"sync_data", "upload_csv", "save_large_items"}:
+            session = _phase2_get_or_create_default_session()
         if not session:
             messages.error(request, "Create or select a session first.")
             return HttpResponseRedirect(reverse("ui:labels"))
-        action = (request.POST.get("action") or "").strip()
         if action in {"download_custom_labels", "preview_custom_labels"}:
             if not request.user.has_module_permission(self.module_key, "export"):
                 messages.error(request, "You do not have permission to download labels.")

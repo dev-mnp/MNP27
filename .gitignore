@@ -6,7 +6,7 @@
 
 # Python envs
 **/.venv/
-
+**/.venv313/
 # Local env files
 **/.env
 
