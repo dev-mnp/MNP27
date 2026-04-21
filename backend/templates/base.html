@@ -306,6 +306,14 @@
     .js-attachment-preview.icon-btn:hover {
       color: #1d4ed8;
     }
+    #attachment-preview-open-link.icon-btn,
+    #attachment-preview-download-link-inline.icon-btn {
+      color: #344054;
+    }
+    #attachment-preview-open-link.icon-btn:hover,
+    #attachment-preview-download-link-inline.icon-btn:hover {
+      color: #1d4ed8;
+    }
     .icon-btn svg {
       width: 18px;
       height: 18px;
@@ -1272,6 +1280,7 @@
     var RESTORE_SCROLL_KEY = "mnp.restore-scroll";
     var currentPreviewUrl = "";
     var currentDownloadUrl = "";
+    var attachmentProbeCache = Object.create(null);
     var currentPreviewItems = [];
     var currentPreviewIndex = 0;
     var cameraState = {
@@ -1632,7 +1641,7 @@
       });
     }
 
-    function openPreviewModal(url, title, sourceName, downloadUrl, items) {
+    function openPreviewModal(url, title, sourceName, downloadUrl, items, activePreviewUrl) {
       currentPreviewItems = Array.isArray(items) && items.length ? items : [{
         preview_url: url || "",
         title: title || "File preview",
@@ -1640,6 +1649,14 @@
         download_url: downloadUrl || "",
       }];
       currentPreviewIndex = 0;
+      if (activePreviewUrl) {
+        var matchedIndex = currentPreviewItems.findIndex(function(item) {
+          return (item && item.preview_url) === activePreviewUrl;
+        });
+        if (matchedIndex >= 0) {
+          currentPreviewIndex = matchedIndex;
+        }
+      }
       renderPreviewTabs(currentPreviewItems, currentPreviewIndex);
       renderPreviewItem(currentPreviewItems[currentPreviewIndex]);
       previewModal.classList.add("is-open");
@@ -1682,7 +1699,19 @@
       var previewItemsRaw = button.getAttribute("data-preview-items-b64") || "";
       if (previewItemsRaw) {
         try {
-          previewItems = JSON.parse(window.atob(previewItemsRaw));
+          var parsed = JSON.parse(window.atob(previewItemsRaw));
+          if (Array.isArray(parsed)) {
+            previewItems = parsed
+              .map(function(item) {
+                return {
+                  preview_url: item && item.preview_url ? String(item.preview_url) : "",
+                  title: item && item.title ? String(item.title) : "",
+                  source: item && item.source ? String(item.source) : "",
+                  download_url: item && item.download_url ? String(item.download_url) : "",
+                };
+              })
+              .filter(function(item) { return !!item.preview_url; });
+          }
         } catch (error) {
           previewItems = [];
         }
@@ -1692,10 +1721,166 @@
         button.getAttribute("data-preview-title"),
         button.getAttribute("data-preview-source"),
         button.getAttribute("data-download-url"),
-        previewItems
+        previewItems,
+        button.getAttribute("data-preview-url")
       );
       return false;
     };
+
+    function removeAttachmentIndicators(button) {
+      if (!button) return;
+      var actions = button.closest(".actions-inline");
+      button.remove();
+      if (!actions) return;
+      actions.querySelectorAll("a[href]").forEach(function(link) {
+        if ((link.getAttribute("href") || "").indexOf("/attachment/") >= 0) {
+          link.remove();
+        }
+      });
+    }
+
+    function probeAttachmentAvailability(button) {
+      var previewUrl = (button && button.getAttribute("data-preview-url")) || "";
+      if (!previewUrl || typeof fetch !== "function") {
+        return Promise.resolve({ available: true });
+      }
+      if (Object.prototype.hasOwnProperty.call(attachmentProbeCache, previewUrl)) {
+        return Promise.resolve(attachmentProbeCache[previewUrl]);
+      }
+      var probeUrl = previewUrl + (previewUrl.indexOf("?") >= 0 ? "&" : "?") + "probe=1";
+      return fetch(probeUrl, {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+      })
+        .then(function(response) {
+          if (!response.ok) {
+            return { available: false, missing: true };
+          }
+          return response.json().catch(function() {
+            return { available: false, missing: true };
+          });
+        })
+        .catch(function() {
+          return { available: false, missing: true };
+        })
+        .then(function(result) {
+          attachmentProbeCache[previewUrl] = result || { available: false, missing: true };
+          return attachmentProbeCache[previewUrl];
+        });
+    }
+
+    function openPreviewWithProbe(button) {
+      if (!button) return false;
+      probeAttachmentAvailability(button).then(function(result) {
+        if (!result || result.available !== false) {
+          window.openAttachmentPreviewFromButton(button);
+          return;
+        }
+        if (result.message) {
+          window.alert(result.message);
+        }
+        if (result.missing) {
+          removeAttachmentIndicators(button);
+        }
+      });
+      return false;
+    }
+
+    function findCsrfToken(contextNode) {
+      if (contextNode) {
+        var scoped = contextNode.querySelector('input[name="csrfmiddlewaretoken"]');
+        if (scoped) return scoped.value || "";
+      }
+      var globalToken = document.querySelector('input[name="csrfmiddlewaretoken"]');
+      return globalToken ? (globalToken.value || "") : "";
+    }
+
+    function replaceAttachmentCardFromHtml(cardId, htmlText) {
+      if (!cardId || !htmlText || typeof DOMParser === "undefined") {
+        return false;
+      }
+      var parser = new DOMParser();
+      var doc = parser.parseFromString(htmlText, "text/html");
+      var nextCard = doc.getElementById(cardId);
+      var currentCard = document.getElementById(cardId);
+      if (!nextCard || !currentCard) {
+        return false;
+      }
+      currentCard.replaceWith(nextCard);
+      return true;
+    }
+
+    function postAttachmentFormData(url, formData, cardId) {
+      if (!url || typeof fetch !== "function") {
+        return Promise.resolve(false);
+      }
+      return fetch(url, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        body: formData,
+      })
+        .then(function(response) {
+          var contentType = (response.headers.get("content-type") || "").toLowerCase();
+          if (contentType.indexOf("application/json") >= 0) {
+            return response.json().then(function(data) {
+              var refreshUrl = data && data.refresh_url ? String(data.refresh_url) : "";
+              if (!refreshUrl) return false;
+              return fetch(refreshUrl, {
+                method: "GET",
+                credentials: "same-origin",
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+              })
+                .then(function(refreshResponse) { return refreshResponse.text(); })
+                .then(function(html) { return replaceAttachmentCardFromHtml(cardId, html); });
+            });
+          }
+          return response.text().then(function(html) { return replaceAttachmentCardFromHtml(cardId, html); });
+        })
+        .catch(function() { return false; });
+    }
+
+    function submitDistrictAttachmentUpload(button) {
+      if (!button || button.disabled) return false;
+      var uploadUrl = button.getAttribute("formaction") || "";
+      var cardId = button.getAttribute("data-attachment-card-id") || "district-attachments-card";
+      var sourceForm = button.closest("form");
+      var fileInput = document.getElementById("district-attachment-file");
+      var nameInput = document.getElementById("district-attachment-file-name");
+      var districtIdInput = document.getElementById("district-attachment-district-id");
+      if (!uploadUrl || !fileInput || !districtIdInput || !districtIdInput.value) {
+        return false;
+      }
+      var formData = new FormData();
+      formData.append("csrfmiddlewaretoken", findCsrfToken(sourceForm));
+      formData.append("district_id", districtIdInput.value);
+      if (nameInput && nameInput.value) {
+        formData.append("file_name", nameInput.value);
+      }
+      if (fileInput.files && fileInput.files[0]) {
+        formData.append("file", fileInput.files[0]);
+      }
+      button.disabled = true;
+      postAttachmentFormData(uploadUrl, formData, cardId).finally(function() {
+        button.disabled = false;
+      });
+      return true;
+    }
+
+    function submitAttachmentUploadForm(form) {
+      if (!form) return false;
+      var uploadUrl = form.getAttribute("action") || "";
+      var cardId = form.getAttribute("data-attachment-card-id") || "";
+      if (!uploadUrl || !cardId) return false;
+      var formData = new FormData(form);
+      var submitButton = form.querySelector('button[type="submit"]');
+      if (submitButton) submitButton.disabled = true;
+      postAttachmentFormData(uploadUrl, formData, cardId).finally(function() {
+        if (submitButton) submitButton.disabled = false;
+      });
+      return true;
+    }
 
     window.openCameraCaptureFromButton = function(button) {
       if (!button) return false;
@@ -1710,8 +1895,15 @@
       button.addEventListener("click", function(event) {
         event.preventDefault();
         event.stopPropagation();
-        window.openAttachmentPreviewFromButton(button);
+        openPreviewWithProbe(button);
       });
+    });
+
+    document.addEventListener("submit", function(event) {
+      var uploadForm = event.target && event.target.closest(".js-attachment-upload-form");
+      if (!uploadForm) return;
+      event.preventDefault();
+      submitAttachmentUploadForm(uploadForm);
     });
 
     document.addEventListener("click", function(event) {
@@ -1726,17 +1918,14 @@
       if (trigger) {
         event.preventDefault();
         event.stopPropagation();
-        openPreviewModal(
-          trigger.getAttribute("data-preview-url"),
-          trigger.getAttribute("data-preview-title"),
-          trigger.getAttribute("data-preview-source"),
-          trigger.getAttribute("data-download-url"),
-          (function() {
-            var raw = trigger.getAttribute("data-preview-items-b64") || "";
-            if (!raw) return [];
-            try { return JSON.parse(window.atob(raw)); } catch (error) { return []; }
-          })()
-        );
+        openPreviewWithProbe(trigger);
+        return;
+      }
+      var districtUploadTrigger = event.target.closest("#district-attachment-upload-btn");
+      if (districtUploadTrigger) {
+        event.preventDefault();
+        event.stopPropagation();
+        submitDistrictAttachmentUpload(districtUploadTrigger);
         return;
       }
       if (event.target === previewModal) {

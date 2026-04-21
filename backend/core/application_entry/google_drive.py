@@ -209,6 +209,45 @@ def download_file(file_id: str) -> bytes:
     return buffer.getvalue()
 
 
+def get_file_metadata(file_id: str) -> dict[str, object]:
+    service = _drive_service()
+    data = (
+        service.files()
+        .get(
+            fileId=file_id,
+            fields="id,name,mimeType,webViewLink,webContentLink",
+            supportsAllDrives=True,
+        )
+        .execute()
+    )
+    return {
+        "file_id": str(data.get("id") or "").strip(),
+        "file_name": str(data.get("name") or "").strip(),
+        "mime_type": str(data.get("mimeType") or "").strip(),
+        "view_url": str(data.get("webViewLink") or data.get("webContentLink") or "").strip(),
+    }
+
+
+def rename_file(file_id: str, new_name: str) -> dict[str, object]:
+    service = _drive_service()
+    data = (
+        service.files()
+        .update(
+            fileId=file_id,
+            body={"name": new_name},
+            fields="id,name,mimeType,webViewLink,webContentLink",
+            supportsAllDrives=True,
+        )
+        .execute()
+    )
+    return {
+        "file_id": str(data.get("id") or "").strip(),
+        "file_name": str(data.get("name") or "").strip(),
+        "mime_type": str(data.get("mimeType") or "").strip(),
+        "view_url": str(data.get("webViewLink") or data.get("webContentLink") or "").strip(),
+    }
+
+
 def delete_file(file_id: str) -> None:
     service = _drive_service()
     service.files().delete(fileId=file_id, supportsAllDrives=True).execute()

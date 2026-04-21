@@ -310,7 +310,7 @@
       </div>
       </div>
 
-      <div class="form-section-card" style="margin-top: 20px;">
+      <div class="form-section-card js-attachment-card" id="district-attachments-card" style="margin-top: 20px;">
       <div class="section-title-row">
         <div>
           <h3 class="section-title">Attachments</h3>
@@ -323,17 +323,17 @@
         <div class="toolbar" style="align-items: end;">
           <div style="flex: 1;">
             <label>Upload file</label>
-            <input class="input" type="file" id="district-attachment-file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv" {% if not attachment_district_id %}disabled{% endif %}>
+            <input class="input" type="file" id="district-attachment-file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv">
           </div>
           <div style="flex: 1;">
             <label>File name</label>
-            <input class="input" type="text" id="district-attachment-file-name" name="file_name" placeholder="Optional display name" {% if not attachment_district_id %}disabled{% endif %}>
+            <input class="input" type="text" id="district-attachment-file-name" name="file_name" placeholder="Optional display name">
           </div>
-          <button class="btn js-camera-capture" id="district-attachment-camera-btn" type="button" data-camera-file-input="district-attachment-file" data-camera-name-input="district-attachment-file-name" {% if not attachment_district_id %}disabled{% endif %}>
+          <button class="btn js-camera-capture" id="district-attachment-camera-btn" type="button" data-camera-file-input="district-attachment-file" data-camera-name-input="district-attachment-file-name">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="14" r="4"/></svg>
             <span>Camera</span>
           </button>
-          <button class="btn" id="district-attachment-upload-btn" type="submit" formaction="{{ attachment_upload_url }}" formmethod="post" formenctype="multipart/form-data" formnovalidate {% if not attachment_district_id %}disabled{% endif %}>
+          <button class="btn" id="district-attachment-upload-btn" type="submit" formaction="{{ attachment_upload_url }}" formmethod="post" formenctype="multipart/form-data" formnovalidate data-attachment-card-id="district-attachments-card">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg><span>Upload</span>
           </button>
         </div>
@@ -356,7 +356,7 @@
                   <td>{{ attachment.created_at|date:"d/m/Y H:i" }}</td>
                   <td>
                     <div class="actions-inline">
-                      <button class="btn icon-btn js-attachment-preview" type="button" onclick="return window.openAttachmentPreviewFromButton(this);" data-preview-url="{% url 'ui:application-attachment-download' attachment.id %}" data-preview-title="{{ attachment.file_name }}" data-preview-source="{% if attachment.file %}{{ attachment.file.name|lower }}{% else %}{{ attachment.file_name|lower }}{% endif %}" data-download-url="{% url 'ui:application-attachment-download' attachment.id %}?download=1" title="Preview file" aria-label="Preview file">
+                      <button class="btn icon-btn js-attachment-preview" type="button" onclick="return window.openAttachmentPreviewFromButton(this);" data-preview-url="{% url 'ui:application-attachment-download' attachment.id %}" data-preview-title="{{ attachment.file_name }}" data-preview-source="{% if attachment.file %}{{ attachment.file.name|lower }}{% else %}{{ attachment.file_name|lower }}{% endif %}" data-download-url="{% url 'ui:application-attachment-download' attachment.id %}?download=1" data-preview-items-b64="{{ attachment_preview_items_b64 }}" title="Preview file" aria-label="Preview file">
                         <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/></svg>
                       </button>
                       <a class="btn icon-btn" href="{% url 'ui:application-attachment-download' attachment.id %}" target="_blank" rel="noopener" title="Open file in new tab" aria-label="Open file in new tab">
@@ -698,11 +698,6 @@
         if (districtAttachmentDistrictId) {
           districtAttachmentDistrictId.value = selectedDistrictId;
         }
-        const hasDistrictContext = !!selectedDistrictId;
-        if (districtAttachmentFile) districtAttachmentFile.disabled = !hasDistrictContext;
-        if (districtAttachmentFileName) districtAttachmentFileName.disabled = !hasDistrictContext;
-        if (districtAttachmentCameraBtn) districtAttachmentCameraBtn.disabled = !hasDistrictContext;
-        if (districtAttachmentUploadBtn) districtAttachmentUploadBtn.disabled = !hasDistrictContext;
         recalcTotals();
       }
 

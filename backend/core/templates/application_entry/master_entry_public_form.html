@@ -294,7 +294,7 @@
 
     </form>
 
-    <div class="form-section-card" style="margin-top: 20px;">
+    <div class="form-section-card js-attachment-card" id="public-attachments-card" style="margin-top: 20px;">
       <div class="section-title-row">
         <div>
           <h3 class="section-title">Attachments</h3>
@@ -302,7 +302,7 @@
           <div class="field-hint" style="margin-top: 6px;">{{ attachment_constraints_text }}</div>
         </div>
       </div>
-      <form method="post" action="{{ attachment_upload_url }}" enctype="multipart/form-data" style="border:0;padding:0;margin:0;">
+      <form class="js-attachment-upload-form" method="post" action="{{ attachment_upload_url }}" enctype="multipart/form-data" style="border:0;padding:0;margin:0;" data-attachment-card-id="public-attachments-card">
         {% csrf_token %}
         <input type="hidden" name="attachment_form_token" value="{{ attachment_form_token|default:'' }}">
         <div class="toolbar" style="align-items: end;">
@@ -341,7 +341,7 @@
                   <td>{{ attachment.created_at|date:"d/m/Y H:i" }}</td>
                   <td>
                     <div class="actions-inline">
-                      <button class="btn icon-btn js-attachment-preview" type="button" onclick="return window.openAttachmentPreviewFromButton(this);" data-preview-url="{% url 'ui:application-attachment-download' attachment.id %}" data-preview-title="{{ attachment.file_name }}" data-preview-source="{% if attachment.file %}{{ attachment.file.name|lower }}{% else %}{{ attachment.file_name|lower }}{% endif %}" data-download-url="{% url 'ui:application-attachment-download' attachment.id %}?download=1" title="Preview file" aria-label="Preview file">
+                      <button class="btn icon-btn js-attachment-preview" type="button" onclick="return window.openAttachmentPreviewFromButton(this);" data-preview-url="{% url 'ui:application-attachment-download' attachment.id %}" data-preview-title="{{ attachment.file_name }}" data-preview-source="{% if attachment.file %}{{ attachment.file.name|lower }}{% else %}{{ attachment.file_name|lower }}{% endif %}" data-download-url="{% url 'ui:application-attachment-download' attachment.id %}?download=1" data-preview-items-b64="{{ attachment_preview_items_b64 }}" title="Preview file" aria-label="Preview file">
                         <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/></svg>
                       </button>
                       <a class="btn icon-btn" href="{% url 'ui:application-attachment-download' attachment.id %}" target="_blank" rel="noopener" title="Open file in new tab" aria-label="Open file in new tab">

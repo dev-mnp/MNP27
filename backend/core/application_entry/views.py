@@ -18,7 +18,7 @@ from django.contrib.postgres.aggregates import StringAgg
 from django.db import transaction
 from django.db.models import Count, Max, OuterRef, Q, Subquery, Sum, TextField, Value
 from django.db.models.functions import Coalesce
-from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
@@ -67,6 +67,9 @@ def _mark_attachment_unavailable(attachment):
     if not attachment:
         return
     update_fields = []
+    if attachment.file:
+        attachment.file = ""
+        update_fields.append("file")
     if attachment.drive_file_id:
         attachment.drive_file_id = ""
         update_fields.append("drive_file_id")
@@ -90,6 +93,10 @@ def _is_probably_missing_drive_file_error(exc: Exception) -> bool:
         "requested entity was not found",
     )
     return any(marker in message for marker in missing_markers)
+
+
+def _is_ajax_request(request):
+    return (request.headers.get("X-Requested-With") or "").lower() == "xmlhttprequest"
 
 
 def _public_active_queryset():
@@ -195,6 +202,7 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             public_attachment_latest, public_attachment_counts = _public_attachment_latest_and_counts(
                 [entry.id for entry in public_entries]
             )
+            public_attachment_lists = _public_attachment_preview_lists([entry.id for entry in public_entries])
             for entry in public_entries:
                 attachment = public_attachment_latest.get(entry.id)
                 entry.attachment_id = attachment.id if attachment else None
@@ -202,6 +210,16 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 entry.attachment_source = _attachment_preview_source(attachment)
                 entry.attachment_title = _attachment_preview_title(attachment)
                 entry.attachment_count = public_attachment_counts.get(entry.id, 0)
+                entry.attachment_preview_items_b64 = _attachment_items_b64(
+                    [
+                        item
+                        for item in (
+                            _attachment_preview_payload(attached)
+                            for attached in public_attachment_lists.get(entry.id, [])
+                        )
+                        if item
+                    ]
+                )
         elif beneficiary_type == "institutions":
             institution_groups = _filter_sort_institution_summaries(
                 _build_institution_entry_summaries(),
@@ -418,11 +436,15 @@ TOKEN_GENERATION_ARTICLE_PRINT_EXCLUDES = {
 
 
 def _attachment_upload_context(*, attachments=None, enabled=False, upload_url="", helper_text="Attachments can be added after the application is first saved."):
+    attachment_list = list(attachments or [])
     return {
-        "application_attachments": attachments or [],
+        "application_attachments": attachment_list,
         "attachment_upload_form": ApplicationAttachmentUploadForm(),
         "attachments_enabled": enabled,
         "attachment_upload_url": upload_url,
+        "attachment_preview_items_b64": _attachment_items_b64(
+            [item for item in (_attachment_preview_payload(attachment) for attachment in attachment_list) if item]
+        ),
         "attachment_helper_text": helper_text,
         "attachment_constraints_text": (
             "Allowed files: PDF, JPG, JPEG, PNG, WEBP, DOC, DOCX, XLS, XLSX, CSV. "
@@ -530,7 +552,21 @@ def _rename_attachment_display_names_for_reference(*, attachments_qs, new_refere
         else:
             suffix = current_name
         attachment.file_name = f"{new_reference}_{suffix}" if suffix else new_reference
-        attachment.save(update_fields=["file_name"])
+        update_fields = ["file_name"]
+        if attachment.drive_file_id:
+            try:
+                metadata = google_drive.rename_file(attachment.drive_file_id, attachment.file_name)
+                attachment.drive_mime_type = str(metadata.get("mime_type") or "").strip()
+                attachment.drive_view_url = str(metadata.get("view_url") or "").strip()
+                update_fields.extend(["drive_mime_type", "drive_view_url"])
+            except Exception:
+                logger.warning(
+                    "Failed to rename Drive file for attachment_id=%s drive_file_id=%s",
+                    attachment.id,
+                    attachment.drive_file_id,
+                    exc_info=True,
+                )
+        attachment.save(update_fields=update_fields)
 
 
 def _save_attachment_from_main_form(
@@ -751,18 +787,36 @@ def _link_temp_attachments_to_application(
         attachment.status = models.ApplicationAttachmentStatusChoices.LINKED
         attachment.form_token = None
         attachment.temp_expires_at = None
-        attachment.file_name = _prefixed_attachment_name(
+        final_name = _prefixed_attachment_name(
             application_reference,
             attachment.file_name or "attachment",
             attachment.file_name or "",
         )
+        attachment.file_name = final_name
+        update_fields = ["status", "form_token", "temp_expires_at", "file_name"]
+        if attachment.drive_file_id:
+            try:
+                metadata = google_drive.rename_file(attachment.drive_file_id, final_name)
+                attachment.drive_mime_type = str(metadata.get("mime_type") or "").strip()
+                attachment.drive_view_url = str(metadata.get("view_url") or "").strip()
+                update_fields.extend(["drive_mime_type", "drive_view_url"])
+            except Exception:
+                logger.warning(
+                    "Failed to rename temporary Drive attachment_id=%s drive_file_id=%s",
+                    attachment.id,
+                    attachment.drive_file_id,
+                    exc_info=True,
+                )
         if district is not None:
             attachment.district = district
+            update_fields.append("district")
         if public_entry is not None:
             attachment.public_entry = public_entry
+            update_fields.append("public_entry")
         if institution_application_number is not None:
             attachment.institution_application_number = institution_application_number
-        attachment.save()
+            update_fields.append("institution_application_number")
+        attachment.save(update_fields=list(dict.fromkeys(update_fields)))
 
 
 def _sync_drive_attachments_for_application(
@@ -1380,6 +1434,48 @@ def _delete_application_attachment_file(attachment):
         logger.exception("Failed to delete attachment file (id=%s). Continuing.", getattr(attachment, "id", None))
 
 
+def _cleanup_application_attachments(*, application_type, district=None, public_entry=None, institution_application_number=None):
+    filters = {"application_type": application_type}
+    if district is not None:
+        filters["district"] = district
+    if public_entry is not None:
+        filters["public_entry"] = public_entry
+    if institution_application_number is not None:
+        filters["institution_application_number"] = institution_application_number
+    attachments = list(models.ApplicationAttachment.objects.filter(**filters))
+    failures = []
+    for attachment in attachments:
+        try:
+            if attachment.drive_file_id:
+                google_drive.delete_file(attachment.drive_file_id)
+            elif attachment.file:
+                attachment.file.delete(save=False)
+        except Exception as exc:
+            if _is_probably_missing_drive_file_error(exc):
+                continue
+            failures.append(attachment.id)
+            logger.warning(
+                "Attachment cleanup failed for attachment_id=%s while deleting application",
+                attachment.id,
+                exc_info=True,
+            )
+    if failures:
+        return False, len(attachments), len(failures)
+    if attachments:
+        models.ApplicationAttachment.objects.filter(id__in=[item.id for item in attachments]).delete()
+    return True, len(attachments), 0
+
+
+def _drive_file_exists(file_id):
+    if not file_id:
+        return False
+    try:
+        google_drive.get_file_metadata(file_id)
+        return True
+    except Exception:
+        return False
+
+
 def _sync_drive_attachments_for_application(
     *,
     application_type,
@@ -1417,15 +1513,21 @@ def _sync_drive_attachments_for_application(
         logger.exception("Failed to sync Drive attachments for %s:%s", application_type, reference)
         return attachments
     if not drive_files:
-        stale_drive_only_ids = [
-            attachment.id
-            for attachment in attachments
-            if attachment.drive_file_id and not attachment.file
-        ]
+        stale_drive_only_ids = []
+        for attachment in attachments:
+            if not attachment.drive_file_id or attachment.file:
+                continue
+            if _drive_file_exists(attachment.drive_file_id):
+                continue
+            stale_drive_only_ids.append(attachment.id)
         if stale_drive_only_ids:
-            models.ApplicationAttachment.objects.filter(id__in=stale_drive_only_ids).delete()
+            for stale_attachment in models.ApplicationAttachment.objects.filter(id__in=stale_drive_only_ids):
+                _mark_attachment_unavailable(stale_attachment)
         return list(
-            models.ApplicationAttachment.objects.filter(**filters).select_related("uploaded_by").order_by("-created_at", "-id")
+            models.ApplicationAttachment.objects.filter(**filters)
+            .filter(_available_attachment_q())
+            .select_related("uploaded_by")
+            .order_by("-created_at", "-id")
         )
 
     def _normalized_name(value):
@@ -1513,10 +1615,14 @@ def _sync_drive_attachments_for_application(
         )
 
     if stale_attachment_ids:
-        models.ApplicationAttachment.objects.filter(id__in=stale_attachment_ids).delete()
+        for stale_attachment in models.ApplicationAttachment.objects.filter(id__in=stale_attachment_ids):
+            _mark_attachment_unavailable(stale_attachment)
 
     return list(
-        models.ApplicationAttachment.objects.filter(**filters).select_related("uploaded_by").order_by("-created_at", "-id")
+        models.ApplicationAttachment.objects.filter(**filters)
+        .filter(_available_attachment_q())
+        .select_related("uploaded_by")
+        .order_by("-created_at", "-id")
     )
 
 
@@ -1525,10 +1631,11 @@ def _district_attachment_context(district):
     attachments = []
     upload_url = reverse("ui:district-attachment-temp-upload")
     if has_district:
-        attachments = _sync_drive_attachments_for_application(
-            application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
-            application_reference=district.application_number,
-            district=district,
+        attachments = list(
+            _linked_attachment_queryset(
+                application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
+                district=district,
+            ).select_related("uploaded_by")
         )
     context = _attachment_upload_context(
         attachments=attachments,
@@ -1546,10 +1653,11 @@ def _public_attachment_context(entry):
     attachments = []
     upload_url = ""
     if has_saved_application:
-        attachments = _sync_drive_attachments_for_application(
-            application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
-            application_reference=entry.application_number or f"PUBLIC-{entry.pk}",
-            public_entry=entry,
+        attachments = list(
+            _linked_attachment_queryset(
+                application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
+                public_entry=entry,
+            ).select_related("uploaded_by")
         )
         upload_url = reverse("ui:public-attachment-upload", kwargs={"pk": entry.pk})
     context = _attachment_upload_context(
@@ -1599,10 +1707,11 @@ def _institution_attachment_context(application_number):
     attachments = []
     upload_url = ""
     if has_saved_application:
-        attachments = _sync_drive_attachments_for_application(
-            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
-            application_reference=application_number,
-            institution_application_number=application_number,
+        attachments = list(
+            _linked_attachment_queryset(
+                application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+                institution_application_number=application_number,
+            ).select_related("uploaded_by")
         )
         upload_url = reverse("ui:institution-attachment-upload", kwargs={"application_number": application_number})
     context = _attachment_upload_context(
@@ -1652,6 +1761,7 @@ def _district_attachment_preview_data(district_ids):
             application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
             district_id__in=district_ids,
         )
+        .filter(_available_attachment_q())
         .order_by("district_id", "-created_at", "-id")
     )
     preview_map = {}
@@ -1681,6 +1791,7 @@ def _public_attachment_preview_data(entry_ids):
             application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
             public_entry_id__in=entry_ids,
         )
+        .filter(_available_attachment_q())
         .order_by("public_entry_id", "-created_at", "-id")
     )
     preview_map = {}
@@ -1710,6 +1821,7 @@ def _institution_attachment_preview_data(application_numbers):
             application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
             institution_application_number__in=application_numbers,
         )
+        .filter(_available_attachment_q())
         .order_by("institution_application_number", "-created_at", "-id")
     )
     preview_map = {}
@@ -2144,6 +2256,7 @@ def _build_district_entry_summaries():
         )
 
     attachment_latest, attachment_counts = _district_attachment_latest_and_counts(district_ids)
+    attachment_lists = _district_attachment_preview_lists(district_ids)
 
     summaries = []
     for row in rows:
@@ -2174,6 +2287,16 @@ def _build_district_entry_summaries():
                 "attachment_source": _attachment_preview_source(attachment),
                 "attachment_title": _attachment_preview_title(attachment),
                 "attachment_count": attachment_counts.get(district_id, 0),
+                "attachment_preview_items_b64": _attachment_items_b64(
+                    [
+                        item
+                        for item in (
+                            _attachment_preview_payload(attached)
+                            for attached in attachment_lists.get(district_id, [])
+                        )
+                        if item
+                    ]
+                ),
                 "detail_items": detail_items_by_district.get(district_id, []),
             }
         )
@@ -2588,13 +2711,23 @@ class DistrictMasterEntryDeleteView(LoginRequiredMixin, AdminRequiredMixin, View
     def post(self, request, *args, **kwargs):
         district = models.DistrictMaster.objects.get(pk=kwargs["district_id"], is_active=True)
         snapshot = _district_audit_snapshot(district)
+        cleanup_ok, cleaned_count, failure_count = _cleanup_application_attachments(
+            application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
+            district=district,
+        )
+        if not cleanup_ok:
+            messages.error(
+                request,
+                f"Could not delete {failure_count} attachment file(s). District application was not deleted.",
+            )
+            return HttpResponseRedirect(reverse("ui:master-entry"))
         models.DistrictBeneficiaryEntry.objects.filter(district=district).delete()
         log_audit(
             user=request.user,
             action_type=models.ActionTypeChoices.DELETE,
             entity_type="district_application",
             entity_id=str(district.id),
-            details={"before": snapshot},
+            details={"before": snapshot, "deleted_attachment_count": cleaned_count},
             **get_request_audit_meta(request),
         )
         messages.warning(request, "District entry deleted.")
@@ -2869,6 +3002,7 @@ def _build_institution_entry_summaries():
         )
 
     attachment_latest, attachment_counts = _institution_attachment_latest_and_counts(application_numbers)
+    attachment_lists = _institution_attachment_preview_lists(application_numbers)
 
     summaries = []
     for row in rows:
@@ -2904,6 +3038,16 @@ def _build_institution_entry_summaries():
                 "attachment_source": _attachment_preview_source(attachment),
                 "attachment_title": _attachment_preview_title(attachment),
                 "attachment_count": attachment_counts.get(application_number, 0),
+                "attachment_preview_items_b64": _attachment_items_b64(
+                    [
+                        item
+                        for item in (
+                            _attachment_preview_payload(attached)
+                            for attached in attachment_lists.get(application_number, [])
+                        )
+                        if item
+                    ]
+                ),
                 "detail_items": detail_items_by_application.get(application_number, []),
             }
         )
@@ -3512,13 +3656,23 @@ class PublicMasterEntryDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         entry = _public_any_queryset().get(pk=kwargs["pk"])
         snapshot = _public_audit_snapshot(entry)
+        cleanup_ok, cleaned_count, failure_count = _cleanup_application_attachments(
+            application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
+            public_entry=entry,
+        )
+        if not cleanup_ok:
+            messages.error(
+                request,
+                f"Could not delete {failure_count} attachment file(s). Public application was not deleted.",
+            )
+            return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public")
         entry.delete()
         log_audit(
             user=request.user,
             action_type=models.ActionTypeChoices.DELETE,
             entity_type="public_application",
             entity_id=str(kwargs["pk"]),
-            details={"before": snapshot},
+            details={"before": snapshot, "deleted_attachment_count": cleaned_count},
             **get_request_audit_meta(request),
         )
         messages.warning(request, "Public entry deleted.")
@@ -3866,13 +4020,23 @@ class InstitutionsMasterEntryDeleteView(LoginRequiredMixin, AdminRequiredMixin, 
     def post(self, request, *args, **kwargs):
         application_number = kwargs["application_number"]
         snapshot = _institution_audit_snapshot(application_number)
+        cleanup_ok, cleaned_count, failure_count = _cleanup_application_attachments(
+            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+            institution_application_number=application_number,
+        )
+        if not cleanup_ok:
+            messages.error(
+                request,
+                f"Could not delete {failure_count} attachment file(s). Institution application was not deleted.",
+            )
+            return HttpResponseRedirect(reverse("ui:master-entry") + "?type=institutions")
         models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).delete()
         log_audit(
             user=request.user,
             action_type=models.ActionTypeChoices.DELETE,
             entity_type="institution_application",
             entity_id=application_number,
-            details={"before": snapshot},
+            details={"before": snapshot, "deleted_attachment_count": cleaned_count},
             **get_request_audit_meta(request),
         )
         messages.warning(request, "Institution entry deleted.")
@@ -3904,6 +4068,21 @@ class ApplicationAttachmentDownloadView(LoginRequiredMixin, RoleRequiredMixin, V
     permission_action = "view"
     def get(self, request, *args, **kwargs):
         attachment = get_object_or_404(models.ApplicationAttachment.objects.select_related("uploaded_by"), pk=kwargs["attachment_id"])
+        is_probe = (request.GET.get("probe") or "").strip() == "1"
+        if is_probe:
+            if not attachment.file and not attachment.drive_file_id:
+                return JsonResponse(
+                    {"ok": True, "available": False, "missing": True, "message": "This attachment is no longer available in Google Drive."}
+                )
+            if attachment.drive_file_id:
+                try:
+                    google_drive.get_file_metadata(attachment.drive_file_id)
+                except Exception:
+                    _mark_attachment_unavailable(attachment)
+                    return JsonResponse(
+                        {"ok": True, "available": False, "missing": True, "message": "This attachment is no longer available in Google Drive."}
+                    )
+            return JsonResponse({"ok": True, "available": True})
         if not attachment.file and not attachment.drive_file_id:
             messages.error(request, "This attachment is no longer available in Google Drive.")
             return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("ui:master-entry"))
@@ -3916,18 +4095,15 @@ class ApplicationAttachmentDownloadView(LoginRequiredMixin, RoleRequiredMixin, V
         if attachment.drive_file_id:
             try:
                 file_bytes = google_drive.download_file(attachment.drive_file_id)
-            except Exception as exc:
+            except Exception:
                 logger.warning(
                     "Attachment download failed for attachment_id=%s drive_file_id=%s",
                     attachment.id,
                     attachment.drive_file_id,
                     exc_info=True,
                 )
-                if _is_probably_missing_drive_file_error(exc):
-                    _mark_attachment_unavailable(attachment)
-                    messages.error(request, "This attachment is no longer available in Google Drive.")
-                else:
-                    messages.error(request, "Attachment is temporarily unavailable. Please try again.")
+                _mark_attachment_unavailable(attachment)
+                messages.error(request, "This attachment is no longer available in Google Drive.")
                 return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("ui:master-entry"))
             if as_attachment:
                 display_root, display_ext = os.path.splitext(display_name)
@@ -3951,6 +4127,7 @@ class ApplicationAttachmentDownloadView(LoginRequiredMixin, RoleRequiredMixin, V
                     content_type=content_type,
                 )
             except Exception:
+                _mark_attachment_unavailable(attachment)
                 messages.error(request, "This attachment file is no longer available.")
                 return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("ui:master-entry"))
         try:
@@ -3960,6 +4137,7 @@ class ApplicationAttachmentDownloadView(LoginRequiredMixin, RoleRequiredMixin, V
                 content_type=content_type,
             )
         except Exception:
+            _mark_attachment_unavailable(attachment)
             messages.error(request, "This attachment file is no longer available.")
             return HttpResponseRedirect(request.META.get("HTTP_REFERER") or reverse("ui:master-entry"))
         response["Content-Disposition"] = "inline"
@@ -3977,15 +4155,20 @@ class DistrictApplicationAttachmentTempUploadView(LoginRequiredMixin, WriteRoleM
         return f"{reverse('ui:master-entry-district-create')}?district_id={district.id}"
 
     def post(self, request, *args, **kwargs):
+        is_ajax = _is_ajax_request(request)
         district_id = (request.POST.get("district_id") or "").strip()
         if not district_id:
             messages.error(request, "Select a district before uploading attachments.")
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": reverse("ui:master-entry-district-create")}, status=400)
             return HttpResponseRedirect(reverse("ui:master-entry-district-create"))
         district = get_object_or_404(models.DistrictMaster, pk=district_id, is_active=True)
         target_url = self._target_url_for_district(district)
         form = ApplicationAttachmentUploadForm(request.POST, request.FILES)
         if not form.is_valid():
             messages.error(request, "; ".join(form.errors.get("file", []) + form.errors.get("file_name", [])) or "Choose a valid file before uploading.")
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
             return HttpResponseRedirect(target_url)
 
         attachments_qs = models.ApplicationAttachment.objects.filter(
@@ -3996,12 +4179,16 @@ class DistrictApplicationAttachmentTempUploadView(LoginRequiredMixin, WriteRoleM
         existing_count = attachments_qs.count()
         if existing_count >= ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION:
             messages.error(request, f"Maximum {ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION} files are allowed for one application.")
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
             return HttpResponseRedirect(target_url)
 
         uploaded = form.cleaned_data["file"]
         display_name = _prefixed_attachment_name(district.application_number, uploaded.name, form.cleaned_data.get("file_name") or "")
         if _attachment_name_exists(attachments_qs, display_name):
             messages.error(request, "A file with this name already exists for this application. Please rename it before uploading.")
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
             return HttpResponseRedirect(target_url)
         try:
             _save_application_attachment(
@@ -4022,8 +4209,12 @@ class DistrictApplicationAttachmentTempUploadView(LoginRequiredMixin, WriteRoleM
                 )
             else:
                 messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": target_url}, status=500)
             return HttpResponseRedirect(target_url)
         messages.success(request, "Attachment uploaded.")
+        if is_ajax:
+            return JsonResponse({"ok": True, "refresh_url": target_url})
         return HttpResponseRedirect(target_url)
 
 
@@ -4031,11 +4222,15 @@ class DistrictApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "create_edit"
     def post(self, request, *args, **kwargs):
+        is_ajax = _is_ajax_request(request)
         district = get_object_or_404(models.DistrictMaster, pk=kwargs["district_id"], is_active=True)
+        target_url = reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id})
         form = ApplicationAttachmentUploadForm(request.POST, request.FILES)
         if not form.is_valid():
             messages.error(request, "; ".join(form.errors.get("file", []) + form.errors.get("file_name", [])) or "Choose a valid file before uploading.")
-            return HttpResponseRedirect(reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}))
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
+            return HttpResponseRedirect(target_url)
 
         attachments_qs = models.ApplicationAttachment.objects.filter(
             application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
@@ -4044,13 +4239,17 @@ class DistrictApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin
         existing_count = attachments_qs.count()
         if existing_count >= ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION:
             messages.error(request, f"Maximum {ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION} files are allowed for one application.")
-            return HttpResponseRedirect(reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}))
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
+            return HttpResponseRedirect(target_url)
 
         uploaded = form.cleaned_data["file"]
         display_name = _prefixed_attachment_name(district.application_number, uploaded.name, form.cleaned_data.get("file_name") or "")
         if _attachment_name_exists(attachments_qs, display_name):
             messages.error(request, "A file with this name already exists for this application. Please rename it before uploading.")
-            return HttpResponseRedirect(reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}))
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
+            return HttpResponseRedirect(target_url)
         try:
             _save_application_attachment(
                 uploaded=uploaded,
@@ -4070,9 +4269,13 @@ class DistrictApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin
                 )
             else:
                 messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
-            return HttpResponseRedirect(reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}))
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": target_url}, status=500)
+            return HttpResponseRedirect(target_url)
         messages.success(request, "Attachment uploaded.")
-        return HttpResponseRedirect(reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}))
+        if is_ajax:
+            return JsonResponse({"ok": True, "refresh_url": target_url})
+        return HttpResponseRedirect(target_url)
 
 
 class DistrictApplicationAttachmentDeleteView(LoginRequiredMixin, WriteRoleMixin, View):
@@ -4096,14 +4299,20 @@ class PublicApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin, 
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "create_edit"
     def post(self, request, *args, **kwargs):
+        is_ajax = _is_ajax_request(request)
         entry = get_object_or_404(_public_any_queryset(), pk=kwargs["pk"])
+        target_url = reverse("ui:master-entry-public-edit", kwargs={"pk": entry.pk})
         if entry.status == models.BeneficiaryStatusChoices.ARCHIVED:
             messages.error(request, "This public application is archived. Unarchive it before uploading attachments.")
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": reverse("ui:master-entry") + "?type=public&status=archived"}, status=400)
             return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public&status=archived")
         form = ApplicationAttachmentUploadForm(request.POST, request.FILES)
         if not form.is_valid():
             messages.error(request, "; ".join(form.errors.get("file", []) + form.errors.get("file_name", [])) or "Choose a valid file before uploading.")
-            return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": entry.pk}))
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
+            return HttpResponseRedirect(target_url)
 
         attachments_qs = models.ApplicationAttachment.objects.filter(
             application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
@@ -4112,14 +4321,18 @@ class PublicApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin, 
         existing_count = attachments_qs.count()
         if existing_count >= ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION:
             messages.error(request, f"Maximum {ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION} files are allowed for one application.")
-            return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": entry.pk}))
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
+            return HttpResponseRedirect(target_url)
 
         uploaded = form.cleaned_data["file"]
         application_reference = entry.application_number or f"PUBLIC-{entry.pk}"
         display_name = _prefixed_attachment_name(application_reference, uploaded.name, form.cleaned_data.get("file_name") or "")
         if _attachment_name_exists(attachments_qs, display_name):
             messages.error(request, "A file with this name already exists for this application. Please rename it before uploading.")
-            return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": entry.pk}))
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
+            return HttpResponseRedirect(target_url)
         try:
             _save_application_attachment(
                 uploaded=uploaded,
@@ -4139,9 +4352,13 @@ class PublicApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin, 
                 )
             else:
                 messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
-            return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": entry.pk}))
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": target_url}, status=500)
+            return HttpResponseRedirect(target_url)
         messages.success(request, "Attachment uploaded.")
-        return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": entry.pk}))
+        if is_ajax:
+            return JsonResponse({"ok": True, "refresh_url": target_url})
+        return HttpResponseRedirect(target_url)
 
 
 class PublicApplicationAttachmentTempUploadView(LoginRequiredMixin, WriteRoleMixin, View):
@@ -4149,6 +4366,7 @@ class PublicApplicationAttachmentTempUploadView(LoginRequiredMixin, WriteRoleMix
     permission_action = "create_edit"
 
     def post(self, request, *args, **kwargs):
+        is_ajax = _is_ajax_request(request)
         form_token = (request.POST.get("attachment_form_token") or "").strip() or _ensure_attachment_form_token(
             request, models.ApplicationAttachmentTypeChoices.PUBLIC
         )
@@ -4157,6 +4375,8 @@ class PublicApplicationAttachmentTempUploadView(LoginRequiredMixin, WriteRoleMix
             application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
             form_token=form_token,
         )
+        if is_ajax:
+            return JsonResponse({"ok": True, "refresh_url": reverse("ui:master-entry-public-create")})
         return HttpResponseRedirect(reverse("ui:master-entry-public-create"))
 
 
@@ -4229,13 +4449,17 @@ class InstitutionApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMi
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "create_edit"
     def post(self, request, *args, **kwargs):
+        is_ajax = _is_ajax_request(request)
         application_number = kwargs["application_number"]
+        target_url = reverse("ui:master-entry-institution-edit", kwargs={"application_number": application_number})
         if not models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).exists():
             raise Http404("Institution application not found.")
         form = ApplicationAttachmentUploadForm(request.POST, request.FILES)
         if not form.is_valid():
             messages.error(request, "; ".join(form.errors.get("file", []) + form.errors.get("file_name", [])) or "Choose a valid file before uploading.")
-            return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": application_number}))
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
+            return HttpResponseRedirect(target_url)
 
         attachments_qs = models.ApplicationAttachment.objects.filter(
             application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
@@ -4244,13 +4468,17 @@ class InstitutionApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMi
         existing_count = attachments_qs.count()
         if existing_count >= ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION:
             messages.error(request, f"Maximum {ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION} files are allowed for one application.")
-            return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": application_number}))
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
+            return HttpResponseRedirect(target_url)
 
         uploaded = form.cleaned_data["file"]
         display_name = _prefixed_attachment_name(application_number, uploaded.name, form.cleaned_data.get("file_name") or "")
         if _attachment_name_exists(attachments_qs, display_name):
             messages.error(request, "A file with this name already exists for this application. Please rename it before uploading.")
-            return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": application_number}))
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": target_url}, status=400)
+            return HttpResponseRedirect(target_url)
         try:
             _save_application_attachment(
                 uploaded=uploaded,
@@ -4270,9 +4498,13 @@ class InstitutionApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMi
                 )
             else:
                 messages.error(request, "Attachment upload failed. Please check Google Drive configuration and try again.")
-            return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": application_number}))
+            if is_ajax:
+                return JsonResponse({"ok": False, "refresh_url": target_url}, status=500)
+            return HttpResponseRedirect(target_url)
         messages.success(request, "Attachment uploaded.")
-        return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": application_number}))
+        if is_ajax:
+            return JsonResponse({"ok": True, "refresh_url": target_url})
+        return HttpResponseRedirect(target_url)
 
 
 class InstitutionApplicationAttachmentTempUploadView(LoginRequiredMixin, WriteRoleMixin, View):
@@ -4280,6 +4512,7 @@ class InstitutionApplicationAttachmentTempUploadView(LoginRequiredMixin, WriteRo
     permission_action = "create_edit"
 
     def post(self, request, *args, **kwargs):
+        is_ajax = _is_ajax_request(request)
         form_token = (request.POST.get("attachment_form_token") or "").strip() or _ensure_attachment_form_token(
             request, models.ApplicationAttachmentTypeChoices.INSTITUTION
         )
@@ -4288,6 +4521,8 @@ class InstitutionApplicationAttachmentTempUploadView(LoginRequiredMixin, WriteRo
             application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
             form_token=form_token,
         )
+        if is_ajax:
+            return JsonResponse({"ok": True, "refresh_url": reverse("ui:master-entry-institution-create")})
         return HttpResponseRedirect(reverse("ui:master-entry-institution-create"))
 
 
