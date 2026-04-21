@@ -3,6 +3,40 @@
 from django.db import migrations
 
 
+RENAME_STATUS_INDEX_SQL = """
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'application_attac_status_9f8eb0_idx') THEN
+        ALTER INDEX application_attac_status_9f8eb0_idx RENAME TO application_status_731a0e_idx;
+    ELSIF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'application_attachments_status_idx') THEN
+        ALTER INDEX application_attachments_status_idx RENAME TO application_status_731a0e_idx;
+    END IF;
+END $$;
+"""
+
+RENAME_FORM_TOKEN_INDEX_SQL = """
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'application_attac_form_to_6df95d_idx') THEN
+        ALTER INDEX application_attac_form_to_6df95d_idx RENAME TO application_form_to_086951_idx;
+    ELSIF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'application_attachments_form_token_idx') THEN
+        ALTER INDEX application_attachments_form_token_idx RENAME TO application_form_to_086951_idx;
+    END IF;
+END $$;
+"""
+
+RENAME_TEMP_EXPIRES_INDEX_SQL = """
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'application_attac_temp_ex_f95e2c_idx') THEN
+        ALTER INDEX application_attac_temp_ex_f95e2c_idx RENAME TO application_temp_ex_3c6677_idx;
+    ELSIF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'application_attachments_temp_expires_at_idx') THEN
+        ALTER INDEX application_attachments_temp_expires_at_idx RENAME TO application_temp_ex_3c6677_idx;
+    END IF;
+END $$;
+"""
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,19 +44,28 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RenameIndex(
-            model_name='applicationattachment',
-            new_name='application_status_731a0e_idx',
-            old_name='application_attac_status_9f8eb0_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='applicationattachment',
-            new_name='application_form_to_086951_idx',
-            old_name='application_attac_form_to_6df95d_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='applicationattachment',
-            new_name='application_temp_ex_3c6677_idx',
-            old_name='application_attac_temp_ex_f95e2c_idx',
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunSQL(sql=RENAME_STATUS_INDEX_SQL, reverse_sql=migrations.RunSQL.noop),
+                migrations.RunSQL(sql=RENAME_FORM_TOKEN_INDEX_SQL, reverse_sql=migrations.RunSQL.noop),
+                migrations.RunSQL(sql=RENAME_TEMP_EXPIRES_INDEX_SQL, reverse_sql=migrations.RunSQL.noop),
+            ],
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name='applicationattachment',
+                    new_name='application_status_731a0e_idx',
+                    old_name='application_attac_status_9f8eb0_idx',
+                ),
+                migrations.RenameIndex(
+                    model_name='applicationattachment',
+                    new_name='application_form_to_086951_idx',
+                    old_name='application_attac_form_to_6df95d_idx',
+                ),
+                migrations.RenameIndex(
+                    model_name='applicationattachment',
+                    new_name='application_temp_ex_3c6677_idx',
+                    old_name='application_attac_temp_ex_f95e2c_idx',
+                ),
+            ],
         ),
     ]
