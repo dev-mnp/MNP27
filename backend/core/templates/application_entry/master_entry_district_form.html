@@ -305,6 +305,8 @@
       </div>
       </div>
 
+    </form>
+
       <div class="form-section-card js-attachment-card" id="district-attachments-card" style="margin-top: 20px;">
       <div class="section-title-row">
         <div>
@@ -313,7 +315,7 @@
           <div class="field-hint" style="margin-top: 6px;">{{ attachment_constraints_text }}</div>
         </div>
       </div>
-      <form class="js-attachment-upload-form" method="post" action="{{ attachment_upload_url }}" enctype="multipart/form-data" style="border:0;padding:0;margin:0;" data-attachment-card-id="district-attachments-card">
+      <form class="js-attachment-upload-form" method="post" action="{{ attachment_upload_url }}" enctype="multipart/form-data" style="border:0;padding:0;margin:0;" data-attachment-card-id="district-attachments-card" data-temp-upload-url="{% url 'ui:district-attachment-temp-upload' %}" data-saved-upload-url="{{ attachment_upload_url|default:'' }}">
         {% csrf_token %}
         <input type="hidden" name="attachment_form_token" value="{{ attachment_form_token|default:'' }}">
         <input type="hidden" id="district-attachment-district-id" name="district_id" value="{{ attachment_district_id|default:'' }}">
@@ -401,7 +403,6 @@
         <button class="btn js-save-button{% if request.resolver_match.url_name == 'master-entry-district-edit' %} btn-disabled{% endif %}" type="submit" name="action" value="draft" form="district-entry-form" {% if request.resolver_match.url_name == 'master-entry-district-edit' %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v6h6V3"/><path d="M9 17h6"/></svg><span>Save as Draft</span></button>
         <button class="btn js-submit-button" type="submit" name="action" value="submit" form="district-entry-form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Submit</span></button>
       </div>
-    </form>
     <form id="district-temp-clear-form" method="post" action="{{ attachment_temp_delete_url }}" style="display:none;">
       {% csrf_token %}
       <input type="hidden" name="attachment_form_token" value="{{ attachment_form_token|default:'' }}">
@@ -507,6 +508,7 @@
       const districtMobile = document.getElementById("district-mobile");
       const districtBudget = document.getElementById("district-budget");
       const districtAttachmentDistrictId = document.getElementById("district-attachment-district-id");
+      const districtAttachmentUploadForm = document.querySelector(".js-attachment-upload-form");
       const districtAttachmentFile = document.getElementById("district-attachment-file");
       const districtAttachmentFileName = document.getElementById("district-attachment-file-name");
       const districtAttachmentCameraBtn = document.getElementById("district-attachment-camera-btn");
@@ -741,6 +743,24 @@
         districtBudget.textContent = "Rs." + formatRupees(budget);
         if (districtAttachmentDistrictId) {
           districtAttachmentDistrictId.value = selectedDistrictId;
+        }
+        if (districtAttachmentUploadForm) {
+          const tempUploadUrl = districtAttachmentUploadForm.dataset.tempUploadUrl || "";
+          const savedUploadUrl = districtAttachmentUploadForm.dataset.savedUploadUrl || "";
+          const uploadUrl = selectedDistrictId ? (savedUploadUrl || tempUploadUrl) : "";
+          districtAttachmentUploadForm.action = uploadUrl || window.location.href;
+          [districtAttachmentFile, districtAttachmentFileName, districtAttachmentCameraBtn].forEach(function(control) {
+            if (!control) return;
+            control.disabled = !selectedDistrictId;
+          });
+          const attachmentSubmitBtn = districtAttachmentUploadForm.querySelector('button[type="submit"]');
+          if (attachmentSubmitBtn) {
+            attachmentSubmitBtn.disabled = !selectedDistrictId;
+          }
+          if (!selectedDistrictId) {
+            if (districtAttachmentFile) districtAttachmentFile.value = "";
+            if (districtAttachmentFileName) districtAttachmentFileName.value = "";
+          }
         }
         recalcTotals();
       }
