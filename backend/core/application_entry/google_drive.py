@@ -19,12 +19,10 @@ if not hasattr(importlib_metadata, "packages_distributions"):
 
 
 def is_configured() -> bool:
-    root_folder_id = (os.getenv("GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID") or "").strip()
-    return bool(root_folder_id)
+    return bool((os.getenv("GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID") or "").strip())
 
 
-@lru_cache(maxsize=1)
-def _drive_service():
+def get_drive_service():
     from googleapiclient.discovery import build
 
     credentials, _ = default(scopes=GOOGLE_DRIVE_SCOPES)
@@ -60,7 +58,7 @@ def _folder_label(application_type: str) -> str:
 
 @lru_cache(maxsize=8)
 def _ensure_child_folder(folder_name: str) -> str:
-    service = _drive_service()
+    service = get_drive_service()
     parent_id = _root_folder_id()
     escaped_name = folder_name.replace("'", "\\'")
     query = (
@@ -120,7 +118,7 @@ def upload_application_attachment(
 ) -> dict[str, object]:
     from googleapiclient.http import MediaIoBaseUpload
 
-    service = _drive_service()
+    service = get_drive_service()
     target_folder_id = _ensure_child_folder(_folder_label(application_type))
     file_metadata = {
         "name": display_name,
@@ -151,7 +149,7 @@ def upload_application_attachment(
 
 
 def list_application_attachments(*, application_type: str, application_reference: str) -> list[dict[str, object]]:
-    service = _drive_service()
+    service = get_drive_service()
     target_folder_id = _ensure_child_folder(_folder_label(application_type))
     reference_prefix = f"{(application_reference or '').strip()}_"
     query = f"'{target_folder_id}' in parents and trashed = false"
@@ -193,7 +191,7 @@ def list_application_attachments(*, application_type: str, application_reference
 def download_file(file_id: str) -> bytes:
     from googleapiclient.http import MediaIoBaseDownload
 
-    service = _drive_service()
+    service = get_drive_service()
     request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
     buffer = io.BytesIO()
     downloader = MediaIoBaseDownload(buffer, request)
@@ -205,7 +203,7 @@ def download_file(file_id: str) -> bytes:
 
 
 def get_file_metadata(file_id: str) -> dict[str, object]:
-    service = _drive_service()
+    service = get_drive_service()
     data = (
         service.files()
         .get(
@@ -224,7 +222,7 @@ def get_file_metadata(file_id: str) -> dict[str, object]:
 
 
 def rename_file(file_id: str, new_name: str) -> dict[str, object]:
-    service = _drive_service()
+    service = get_drive_service()
     data = (
         service.files()
         .update(
@@ -244,5 +242,5 @@ def rename_file(file_id: str, new_name: str) -> dict[str, object]:
 
 
 def delete_file(file_id: str) -> None:
-    service = _drive_service()
+    service = get_drive_service()
     service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
