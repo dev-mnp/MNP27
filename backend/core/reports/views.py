@@ -18,6 +18,9 @@ from core.reports import services
 from core.reports.services import REPORTS_DISTRIBUTION_STATE_KEY
 from core.reports.services import REPORTS_SEGREGATION_STATE_KEY
 from core.reports.services import REPORTS_WAITING_HALL_STATE_KEY
+from core.reports.services import STAGE_DISTRIBUTION_BENEFICIARY_FILTER_CHOICES
+from core.reports.services import STAGE_DISTRIBUTION_ITEM_FILTER_CHOICES
+from core.reports.services import STAGE_DISTRIBUTION_PREMISE_FILTER_CHOICES
 from core.reports.services import SEGREGATION_BENEFICIARY_FILTER_CHOICES
 from core.reports.services import SEGREGATION_ITEM_FILTER_CHOICES
 from core.reports.services import _reports_active_session
@@ -53,6 +56,16 @@ from core.reports.services import _reports_token_lookup_rows_from_session
 from core.reports.services import _reports_token_lookup_session_state
 from core.reports.services import _reports_waiting_hall_grouped_data
 from core.reports.services import _reports_waiting_hall_session_state
+from core.reports.services import _stage_distribution_build_file1
+from core.reports.services import _stage_distribution_build_beneficiary_article_file
+from core.reports.services import _stage_distribution_build_article_beneficiary_file
+from core.reports.services import _stage_distribution_file1_sheet_rows
+from core.reports.services import _stage_distribution_master_sheet_rows
+from core.reports.services import _stage_distribution_filter_rows
+from core.reports.services import _stage_distribution_normalize_dataset
+from core.reports.services import generate_stage_distribution_file1_pdf
+from core.reports.services import generate_stage_distribution_grouped_pdf
+from core.reports.services import generate_stage_distribution_xlsx
 from core.reports.services import _segregation_build_file1
 from core.reports.services import _segregation_build_file2
 from core.reports.services import _segregation_build_file3
@@ -65,6 +78,7 @@ from core.reports.services import _segregation_normalize_dataset
 from core.shared.csv_utils import _tabular_rows_from_upload
 from core.shared.permissions import RoleRequiredMixin
 from core.shared.phase2 import _phase2_unique_headers
+from core.shared.phase2 import _phase2_parse_number
 from core.shared.token_generation import _token_generation_saved_dataset
 
 
@@ -110,6 +124,20 @@ def _reports_selection_summary(selected_values: list[str], choices: list[tuple[s
     if len(labels) <= 3:
         return ", ".join(labels)
     return f"{len(labels)} selected"
+
+
+def _stage_distribution_file5_title(selected_beneficiary_types: list[str]) -> str:
+    if len(selected_beneficiary_types) == 1:
+        value = str(selected_beneficiary_types[0] or "").strip().lower()
+        if value == models.RecipientTypeChoices.PUBLIC:
+            return "Article wise Public list"
+        if value == models.RecipientTypeChoices.DISTRICT:
+            return "Article wise District list"
+        if value == models.RecipientTypeChoices.INSTITUTIONS:
+            return "Article wise Institution list"
+        if value == models.RecipientTypeChoices.OTHERS:
+            return "Article wise Others list"
+    return "Article wise beneficiaries"
 
 
 class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
@@ -159,8 +187,26 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             return HttpResponseRedirect(f"{reverse('ui:reports')}?tab={target}")
         action = (request.POST.get("action") or "").strip()
         if active_tab == "reports-home":
+            reports_panel = str(request.POST.get("reports_panel") or request.GET.get("reports_panel") or "").strip().lower()
             segregation_state = _reports_simple_report_session_state(request, REPORTS_SEGREGATION_STATE_KEY)
             distribution_state = _reports_simple_report_session_state(request, REPORTS_DISTRIBUTION_STATE_KEY)
+            stage_distribution_beneficiary_types = _reports_normalize_segmentation_filter(
+                _reports_multi_value_list(request.GET if request.method == "GET" else request.POST, "stage_beneficiary_type"),
+                allowed_values={choice[0] for choice in STAGE_DISTRIBUTION_BENEFICIARY_FILTER_CHOICES},
+            )
+            stage_distribution_item_types = _reports_normalize_segmentation_filter(
+                _reports_multi_value_list(request.GET if request.method == "GET" else request.POST, "stage_item_type"),
+                allowed_values={choice[0] for choice in STAGE_DISTRIBUTION_ITEM_FILTER_CHOICES},
+            )
+            stage_distribution_premise = str(
+                (request.GET if request.method == "GET" else request.POST).get("stage_premise") or ""
+            ).strip().lower() or "all"
+            stage_distribution_seq_start = _phase2_parse_number(
+                (request.GET if request.method == "GET" else request.POST).get("stage_seq_start")
+            )
+            stage_distribution_seq_end = _phase2_parse_number(
+                (request.GET if request.method == "GET" else request.POST).get("stage_seq_end")
+            )
             segregation_beneficiary_types = _reports_normalize_segmentation_filter(
                 _reports_multi_value_list(request.POST, "segregation_beneficiary_type"),
                 allowed_values={choice[0] for choice in SEGREGATION_BENEFICIARY_FILTER_CHOICES},
@@ -174,10 +220,23 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 params = {
                     "tab": "reports-home",
                 }
+                panel = reports_panel or ("stage-distribution" if action.startswith("preview_reports_stage_distribution") or action.startswith("download_reports_stage_distribution") or action in {"sync_reports_distribution", "upload_reports_distribution"} else "segregation")
+                if panel:
+                    params["reports_panel"] = panel
                 if segregation_beneficiary_types:
                     params["seg_beneficiary_type"] = segregation_beneficiary_types
                 if segregation_item_types:
                     params["seg_item_type"] = segregation_item_types
+                if stage_distribution_beneficiary_types:
+                    params["stage_beneficiary_type"] = stage_distribution_beneficiary_types
+                if stage_distribution_item_types:
+                    params["stage_item_type"] = stage_distribution_item_types
+                if stage_distribution_premise != "all":
+                    params["stage_premise"] = stage_distribution_premise
+                if stage_distribution_seq_start:
+                    params["stage_seq_start"] = stage_distribution_seq_start
+                if stage_distribution_seq_end:
+                    params["stage_seq_end"] = stage_distribution_seq_end
                 return HttpResponseRedirect(f"{reverse('ui:reports')}?{urlencode(params, doseq=True)}")
 
             def _simple_report_sync(state, label: str):
@@ -319,6 +378,160 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                     return _reports_home_redirect()
                 messages.success(request, f"Uploaded {rows_count} distribution row(s).")
                 return _reports_home_redirect()
+
+            if action in {
+                "download_reports_stage_distribution_excel",
+                "download_reports_stage_distribution_file1_pdf",
+                "preview_reports_stage_distribution_file1_pdf",
+                "download_reports_stage_distribution_file2_pdf",
+                "preview_reports_stage_distribution_file2_pdf",
+                "download_reports_stage_distribution_file3_pdf",
+                "preview_reports_stage_distribution_file3_pdf",
+                "download_reports_stage_distribution_file4_pdf",
+                "preview_reports_stage_distribution_file4_pdf",
+                "download_reports_stage_distribution_file5_pdf",
+                "preview_reports_stage_distribution_file5_pdf",
+            }:
+                normalized_dataset = _stage_distribution_normalize_dataset(distribution_state)
+                file5_title = _stage_distribution_file5_title(stage_distribution_beneficiary_types)
+                rows_with_three_filters = _stage_distribution_filter_rows(
+                    normalized_dataset.get("rows") or [],
+                    beneficiary_types=stage_distribution_beneficiary_types,
+                    item_types=stage_distribution_item_types,
+                    premise=stage_distribution_premise,
+                )
+                rows_for_file1 = _stage_distribution_filter_rows(
+                    normalized_dataset.get("rows") or [],
+                    beneficiary_types=stage_distribution_beneficiary_types,
+                    item_types=stage_distribution_item_types,
+                    premise=stage_distribution_premise,
+                    seq_start=int(stage_distribution_seq_start or 0) or None,
+                    seq_end=int(stage_distribution_seq_end or 0) or None,
+                )
+                rows_for_file2_4 = _stage_distribution_filter_rows(
+                    normalized_dataset.get("rows") or [],
+                    item_types=stage_distribution_item_types,
+                    premise=stage_distribution_premise,
+                )
+                logo_bytes = base64.b64decode(shared_logo["logo_base64"]) if shared_logo.get("logo_base64") else None
+                if logo_bytes:
+                    logo_bytes, _ = services._optimized_report_logo(
+                        logo_bytes,
+                        shared_logo.get("logo_content_type") or "image/png",
+                    )
+                if action == "download_reports_stage_distribution_excel":
+                    file1_data = _stage_distribution_build_file1(rows_for_file1)
+                    file2_data = _stage_distribution_build_beneficiary_article_file(
+                        rows_for_file2_4,
+                        beneficiary_types={models.RecipientTypeChoices.DISTRICT},
+                        premise=stage_distribution_premise,
+                    )
+                    file3_data = _stage_distribution_build_beneficiary_article_file(
+                        rows_for_file2_4,
+                        beneficiary_types={models.RecipientTypeChoices.PUBLIC},
+                        premise=stage_distribution_premise,
+                    )
+                    file4_data = _stage_distribution_build_beneficiary_article_file(
+                        rows_for_file2_4,
+                        beneficiary_types={models.RecipientTypeChoices.INSTITUTIONS},
+                        premise=stage_distribution_premise,
+                    )
+                    file5_data = _stage_distribution_build_article_beneficiary_file(
+                        rows_with_three_filters,
+                        premise=stage_distribution_premise,
+                    )
+                    workbook_stream = generate_stage_distribution_xlsx(
+                        master_rows=_stage_distribution_master_sheet_rows(normalized_dataset.get("rows") or []),
+                        file1_rows=_stage_distribution_file1_sheet_rows(file1_data["rows"]),
+                        file2_groups=file2_data["groups"],
+                        file3_groups=file3_data["groups"],
+                        file4_groups=file4_data["groups"],
+                        file5_groups=file5_data["groups"],
+                        file5_title=file5_title,
+                    )
+                    return FileResponse(
+                        workbook_stream,
+                        as_attachment=True,
+                        filename=f"stage_distribution_reports_{timezone.localtime().strftime('%d_%b_%Y_%H_%M')}.xlsx",
+                        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+                if action in {"download_reports_stage_distribution_file1_pdf", "preview_reports_stage_distribution_file1_pdf"}:
+                    file1_data = _stage_distribution_build_file1(rows_for_file1)
+                    pdf_stream = generate_stage_distribution_file1_pdf(
+                        file1_data["rows"],
+                        seq_start=int(stage_distribution_seq_start or 0) or None,
+                        seq_end=int(stage_distribution_seq_end or 0) or None,
+                        custom_logo=logo_bytes,
+                    )
+                    file_name_base = "stage_distribution_file_1"
+                elif action in {"download_reports_stage_distribution_file2_pdf", "preview_reports_stage_distribution_file2_pdf"}:
+                    file2_data = _stage_distribution_build_beneficiary_article_file(
+                        rows_for_file2_4,
+                        beneficiary_types={models.RecipientTypeChoices.DISTRICT},
+                        premise=stage_distribution_premise,
+                    )
+                    pdf_stream = generate_stage_distribution_grouped_pdf(
+                        file2_data["groups"],
+                        section_title="District-wise Article List",
+                        item_value_key="article_name",
+                        name_column_label="District Name",
+                        header_title_text="District-wise Article List",
+                        custom_logo=logo_bytes,
+                    )
+                    file_name_base = "stage_distribution_file_2"
+                elif action in {"download_reports_stage_distribution_file3_pdf", "preview_reports_stage_distribution_file3_pdf"}:
+                    file3_data = _stage_distribution_build_beneficiary_article_file(
+                        rows_for_file2_4,
+                        beneficiary_types={models.RecipientTypeChoices.PUBLIC},
+                        premise=stage_distribution_premise,
+                    )
+                    pdf_stream = generate_stage_distribution_grouped_pdf(
+                        file3_data["groups"],
+                        section_title="Public-wise Article List",
+                        item_value_key="article_name",
+                        name_column_label="Public Name",
+                        header_title_text="Public-wise Article List",
+                        custom_logo=logo_bytes,
+                    )
+                    file_name_base = "stage_distribution_file_3"
+                elif action in {"download_reports_stage_distribution_file4_pdf", "preview_reports_stage_distribution_file4_pdf"}:
+                    file4_data = _stage_distribution_build_beneficiary_article_file(
+                        rows_for_file2_4,
+                        beneficiary_types={models.RecipientTypeChoices.INSTITUTIONS},
+                        premise=stage_distribution_premise,
+                    )
+                    pdf_stream = generate_stage_distribution_grouped_pdf(
+                        file4_data["groups"],
+                        section_title="Institution-wise Article List",
+                        item_value_key="article_name",
+                        name_column_label="Institution Name",
+                        header_title_text="Institution-wise Article List",
+                        custom_logo=logo_bytes,
+                    )
+                    file_name_base = "stage_distribution_file_4"
+                else:
+                    file5_data = _stage_distribution_build_article_beneficiary_file(
+                        rows_with_three_filters,
+                        premise=stage_distribution_premise,
+                    )
+                    pdf_stream = generate_stage_distribution_grouped_pdf(
+                        file5_data["groups"],
+                        section_title=file5_title,
+                        item_value_key="beneficiary_name",
+                        name_column_label="Article Name",
+                        header_title_text=file5_title,
+                        custom_logo=logo_bytes,
+                    )
+                    file_name_base = "stage_distribution_file_5"
+                return FileResponse(
+                    pdf_stream,
+                    as_attachment=action.startswith("download_reports_stage_distribution"),
+                    filename=(
+                        f"{file_name_base}_{timezone.localtime().strftime('%d_%b_%Y_%H_%M')}.pdf"
+                        if action.startswith("download_reports_stage_distribution")
+                        else f"{file_name_base}_preview.pdf"
+                    ),
+                )
 
             return _reports_home_redirect()
 
@@ -883,6 +1096,53 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         segregation_file3 = _segregation_build_file3(segregation_filtered_rows)
         distribution_state = _reports_simple_report_session_state(self.request, REPORTS_DISTRIBUTION_STATE_KEY)
         distribution_rows = list(distribution_state.get("rows") or [])
+        stage_distribution_beneficiary_types = _reports_normalize_segmentation_filter(
+            _reports_multi_value_list(self.request.GET, "stage_beneficiary_type"),
+            allowed_values={choice[0] for choice in STAGE_DISTRIBUTION_BENEFICIARY_FILTER_CHOICES},
+        )
+        stage_distribution_item_types = _reports_normalize_segmentation_filter(
+            _reports_multi_value_list(self.request.GET, "stage_item_type"),
+            allowed_values={choice[0] for choice in STAGE_DISTRIBUTION_ITEM_FILTER_CHOICES},
+        )
+        stage_distribution_premise = str(self.request.GET.get("stage_premise") or "").strip().lower() or "all"
+        stage_distribution_seq_start = _phase2_parse_number(self.request.GET.get("stage_seq_start"))
+        stage_distribution_seq_end = _phase2_parse_number(self.request.GET.get("stage_seq_end"))
+        stage_distribution_dataset = _stage_distribution_normalize_dataset(distribution_state)
+        stage_distribution_filtered_rows = _stage_distribution_filter_rows(
+            stage_distribution_dataset.get("rows") or [],
+            beneficiary_types=stage_distribution_beneficiary_types,
+            item_types=stage_distribution_item_types,
+            premise=stage_distribution_premise,
+        )
+        stage_distribution_file2_4_rows = _stage_distribution_filter_rows(
+            stage_distribution_dataset.get("rows") or [],
+            item_types=stage_distribution_item_types,
+            premise=stage_distribution_premise,
+        )
+        stage_distribution_file1 = _stage_distribution_build_file1(stage_distribution_filtered_rows)
+        stage_distribution_file2 = _stage_distribution_build_beneficiary_article_file(
+            stage_distribution_file2_4_rows,
+            beneficiary_types={models.RecipientTypeChoices.DISTRICT},
+            premise=stage_distribution_premise,
+        )
+        stage_distribution_file3 = _stage_distribution_build_beneficiary_article_file(
+            stage_distribution_file2_4_rows,
+            beneficiary_types={models.RecipientTypeChoices.PUBLIC},
+            premise=stage_distribution_premise,
+        )
+        stage_distribution_file4 = _stage_distribution_build_beneficiary_article_file(
+            stage_distribution_file2_4_rows,
+            beneficiary_types={models.RecipientTypeChoices.INSTITUTIONS},
+            premise=stage_distribution_premise,
+        )
+        stage_distribution_file5 = _stage_distribution_build_article_beneficiary_file(
+            stage_distribution_filtered_rows,
+            premise=stage_distribution_premise,
+        )
+        stage_distribution_file5_title = _stage_distribution_file5_title(stage_distribution_beneficiary_types)
+        reports_home_open_panel = str(self.request.GET.get("reports_panel") or "segregation").strip().lower() or "segregation"
+        if reports_home_open_panel not in {"segregation", "stage-distribution"}:
+            reports_home_open_panel = "segregation"
         context.update(
             {
                 "page_title": "Reports",
@@ -931,6 +1191,35 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 "segregation_file3": segregation_file3,
                 "distribution_state": distribution_state,
                 "distribution_row_count": len(distribution_rows),
+                "stage_distribution_filter_values": {
+                    "beneficiary_types": stage_distribution_beneficiary_types,
+                    "item_types": stage_distribution_item_types,
+                    "premise": stage_distribution_premise,
+                    "seq_start": int(stage_distribution_seq_start or 0) if stage_distribution_seq_start else "",
+                    "seq_end": int(stage_distribution_seq_end or 0) if stage_distribution_seq_end else "",
+                },
+                "stage_distribution_beneficiary_type_choices": STAGE_DISTRIBUTION_BENEFICIARY_FILTER_CHOICES,
+                "stage_distribution_item_type_choices": STAGE_DISTRIBUTION_ITEM_FILTER_CHOICES,
+                "stage_distribution_premise_choices": STAGE_DISTRIBUTION_PREMISE_FILTER_CHOICES,
+                "stage_distribution_beneficiary_summary": _reports_selection_summary(
+                    stage_distribution_beneficiary_types,
+                    STAGE_DISTRIBUTION_BENEFICIARY_FILTER_CHOICES,
+                ),
+                "stage_distribution_item_summary": _reports_selection_summary(
+                    stage_distribution_item_types,
+                    STAGE_DISTRIBUTION_ITEM_FILTER_CHOICES,
+                ),
+                "stage_distribution_premise_summary": _reports_selection_summary(
+                    [stage_distribution_premise] if stage_distribution_premise != "all" else [],
+                    STAGE_DISTRIBUTION_PREMISE_FILTER_CHOICES,
+                ),
+                "stage_distribution_file1": stage_distribution_file1,
+                "stage_distribution_file2": stage_distribution_file2,
+                "stage_distribution_file3": stage_distribution_file3,
+                "stage_distribution_file4": stage_distribution_file4,
+                "stage_distribution_file5": stage_distribution_file5,
+                "stage_distribution_file5_title": stage_distribution_file5_title,
+                "reports_home_open_panel": reports_home_open_panel,
                 "public_ack_field_rows": [
                     {
                         "field_name": field.get("field_name") or "",

@@ -53,6 +53,23 @@ REPORTS_PUBLIC_SIGNATURE_STATE_KEY = "reports_public_signature"
 REPORTS_DISTRICT_SIGNATURE_STATE_KEY = "reports_district_signature"
 REPORTS_SEGREGATION_STATE_KEY = "reports_segregation"
 REPORTS_DISTRIBUTION_STATE_KEY = "reports_distribution"
+STAGE_DISTRIBUTION_BENEFICIARY_FILTER_CHOICES = [
+    ("all", "All"),
+    (models.RecipientTypeChoices.DISTRICT, "District"),
+    (models.RecipientTypeChoices.PUBLIC, "Public"),
+    (models.RecipientTypeChoices.INSTITUTIONS, "Institutions"),
+    (models.RecipientTypeChoices.OTHERS, "Others"),
+]
+STAGE_DISTRIBUTION_ITEM_FILTER_CHOICES = [
+    ("all", "All"),
+    (models.ItemTypeChoices.ARTICLE, "Article"),
+    (models.ItemTypeChoices.AID, "Aid"),
+]
+STAGE_DISTRIBUTION_PREMISE_FILTER_CHOICES = [
+    ("all", "All"),
+    ("waiting_hall", "Waiting Hall Qty only"),
+    ("masm_hall", "Masm Hall Qty only"),
+]
 
 
 def _reports_active_session():
@@ -624,6 +641,807 @@ def _segregation_file3_sheet_rows(rows: list[dict]) -> list[dict]:
         }
         for row in list(rows or [])
     ]
+
+
+def _stage_distribution_pick_value(row: dict, aliases: list[str], default=""):
+    item = dict(row or {})
+    for alias in list(aliases or []):
+        if alias in item and item.get(alias) not in {None, ""}:
+            return item.get(alias)
+    return default
+
+
+def _stage_distribution_display_text(*values):
+    parts = []
+    for value in values:
+        text = str(value or "").strip()
+        if text:
+            parts.append(text)
+    return " - ".join(parts)
+
+
+def _stage_distribution_normalize_row(row: dict) -> dict:
+    item = dict(row or {})
+    sequence_no = _phase2_parse_number(_stage_distribution_pick_value(item, ["Sequence No", "Seq No", "sequence_no", "Sequence"], 0))
+    item_name = _stage_distribution_display_text(
+        _stage_distribution_pick_value(item, ["Article", "Requested Item", "Token Name", "Item", "article_name", "item_name"]),
+    )
+    beneficiary_name = _stage_distribution_display_text(
+        _stage_distribution_pick_value(item, ["Beneficiary Name", "Beneficiary", "Name", "beneficiary_name"]),
+    )
+    application_number = _stage_distribution_display_text(
+        _stage_distribution_pick_value(item, ["Application Number", "App No", "application_number"]),
+    )
+    names = _stage_distribution_display_text(
+        _stage_distribution_pick_value(item, ["Names", "Name", "names"]),
+    )
+    beneficiary_type = _stage_distribution_display_text(
+        _stage_distribution_pick_value(item, ["Beneficiary Type", "beneficiary_type"]),
+    )
+    item_type = _stage_distribution_display_text(
+        _stage_distribution_pick_value(item, ["Item Type", "item_type"]),
+    )
+    waiting_hall_quantity = _phase2_parse_number(
+        _stage_distribution_pick_value(item, ["Waiting Hall Quantity", "waiting_hall_quantity"], 0)
+    )
+    token_quantity = _phase2_parse_number(
+        _stage_distribution_pick_value(item, ["Token Quantity", "Token Qty", "token_quantity"], 0)
+    )
+    start_token_no = _phase2_parse_number(
+        _stage_distribution_pick_value(item, ["Start Token No", "Start Token", "token_start"], 0)
+    )
+    end_token_no = _phase2_parse_number(
+        _stage_distribution_pick_value(item, ["End Token No", "End Token", "token_end"], 0)
+    )
+    if token_quantity <= 0 and start_token_no > 0 and end_token_no >= start_token_no:
+        token_quantity = end_token_no - start_token_no + 1
+    premise = _stage_distribution_display_text(
+        _stage_distribution_pick_value(item, ["Premise", "premise"]),
+    )
+    if not premise:
+        if waiting_hall_quantity > 0:
+            premise = "waiting_hall"
+        elif token_quantity > 0:
+            premise = "masm_hall"
+        else:
+            premise = "all"
+    token_display = str(int(start_token_no or 0))
+    if end_token_no and end_token_no > start_token_no:
+        token_display = f"{int(start_token_no)} - {int(end_token_no)}"
+
+    return {
+        "sequence_no": int(sequence_no or 0),
+        "item_name": item_name,
+        "beneficiary_name": beneficiary_name,
+        "application_number": application_number,
+        "names": names,
+        "beneficiary_type": beneficiary_type,
+        "item_type": item_type,
+        "waiting_hall_quantity": int(waiting_hall_quantity or 0),
+        "token_quantity": int(token_quantity or 0),
+        "start_token_no": int(start_token_no or 0),
+        "end_token_no": int(end_token_no or 0),
+        "premise": premise,
+        "token_display": token_display,
+    }
+
+
+def _stage_distribution_normalize_dataset(dataset: dict) -> dict:
+    rows = []
+    for row in list(dataset.get("rows") or []):
+        normalized = _stage_distribution_normalize_row(row)
+        if not (
+            normalized["item_name"]
+            or normalized["beneficiary_name"]
+            or normalized["token_quantity"]
+            or normalized["waiting_hall_quantity"]
+        ):
+            continue
+        rows.append(normalized)
+    return {
+        "rows": rows,
+        "headers": list(dataset.get("headers") or []),
+    }
+
+
+def _stage_distribution_filter_rows(
+    rows: list[dict],
+    *,
+    beneficiary_types: list[str] | tuple[str, ...] | set[str] | None = None,
+    item_types: list[str] | tuple[str, ...] | set[str] | None = None,
+    premise: str = "all",
+    seq_start: int | None = None,
+    seq_end: int | None = None,
+) -> list[dict]:
+    beneficiary_type_set = {str(value or "").strip() for value in list(beneficiary_types or []) if str(value or "").strip()}
+    item_type_set = {str(value or "").strip() for value in list(item_types or []) if str(value or "").strip()}
+    premise_value = str(premise or "all").strip().lower() or "all"
+    filtered_rows = []
+    for row in list(rows or []):
+        row_beneficiary_type = str(row.get("beneficiary_type") or "").strip()
+        row_item_type = str(row.get("item_type") or "").strip()
+        row_premise = str(row.get("premise") or "all").strip().lower() or "all"
+        row_sequence = int(row.get("sequence_no") or 0)
+        if beneficiary_type_set and row_beneficiary_type not in beneficiary_type_set:
+            continue
+        if item_type_set and row_item_type not in item_type_set:
+            continue
+        if premise_value != "all" and row_premise != premise_value:
+            continue
+        if seq_start is not None and row_sequence and row_sequence < seq_start:
+            continue
+        if seq_end is not None and row_sequence and row_sequence > seq_end:
+            continue
+        if seq_start is not None and seq_end is not None and row_sequence <= 0:
+            continue
+        filtered_rows.append(dict(row))
+    filtered_rows.sort(
+        key=lambda row: (
+            int(row.get("sequence_no") or 0) <= 0,
+            int(row.get("sequence_no") or 0) if int(row.get("sequence_no") or 0) > 0 else 10**9,
+            str(row.get("beneficiary_name") or "").casefold(),
+            str(row.get("item_name") or "").casefold(),
+        )
+    )
+    return filtered_rows
+
+
+def _stage_distribution_build_file1(rows: list[dict]) -> dict:
+    filtered_rows = [
+        row
+        for row in list(rows or [])
+        if str(row.get("item_name") or "").strip()
+        and (str(row.get("beneficiary_name") or "").strip() or str(row.get("application_number") or "").strip())
+    ]
+    filtered_rows.sort(
+        key=lambda row: (
+            int(row.get("sequence_no") or 0) <= 0,
+            int(row.get("sequence_no") or 0) if int(row.get("sequence_no") or 0) > 0 else 10**9,
+            str(row.get("item_name") or "").casefold(),
+            str(row.get("beneficiary_name") or "").casefold(),
+        )
+    )
+    grouped_rows: list[dict] = []
+    grouped_map: dict[tuple[str, str], dict] = {}
+    for row in filtered_rows:
+        names_value = str(row.get("names") or "").strip()
+        if not names_value:
+            beneficiary_name = str(row.get("beneficiary_name") or "").strip()
+            application_number = str(row.get("application_number") or "").strip()
+            if beneficiary_name and application_number and str(row.get("beneficiary_type") or "").strip().lower() != "district":
+                names_value = f"{application_number} - {beneficiary_name}"
+            else:
+                names_value = beneficiary_name or application_number
+        group_key = (str(row.get("item_name") or "").strip().casefold(), names_value.strip().casefold())
+        group = grouped_map.get(group_key)
+        if group is None:
+            group = {
+                "article_name": str(row.get("item_name") or ""),
+                "beneficiary_name": names_value,
+                "sequence_no": int(row.get("sequence_no") or 0),
+                "token_start": 0,
+                "token_end": 0,
+                "token_quantity": 0,
+            }
+            grouped_map[group_key] = group
+            grouped_rows.append(group)
+        sequence_no = int(row.get("sequence_no") or 0)
+        if sequence_no > 0 and (group["sequence_no"] <= 0 or sequence_no < group["sequence_no"]):
+            group["sequence_no"] = sequence_no
+        token_qty = int(row.get("token_quantity") or 0)
+        if token_qty <= 0:
+            token_qty = int(row.get("waiting_hall_quantity") or 0)
+        group["token_quantity"] += token_qty
+        start_token = int(row.get("start_token_no") or 0)
+        end_token = int(row.get("end_token_no") or 0)
+        if start_token <= 0 and end_token <= 0:
+            continue
+        if start_token <= 0:
+            start_token = end_token
+        if end_token <= 0:
+            end_token = start_token
+        if group["token_start"] <= 0 or start_token < group["token_start"]:
+            group["token_start"] = start_token
+        if end_token > group["token_end"]:
+            group["token_end"] = end_token
+    rendered_rows = []
+    token_total = 0
+    for group in grouped_rows:
+        token_total += int(group.get("token_quantity") or 0)
+        token_start = int(group.get("token_start") or 0)
+        token_end = int(group.get("token_end") or 0)
+        token_number = ""
+        if token_start > 0 and token_end > 0:
+            token_number = str(token_start) if token_start == token_end else f"{token_start} - {token_end}"
+        elif token_start > 0:
+            token_number = str(token_start)
+        rendered_rows.append(
+            {
+                "article_name": str(group.get("article_name") or ""),
+                "beneficiary_name": str(group.get("beneficiary_name") or ""),
+                "token_number": token_number,
+                "sequence_no": int(group.get("sequence_no") or 0),
+            }
+        )
+    return {
+        "rows": rendered_rows,
+        "row_count": len(rendered_rows),
+        "total_token_quantity": token_total,
+    }
+
+
+def _stage_distribution_file1_sheet_rows(rows: list[dict]) -> list[dict]:
+    return [
+        {
+            "Seq No": int(row.get("sequence_no") or 0) if int(row.get("sequence_no") or 0) > 0 else "",
+            "Article": str(row.get("article_name") or ""),
+            "Beneficiary": str(row.get("beneficiary_name") or ""),
+            "Token Number": str(row.get("token_number") or ""),
+        }
+        for row in list(rows or [])
+    ]
+
+
+def _stage_distribution_names_value(row: dict) -> str:
+    names_value = str(row.get("names") or "").strip()
+    if names_value:
+        return names_value
+    beneficiary_name = str(row.get("beneficiary_name") or "").strip()
+    application_number = str(row.get("application_number") or "").strip()
+    if beneficiary_name and application_number and str(row.get("beneficiary_type") or "").strip().lower() != "district":
+        return f"{application_number} - {beneficiary_name}"
+    return beneficiary_name or application_number
+
+
+def _stage_distribution_selected_quantity(row: dict, premise: str = "all") -> int:
+    waiting_qty = int(row.get("waiting_hall_quantity") or 0)
+    token_qty = int(row.get("token_quantity") or 0)
+    premise_value = str(premise or "all").strip().lower() or "all"
+    if premise_value == "waiting_hall":
+        return waiting_qty
+    if premise_value == "masm_hall":
+        return token_qty
+    return waiting_qty + token_qty
+
+
+def _stage_distribution_build_beneficiary_article_file(
+    rows: list[dict],
+    *,
+    beneficiary_types: set[str],
+    premise: str = "all",
+) -> dict:
+    grouped: dict[str, dict[str, int]] = {}
+    for row in list(rows or []):
+        beneficiary_type = str(row.get("beneficiary_type") or "").strip()
+        if beneficiary_type not in beneficiary_types:
+            continue
+        article_name = str(row.get("item_name") or "").strip()
+        beneficiary_label = _stage_distribution_names_value(row).strip()
+        if not article_name or not beneficiary_label:
+            continue
+        quantity = _stage_distribution_selected_quantity(row, premise)
+        if quantity <= 0:
+            continue
+        grouped.setdefault(beneficiary_label, {})
+        grouped[beneficiary_label][article_name] = grouped[beneficiary_label].get(article_name, 0) + quantity
+
+    groups = []
+    grand_total = 0
+    row_count = 0
+    for beneficiary_label in sorted(grouped.keys(), key=lambda value: value.casefold()):
+        article_map = grouped.get(beneficiary_label) or {}
+        items = []
+        total_quantity = 0
+        for article_name in sorted(article_map.keys(), key=lambda value: value.casefold()):
+            quantity = int(article_map.get(article_name) or 0)
+            if quantity <= 0:
+                continue
+            items.append({"article_name": article_name, "quantity": quantity})
+            total_quantity += quantity
+        if not items:
+            continue
+        groups.append(
+            {
+                "group_label": beneficiary_label,
+                "items": items,
+                "total_quantity": total_quantity,
+            }
+        )
+        row_count += len(items)
+        grand_total += total_quantity
+    return {
+        "groups": groups,
+        "row_count": row_count,
+        "grand_total": grand_total,
+    }
+
+
+def _stage_distribution_build_article_beneficiary_file(rows: list[dict], *, premise: str = "all") -> dict:
+    grouped: dict[str, dict[tuple[str, str], int]] = {}
+    beneficiary_type_order = {
+        models.RecipientTypeChoices.DISTRICT: 0,
+        models.RecipientTypeChoices.PUBLIC: 1,
+        models.RecipientTypeChoices.INSTITUTIONS: 2,
+        models.RecipientTypeChoices.OTHERS: 3,
+    }
+    for row in list(rows or []):
+        article_name = str(row.get("item_name") or "").strip()
+        beneficiary_label = _stage_distribution_names_value(row).strip()
+        beneficiary_type = str(row.get("beneficiary_type") or "").strip()
+        if not article_name or not beneficiary_label:
+            continue
+        quantity = _stage_distribution_selected_quantity(row, premise)
+        if quantity <= 0:
+            continue
+        grouped.setdefault(article_name, {})
+        beneficiary_key = (beneficiary_type, beneficiary_label)
+        grouped[article_name][beneficiary_key] = grouped[article_name].get(beneficiary_key, 0) + quantity
+
+    groups = []
+    grand_total = 0
+    row_count = 0
+    for article_name in sorted(grouped.keys(), key=lambda value: value.casefold()):
+        beneficiary_map = grouped.get(article_name) or {}
+        items = []
+        total_quantity = 0
+        sorted_beneficiary_keys = sorted(
+            beneficiary_map.keys(),
+            key=lambda value: (
+                beneficiary_type_order.get(str(value[0] or "").strip(), 99),
+                str(value[1] or "").casefold(),
+            ),
+        )
+        for beneficiary_type, beneficiary_label in sorted_beneficiary_keys:
+            quantity = int(beneficiary_map.get((beneficiary_type, beneficiary_label)) or 0)
+            if quantity <= 0:
+                continue
+            items.append({"beneficiary_name": beneficiary_label, "quantity": quantity})
+            total_quantity += quantity
+        if not items:
+            continue
+        groups.append(
+            {
+                "group_label": article_name,
+                "items": items,
+                "total_quantity": total_quantity,
+            }
+        )
+        row_count += len(items)
+        grand_total += total_quantity
+    return {
+        "groups": groups,
+        "row_count": row_count,
+        "grand_total": grand_total,
+    }
+
+
+def _stage_distribution_header_table(styles, *, custom_logo=None, title_text: str = "Beneficiaries List"):
+    header_title = ParagraphStyle(
+        "stage_distribution_title_grouped",
+        parent=styles["Heading2"],
+        alignment=1,
+        fontName="Helvetica-Bold",
+        fontSize=12,
+        leading=13,
+        textColor=colors.black,
+    )
+    header_sub = ParagraphStyle(
+        "stage_distribution_sub_grouped",
+        parent=styles["BodyText"],
+        alignment=1,
+        fontName="Helvetica",
+        fontSize=9.3,
+        leading=9.2,
+        spaceBefore=0,
+        spaceAfter=0,
+        textColor=colors.black,
+    )
+    left_logo = _fitted_pdf_image_source(custom_logo or _pdf_guru_logo_path(), max_width_mm=18, max_height_mm=18)
+    right_logo = _fitted_pdf_image(_pdf_logo_path(), max_width_mm=18, max_height_mm=18)
+    district_prog_line_one, district_prog_line_two = _district_signature_programme_lines()
+    return Table(
+        [[
+            left_logo,
+            [
+                Paragraph(
+                    "OM SAKTHI",
+                    ParagraphStyle(
+                        "stage-distribution-om-grouped",
+                        parent=header_title,
+                        fontSize=8.8,
+                        leading=9.0,
+                        spaceAfter=0,
+                        textColor=colors.red,
+                    ),
+                ),
+                Paragraph(district_prog_line_one, header_sub),
+                Paragraph(district_prog_line_two, header_sub),
+                Paragraph(str(title_text or "Beneficiaries List"), header_title),
+            ],
+            right_logo,
+        ]],
+        colWidths=[22 * mm, 154 * mm, 22 * mm],
+        style=TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (0, 0), "LEFT"),
+                ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ]
+        ),
+    )
+
+
+def generate_stage_distribution_grouped_pdf(
+    groups: list[dict],
+    *,
+    section_title: str,
+    item_value_key: str,
+    name_column_label: str = "Name",
+    header_title_text: str | None = None,
+    custom_logo=None,
+) -> io.BytesIO:
+    styles = getSampleStyleSheet()
+    header_style = ParagraphStyle(
+        "stage_distribution_grouped_header",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=9.2,
+        leading=10.2,
+        alignment=1,
+        textColor=colors.black,
+    )
+    body_style = ParagraphStyle(
+        "stage_distribution_grouped_body",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8.6,
+        leading=9.6,
+        textColor=colors.black,
+    )
+    body_bold_style = ParagraphStyle(
+        "stage_distribution_grouped_body_bold",
+        parent=body_style,
+        fontName="Helvetica-Bold",
+    )
+    body_center_bold_style = ParagraphStyle(
+        "stage_distribution_grouped_center_bold",
+        parent=body_style,
+        fontName="Helvetica-Bold",
+        alignment=1,
+    )
+    subtotal_label_style = ParagraphStyle(
+        "stage_distribution_grouped_subtotal_label",
+        parent=body_style,
+        fontName="Helvetica-Bold",
+        alignment=2,
+        textColor=colors.HexColor("#1d4ed8"),
+    )
+    subtotal_value_style = ParagraphStyle(
+        "stage_distribution_grouped_subtotal_value",
+        parent=body_style,
+        fontName="Helvetica-Bold",
+        alignment=1,
+        textColor=colors.HexColor("#1d4ed8"),
+    )
+    section_style = ParagraphStyle(
+        "stage_distribution_grouped_section",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=9.1,
+        leading=10.2,
+        textColor=colors.HexColor("#334155"),
+    )
+    empty_style = ParagraphStyle(
+        "stage_distribution_grouped_empty",
+        parent=styles["BodyText"],
+        alignment=1,
+        fontName="Helvetica",
+        fontSize=10,
+        textColor=colors.black,
+    )
+    stage_border = colors.HexColor("#5b6572")
+    stage_light_border = colors.HexColor("#7c8794")
+
+    story = [
+        _stage_distribution_header_table(
+            styles,
+            custom_logo=custom_logo,
+            title_text=header_title_text or "Beneficiaries List",
+        ),
+        Spacer(1, 2 * mm),
+    ]
+    grand_total = 0
+    if not groups:
+        story.append(Paragraph("No rows available for this report.", empty_style))
+    else:
+        table_rows = [[
+            Paragraph(str(name_column_label or "Name"), header_style),
+            Paragraph("Qty", header_style),
+        ]]
+        group_header_row_indexes: list[int] = []
+        group_subtotal_row_indexes: list[int] = []
+        group_end_row_indexes: list[int] = []
+        detail_row_indexes: list[int] = []
+
+        for group in list(groups or []):
+            group_label = str(group.get("group_label") or "").strip()
+            items = list(group.get("items") or [])
+            group_total = int(group.get("total_quantity") or 0)
+            grand_total += group_total
+
+            if group_label:
+                group_header_row_indexes.append(len(table_rows))
+                table_rows.append(
+                    [
+                        Paragraph(escape(group_label), body_bold_style),
+                        Paragraph("", body_style),
+                    ]
+                )
+
+            for item in items:
+                item_value = str(item.get(item_value_key) or "")
+                if not item_value:
+                    item_value = str(item.get("article_name") or item.get("beneficiary_name") or "")
+                detail_row_indexes.append(len(table_rows))
+                table_rows.append(
+                    [
+                        Paragraph(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{escape(item_value)}", body_style),
+                        Paragraph(str(int(item.get("quantity") or 0)), body_center_bold_style),
+                    ]
+                )
+            if items:
+                group_subtotal_row_indexes.append(len(table_rows))
+                table_rows.append(
+                    [
+                        Paragraph("Total", subtotal_label_style),
+                        Paragraph(str(group_total), subtotal_value_style),
+                    ]
+                )
+            if items:
+                group_end_row_indexes.append(len(table_rows) - 1)
+            elif group_label:
+                group_end_row_indexes.append(len(table_rows) - 1)
+
+        table_rows.append(
+            [
+                Paragraph("Grand Total", body_bold_style),
+                Paragraph(str(grand_total), body_center_bold_style),
+            ]
+        )
+        grand_total_row_index = len(table_rows) - 1
+
+        table = _segregation_pdf_table(table_rows, col_widths=[160 * mm, 36 * mm])
+        table_style_commands = [
+            ("ALIGN", (1, 0), (1, -1), "CENTER"),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#dbeafe")),
+            ("BOX", (0, 0), (-1, -1), 0.65, stage_border),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.6, stage_border),
+            ("GRID", (0, 1), (-1, -1), 0, colors.white),
+            ("LINEAFTER", (0, 0), (0, -1), 0.45, stage_light_border),
+            ("BACKGROUND", (0, grand_total_row_index), (-1, grand_total_row_index), colors.HexColor("#e2e8f0")),
+            ("LINEABOVE", (0, grand_total_row_index), (-1, grand_total_row_index), 0.6, stage_border),
+            ("TOPPADDING", (0, 0), (-1, -1), 3.2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3.2),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ]
+        for row_index in group_header_row_indexes:
+            table_style_commands.extend(
+                [
+                    ("SPAN", (0, row_index), (1, row_index)),
+                    ("BACKGROUND", (0, row_index), (1, row_index), colors.HexColor("#eff6ff")),
+                    ("LINEABOVE", (0, row_index), (1, row_index), 0.45, stage_light_border),
+                ]
+            )
+        for row_index in group_subtotal_row_indexes:
+            table_style_commands.extend(
+                [
+                    ("BACKGROUND", (0, row_index), (1, row_index), colors.HexColor("#f8fafc")),
+                    ("LINEABOVE", (0, row_index), (1, row_index), 0.45, stage_light_border),
+                ]
+            )
+        for row_index in group_end_row_indexes:
+            if row_index != grand_total_row_index:
+                table_style_commands.append(("LINEBELOW", (0, row_index), (1, row_index), 0.45, stage_light_border))
+        for row_index in detail_row_indexes:
+            table_style_commands.extend(
+                [
+                    ("LINEABOVE", (0, row_index), (1, row_index), 0, colors.white),
+                    ("LINEBELOW", (0, row_index), (1, row_index), 0, colors.white),
+                ]
+            )
+        table.setStyle(TableStyle(table_style_commands))
+        story.append(table)
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=portrait(A4),
+        leftMargin=7 * mm,
+        rightMargin=7 * mm,
+        topMargin=8 * mm,
+        bottomMargin=8 * mm,
+    )
+    doc.build(story, canvasmaker=_NumberedPdfCanvas)
+    buffer.seek(0)
+    return buffer
+
+
+class _NumberedPdfCanvas(canvas.Canvas):
+    def __init__(self, *args, footer_text: str | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+        self._footer_text = footer_text or ""
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        total_pages = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self.setFont("Helvetica", 8)
+            self.setFillColor(colors.black)
+            if self._footer_text:
+                self.drawString(9 * mm, 6 * mm, self._footer_text)
+            self.drawCentredString(A4[0] / 2, 6 * mm, f"Page {self._pageNumber}/{total_pages}")
+            canvas.Canvas.showPage(self)
+        canvas.Canvas.save(self)
+
+
+def generate_stage_distribution_file1_pdf(
+    rows: list[dict],
+    *,
+    seq_start: int | None = None,
+    seq_end: int | None = None,
+    custom_logo=None,
+) -> io.BytesIO:
+    styles = getSampleStyleSheet()
+    stage_border = colors.HexColor("#5b6572")
+    stage_light_border = colors.HexColor("#7c8794")
+    left_logo = _fitted_pdf_image_source(custom_logo or _pdf_guru_logo_path(), max_width_mm=18, max_height_mm=18)
+    right_logo = _fitted_pdf_image(_pdf_logo_path(), max_width_mm=18, max_height_mm=18)
+    header_title = ParagraphStyle(
+        "stage_distribution_title",
+        parent=styles["Heading2"],
+        alignment=1,
+        fontName="Helvetica-Bold",
+        fontSize=12,
+        leading=13,
+        textColor=colors.black,
+    )
+    header_sub = ParagraphStyle(
+        "stage_distribution_sub",
+        parent=styles["BodyText"],
+        alignment=1,
+        fontName="Helvetica",
+        fontSize=9.3,
+        leading=9.2,
+        spaceBefore=0,
+        spaceAfter=0,
+        textColor=colors.black,
+    )
+    header_style = ParagraphStyle(
+        "stage_distribution_header",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=9.4,
+        leading=10.4,
+        alignment=1,
+        textColor=colors.black,
+    )
+    body_style = ParagraphStyle(
+        "stage_distribution_body",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8.8,
+        leading=9.8,
+        textColor=colors.black,
+    )
+    body_bold_style = ParagraphStyle(
+        "stage_distribution_body_bold",
+        parent=body_style,
+        fontName="Helvetica-Bold",
+    )
+    body_center_bold_style = ParagraphStyle(
+        "stage_distribution_body_center_bold",
+        parent=body_style,
+        fontName="Helvetica-Bold",
+        alignment=1,
+    )
+    district_prog_line_one, district_prog_line_two = _district_signature_programme_lines()
+    story = [
+        Table(
+            [[
+                left_logo,
+                [
+                    Paragraph(
+                        "OM SAKTHI",
+                        ParagraphStyle(
+                            "stage-distribution-om",
+                            parent=header_title,
+                            fontSize=8.8,
+                            leading=9.0,
+                            spaceAfter=0,
+                            textColor=colors.red,
+                        ),
+                    ),
+                    Paragraph(district_prog_line_one, header_sub),
+                    Paragraph(district_prog_line_two, header_sub),
+                    Paragraph("Beneficiaries List", header_title),
+                ],
+                right_logo,
+            ]],
+            colWidths=[22 * mm, 154 * mm, 22 * mm],
+            style=TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("ALIGN", (0, 0), (0, 0), "LEFT"),
+                    ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ]
+            ),
+        ),
+    ]
+
+    if not rows:
+        story.append(Spacer(1, 3 * mm))
+        story.append(Paragraph("No rows available for this report.", ParagraphStyle("stage-distribution-empty", parent=styles["BodyText"], alignment=1, fontName="Helvetica", fontSize=10, textColor=colors.black)))
+    else:
+        story.append(Spacer(1, 3 * mm))
+        table_rows = [[
+            Paragraph("Article Name", header_style),
+            Paragraph("Beneficiary Names", header_style),
+            Paragraph("Token Number", header_style),
+        ]]
+        for row in list(rows or []):
+            table_rows.append(
+                [
+                    Paragraph(escape(str(row.get("article_name") or "")), body_style),
+                    Paragraph(escape(str(row.get("beneficiary_name") or "")), body_style),
+                    Paragraph(escape(str(row.get("token_number") or "")), body_center_bold_style),
+                ]
+            )
+        table = _segregation_pdf_table(table_rows, col_widths=[80 * mm, 80 * mm, 36 * mm])
+        table.setStyle(
+            TableStyle(
+                [
+                    ("ALIGN", (2, 0), (2, -1), "CENTER"),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#dbeafe")),
+                    ("BOX", (0, 0), (-1, -1), 0.65, stage_border),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.45, stage_light_border),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3.5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3.5),
+                ]
+            )
+        )
+        story.append(table)
+
+    sequence_numbers = [int(row.get("sequence_no") or 0) for row in list(rows or []) if int(row.get("sequence_no") or 0) > 0]
+    footer_start = int(seq_start or 0) if int(seq_start or 0) > 0 else (min(sequence_numbers) if sequence_numbers else 0)
+    footer_end = int(seq_end or 0) if int(seq_end or 0) > 0 else (max(sequence_numbers) if sequence_numbers else 0)
+    seq_range_text = ""
+    if footer_start > 0 and footer_end > 0:
+        seq_range_text = f"Seq No : {footer_start} - {footer_end}"
+    elif footer_start > 0:
+        seq_range_text = f"Seq No : {footer_start}"
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=portrait(A4),
+        leftMargin=7 * mm,
+        rightMargin=7 * mm,
+        topMargin=8 * mm,
+        bottomMargin=8 * mm,
+    )
+    doc.build(story, canvasmaker=lambda *args, **kwargs: _NumberedPdfCanvas(*args, footer_text=seq_range_text, **kwargs))
+    buffer.seek(0)
+    return buffer
 
 
 def _reports_token_lookup_default_state():
@@ -2266,7 +3084,7 @@ def generate_public_signature_pdf(rows: list[dict]) -> io.BytesIO:
             ]
         )
     )
-    doc.build([table])
+    doc.build([table], canvasmaker=_NumberedPdfCanvas)
     buffer.seek(0)
     return buffer
 
@@ -2526,8 +3344,8 @@ def generate_district_signature_pdf(
         "district_signature_header",
         parent=styles["Normal"],
         fontName="Helvetica-Bold",
-        fontSize=10.5,
-        leading=12,
+        fontSize=9.3,
+        leading=10.3,
         alignment=1,
         textColor=colors.black,
     )
@@ -2535,8 +3353,8 @@ def generate_district_signature_pdf(
         "district_signature_district",
         parent=styles["Normal"],
         fontName="Helvetica-Bold",
-        fontSize=10.5,
-        leading=12,
+        fontSize=9.4,
+        leading=10.4,
         alignment=1,
         textColor=colors.black,
     )
@@ -2544,24 +3362,24 @@ def generate_district_signature_pdf(
         "district_signature_item",
         parent=styles["Normal"],
         fontName="Helvetica",
-        fontSize=10,
-        leading=12,
+        fontSize=8.8,
+        leading=9.8,
         textColor=colors.black,
     )
     total_style = ParagraphStyle(
         "district_signature_total",
         parent=styles["Normal"],
         fontName="Helvetica-Bold",
-        fontSize=10,
-        leading=12,
+        fontSize=8.9,
+        leading=9.9,
         textColor=colors.black,
     )
     numeric_style = ParagraphStyle(
         "district_signature_numeric",
         parent=styles["Normal"],
         fontName="Helvetica",
-        fontSize=10,
-        leading=12,
+        fontSize=8.8,
+        leading=9.8,
         alignment=1,
         textColor=colors.black,
     )
@@ -2589,9 +3407,11 @@ def generate_district_signature_pdf(
         ("ALIGN", (5, 0), (5, -1), "LEFT"),
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, 0), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
-    ]
+            ("TOPPADDING", (0, 0), (-1, 0), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+            ("TOPPADDING", (0, 1), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
+        ]
 
     district_prog_line_one, district_prog_line_two = _district_signature_programme_lines()
     header_rows = [[
@@ -2640,8 +3460,8 @@ def generate_district_signature_pdf(
             ])
             style_commands.extend([
                 ("LINEBELOW", (0, row_index), (4, row_index), 0.45, district_light_border),
-                ("TOPPADDING", (0, row_index), (5, row_index), 7),
-                ("BOTTOMPADDING", (0, row_index), (5, row_index), 7),
+                ("TOPPADDING", (0, row_index), (5, row_index), 4),
+                ("BOTTOMPADDING", (0, row_index), (5, row_index), 4),
             ])
             row_index += 1
 
@@ -2656,8 +3476,8 @@ def generate_district_signature_pdf(
         style_commands.extend([
             ("LINEABOVE", (0, row_index), (4, row_index), 1.0, district_border),
             ("LINEBELOW", (0, row_index), (5, row_index), 1.0, district_border),
-            ("TOPPADDING", (0, row_index), (5, row_index), 7),
-            ("BOTTOMPADDING", (0, row_index), (5, row_index), 10),
+            ("TOPPADDING", (0, row_index), (5, row_index), 5),
+            ("BOTTOMPADDING", (0, row_index), (5, row_index), 6),
             ("BOX", (0, block_start), (5, row_index), 1.2, district_border),
             ("INNERGRID", (0, block_start), (4, row_index), 0.45, district_light_border),
             ("LINEBEFORE", (5, block_start), (5, row_index), 1.2, district_border),
@@ -2666,8 +3486,8 @@ def generate_district_signature_pdf(
         table_rows.append(["", "", "", "", "", ""])
         style_commands.extend([
             ("SPAN", (0, row_index), (5, row_index)),
-            ("TOPPADDING", (0, row_index), (5, row_index), 7),
-            ("BOTTOMPADDING", (0, row_index), (5, row_index), 7),
+            ("TOPPADDING", (0, row_index), (5, row_index), 4),
+            ("BOTTOMPADDING", (0, row_index), (5, row_index), 4),
         ])
         row_index += 1
 
@@ -2675,14 +3495,14 @@ def generate_district_signature_pdf(
     doc = SimpleDocTemplate(
         buffer,
         pagesize=portrait(A4),
-        leftMargin=9 * mm,
-        rightMargin=9 * mm,
-        topMargin=6 * mm,
-        bottomMargin=12 * mm,
+        leftMargin=7 * mm,
+        rightMargin=7 * mm,
+        topMargin=5 * mm,
+        bottomMargin=8 * mm,
     )
     table = LongTable(
         table_rows,
-        colWidths=[79 * mm, 16 * mm, 16 * mm, 17 * mm, 17 * mm, 45 * mm],
+        colWidths=[82 * mm, 14 * mm, 14 * mm, 16 * mm, 16 * mm, 45 * mm],
         repeatRows=1,
         splitByRow=1,
     )
@@ -2714,28 +3534,28 @@ def _segregation_pdf_styles():
             "segregation_title",
             parent=styles["Heading2"],
             fontName="Helvetica-Bold",
-            fontSize=13,
-            leading=16,
+            fontSize=11.8,
+            leading=14,
             alignment=1,
             textColor=colors.black,
-            spaceAfter=6,
+            spaceAfter=4,
         ),
         "section": ParagraphStyle(
             "segregation_section",
             parent=styles["Normal"],
             fontName="Helvetica-Bold",
-            fontSize=10.5,
-            leading=13,
+            fontSize=9.5,
+            leading=11.5,
             textColor=colors.black,
-            spaceBefore=4,
-            spaceAfter=4,
+            spaceBefore=3,
+            spaceAfter=3,
         ),
         "header": ParagraphStyle(
             "segregation_header",
             parent=styles["Normal"],
             fontName="Helvetica-Bold",
-            fontSize=9.6,
-            leading=11,
+            fontSize=8.8,
+            leading=10,
             alignment=1,
             textColor=colors.black,
         ),
@@ -2743,24 +3563,24 @@ def _segregation_pdf_styles():
             "segregation_body",
             parent=styles["Normal"],
             fontName="Helvetica",
-            fontSize=9.2,
-            leading=11,
+            fontSize=8.4,
+            leading=9.8,
             textColor=colors.black,
         ),
         "body_bold": ParagraphStyle(
             "segregation_body_bold",
             parent=styles["Normal"],
             fontName="Helvetica-Bold",
-            fontSize=9.2,
-            leading=11,
+            fontSize=8.4,
+            leading=9.8,
             textColor=colors.black,
         ),
         "body_center": ParagraphStyle(
             "segregation_body_center",
             parent=styles["Normal"],
             fontName="Helvetica",
-            fontSize=9.2,
-            leading=11,
+            fontSize=8.4,
+            leading=9.8,
             alignment=1,
             textColor=colors.black,
         ),
@@ -2768,8 +3588,8 @@ def _segregation_pdf_styles():
             "segregation_body_center_bold",
             parent=styles["Normal"],
             fontName="Helvetica-Bold",
-            fontSize=9.2,
-            leading=11,
+            fontSize=8.4,
+            leading=9.8,
             alignment=1,
             textColor=colors.black,
         ),
@@ -2777,8 +3597,8 @@ def _segregation_pdf_styles():
             "segregation_empty",
             parent=styles["Normal"],
             fontName="Helvetica-Oblique",
-            fontSize=9.6,
-            leading=12,
+            fontSize=8.8,
+            leading=10.2,
             alignment=1,
             textColor=colors.HexColor("#475569"),
         ),
@@ -2795,12 +3615,12 @@ def _segregation_pdf_table(table_rows, *, col_widths):
                 ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
                 ("GRID", (0, 0), (-1, -1), 0.55, colors.black),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 5),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-                ("TOPPADDING", (0, 0), (-1, 0), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
-                ("TOPPADDING", (0, 1), (-1, -1), 5),
-                ("BOTTOMPADDING", (0, 1), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, 0), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 4),
+                ("TOPPADDING", (0, 1), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 1), (-1, -1), 3),
             ]
         )
     )
@@ -2814,7 +3634,7 @@ def generate_segregation_file1_pdf(groups: list[dict]) -> io.BytesIO:
     body_bold_style = styles["body_bold"]
     body_center_bold_style = styles["body_center_bold"]
     header_style = styles["header"]
-    story = [Paragraph("File 1: Beneficiary-wise Article List with Signature", styles["title"])]
+    story = [Paragraph("File 1 : Beneficiary-wise Article List (Waiting Hall)", styles["title"])]
 
     if not groups:
         story.append(Paragraph("No rows available for this report.", styles["empty"]))
@@ -2860,12 +3680,12 @@ def generate_segregation_file1_pdf(groups: list[dict]) -> io.BytesIO:
     doc = SimpleDocTemplate(
         buffer,
         pagesize=portrait(A4),
-        leftMargin=9 * mm,
-        rightMargin=9 * mm,
-        topMargin=10 * mm,
-        bottomMargin=10 * mm,
+        leftMargin=7 * mm,
+        rightMargin=7 * mm,
+        topMargin=8 * mm,
+        bottomMargin=8 * mm,
     )
-    doc.build(story)
+    doc.build(story, canvasmaker=_NumberedPdfCanvas)
     buffer.seek(0)
     return buffer
 
@@ -2918,12 +3738,12 @@ def generate_segregation_file2_pdf(groups: list[dict]) -> io.BytesIO:
     doc = SimpleDocTemplate(
         buffer,
         pagesize=portrait(A4),
-        leftMargin=9 * mm,
-        rightMargin=9 * mm,
-        topMargin=10 * mm,
-        bottomMargin=10 * mm,
+        leftMargin=7 * mm,
+        rightMargin=7 * mm,
+        topMargin=8 * mm,
+        bottomMargin=8 * mm,
     )
-    doc.build(story)
+    doc.build(story, canvasmaker=_NumberedPdfCanvas)
     buffer.seek(0)
     return buffer
 
@@ -2970,12 +3790,12 @@ def generate_segregation_file3_pdf(rows: list[dict]) -> io.BytesIO:
     doc = SimpleDocTemplate(
         buffer,
         pagesize=portrait(A4),
-        leftMargin=9 * mm,
-        rightMargin=9 * mm,
-        topMargin=10 * mm,
-        bottomMargin=10 * mm,
+        leftMargin=7 * mm,
+        rightMargin=7 * mm,
+        topMargin=8 * mm,
+        bottomMargin=8 * mm,
     )
-    doc.build(story)
+    doc.build(story, canvasmaker=_NumberedPdfCanvas)
     buffer.seek(0)
     return buffer
 
@@ -3028,6 +3848,203 @@ def generate_segregation_xlsx(*, master_rows: list[dict], file1_rows: list[dict]
     _segregation_write_sheet(workbook.create_sheet(), "File 1", file1_rows)
     _segregation_write_sheet(workbook.create_sheet(), "File 2", file2_rows)
     _segregation_write_sheet(workbook.create_sheet(), "File 3", file3_rows)
+
+    stream = io.BytesIO()
+    workbook.save(stream)
+    stream.seek(0)
+    return stream
+
+
+def _stage_distribution_master_sheet_rows(rows: list[dict]) -> list[dict]:
+    return [
+        {
+            "Application Number": str(row.get("application_number") or ""),
+            "Beneficiary Type": str(row.get("beneficiary_type") or ""),
+            "District": str(row.get("district") or ""),
+            "Beneficiary Name": str(row.get("beneficiary_name") or ""),
+            "Names": str(row.get("names") or ""),
+            "Item Name": str(row.get("item_name") or ""),
+            "Item Type": str(row.get("item_type") or ""),
+            "Premise": str(row.get("premise") or ""),
+            "Waiting Hall Qty": int(row.get("waiting_hall_quantity") or 0),
+            "Token Qty": int(row.get("token_quantity") or 0),
+            "Start Token No": int(row.get("start_token_no") or 0) if int(row.get("start_token_no") or 0) > 0 else "",
+            "End Token No": int(row.get("end_token_no") or 0) if int(row.get("end_token_no") or 0) > 0 else "",
+            "Sequence No": int(row.get("sequence_no") or 0) if int(row.get("sequence_no") or 0) > 0 else "",
+        }
+        for row in list(rows or [])
+    ]
+
+
+def _stage_distribution_write_file1_sheet(worksheet, rows: list[dict]):
+    worksheet.title = "File 1"
+    thin = Side(style="thin", color="7C8794")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    header_fill = PatternFill("solid", fgColor="DBEAFE")
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+
+    headers = ["Seq No", "Article Name", "Beneficiary Names", "Token Number"]
+    worksheet.append(headers)
+    for cell in worksheet[1]:
+        cell.font = Font(size=11, bold=True)
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = center
+
+    for row in list(rows or []):
+        worksheet.append(
+            [
+                row.get("Seq No", ""),
+                row.get("Article", ""),
+                row.get("Beneficiary", ""),
+                row.get("Token Number", ""),
+            ]
+        )
+
+    for row in worksheet.iter_rows(min_row=2, max_row=worksheet.max_row, min_col=1, max_col=4):
+        for index, cell in enumerate(row, start=1):
+            cell.border = border
+            cell.font = Font(size=10)
+            cell.alignment = center if index in {1, 4} else left
+
+    worksheet.column_dimensions["A"].width = 10
+    worksheet.column_dimensions["B"].width = 42
+    worksheet.column_dimensions["C"].width = 44
+    worksheet.column_dimensions["D"].width = 18
+    worksheet.freeze_panes = "A2"
+    worksheet.sheet_view.showGridLines = False
+    worksheet.page_setup.orientation = "portrait"
+    worksheet.page_setup.paperSize = worksheet.PAPERSIZE_A4
+    worksheet.page_setup.fitToWidth = 1
+    worksheet.page_setup.fitToHeight = 0
+
+
+def _stage_distribution_write_grouped_sheet(
+    worksheet,
+    *,
+    title: str,
+    name_column_label: str,
+    groups: list[dict],
+):
+    worksheet.title = title
+    thin = Side(style="thin", color="7C8794")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    header_fill = PatternFill("solid", fgColor="DBEAFE")
+    group_fill = PatternFill("solid", fgColor="EFF6FF")
+    subtotal_fill = PatternFill("solid", fgColor="F8FAFC")
+    grand_total_fill = PatternFill("solid", fgColor="E2E8F0")
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    right = Alignment(horizontal="right", vertical="center", wrap_text=True)
+
+    worksheet.append([name_column_label, "Qty"])
+    for cell in worksheet[1]:
+        cell.font = Font(size=11, bold=True)
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = center
+
+    grand_total = 0
+    for group in list(groups or []):
+        group_label = str(group.get("group_label") or "")
+        items = list(group.get("items") or [])
+        group_total = int(group.get("total_quantity") or 0)
+        grand_total += group_total
+
+        worksheet.append([group_label, ""])
+        row_index = worksheet.max_row
+        worksheet.cell(row_index, 1).font = Font(size=10.5, bold=True)
+        worksheet.cell(row_index, 1).fill = group_fill
+        worksheet.cell(row_index, 1).border = border
+        worksheet.cell(row_index, 1).alignment = left
+        worksheet.cell(row_index, 2).fill = group_fill
+        worksheet.cell(row_index, 2).border = border
+        worksheet.cell(row_index, 2).alignment = center
+
+        for item in items:
+            item_value = str(item.get("article_name") or item.get("beneficiary_name") or "")
+            quantity = int(item.get("quantity") or 0)
+            worksheet.append([f"        {item_value}", quantity])
+            item_row = worksheet.max_row
+            worksheet.cell(item_row, 1).font = Font(size=10)
+            worksheet.cell(item_row, 1).border = border
+            worksheet.cell(item_row, 1).alignment = left
+            worksheet.cell(item_row, 2).font = Font(size=10, bold=True)
+            worksheet.cell(item_row, 2).border = border
+            worksheet.cell(item_row, 2).alignment = center
+
+        worksheet.append(["Total", group_total])
+        subtotal_row = worksheet.max_row
+        worksheet.cell(subtotal_row, 1).font = Font(size=10, bold=True, color="1D4ED8")
+        worksheet.cell(subtotal_row, 1).alignment = right
+        worksheet.cell(subtotal_row, 1).fill = subtotal_fill
+        worksheet.cell(subtotal_row, 1).border = border
+        worksheet.cell(subtotal_row, 2).font = Font(size=10, bold=True, color="1D4ED8")
+        worksheet.cell(subtotal_row, 2).alignment = center
+        worksheet.cell(subtotal_row, 2).fill = subtotal_fill
+        worksheet.cell(subtotal_row, 2).border = border
+
+    worksheet.append(["Grand Total", grand_total])
+    total_row = worksheet.max_row
+    worksheet.cell(total_row, 1).font = Font(size=11, bold=True)
+    worksheet.cell(total_row, 1).fill = grand_total_fill
+    worksheet.cell(total_row, 1).alignment = left
+    worksheet.cell(total_row, 1).border = border
+    worksheet.cell(total_row, 2).font = Font(size=11, bold=True)
+    worksheet.cell(total_row, 2).fill = grand_total_fill
+    worksheet.cell(total_row, 2).alignment = center
+    worksheet.cell(total_row, 2).border = border
+
+    worksheet.column_dimensions["A"].width = 58
+    worksheet.column_dimensions["B"].width = 12
+    worksheet.freeze_panes = "A2"
+    worksheet.sheet_view.showGridLines = False
+    worksheet.page_setup.orientation = "portrait"
+    worksheet.page_setup.paperSize = worksheet.PAPERSIZE_A4
+    worksheet.page_setup.fitToWidth = 1
+    worksheet.page_setup.fitToHeight = 0
+
+
+def generate_stage_distribution_xlsx(
+    *,
+    master_rows: list[dict],
+    file1_rows: list[dict],
+    file2_groups: list[dict],
+    file3_groups: list[dict],
+    file4_groups: list[dict],
+    file5_groups: list[dict],
+    file5_title: str,
+) -> io.BytesIO:
+    workbook = Workbook()
+    master_sheet = workbook.active
+    _segregation_write_sheet(master_sheet, "Master Data", master_rows)
+
+    _stage_distribution_write_file1_sheet(workbook.create_sheet(), file1_rows)
+    _stage_distribution_write_grouped_sheet(
+        workbook.create_sheet(),
+        title="File 2",
+        name_column_label="District Name",
+        groups=file2_groups,
+    )
+    _stage_distribution_write_grouped_sheet(
+        workbook.create_sheet(),
+        title="File 3",
+        name_column_label="Public Name",
+        groups=file3_groups,
+    )
+    _stage_distribution_write_grouped_sheet(
+        workbook.create_sheet(),
+        title="File 4",
+        name_column_label="Institution Name",
+        groups=file4_groups,
+    )
+    _stage_distribution_write_grouped_sheet(
+        workbook.create_sheet(),
+        title="File 5",
+        name_column_label="Article Name",
+        groups=file5_groups,
+    )
 
     stream = io.BytesIO()
     workbook.save(stream)

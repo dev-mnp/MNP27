@@ -387,6 +387,9 @@
       font-size: 0.9rem;
       text-align: right;
     }
+    .reports-collapsible:not([open]) .reports-collapsible-meta {
+      display: none;
+    }
     .reports-collapsible-body {
       padding: 0 14px 14px;
       border-top: 1px solid #e2e8f0;
@@ -525,6 +528,26 @@
     });
 
     document.addEventListener("DOMContentLoaded", function () {
+      const stageSeqStartInput = document.getElementById("stage-distribution-seq-start");
+      const stageSeqEndInput = document.getElementById("stage-distribution-seq-end");
+      const stageDistributionForms = Array.from(document.querySelectorAll('details#reports-stage-distribution-panel input[name="stage_seq_start"], details#reports-stage-distribution-panel input[name="stage_seq_end"]'));
+      const syncStageDistributionSequenceFields = () => {
+        const seqStartValue = stageSeqStartInput ? stageSeqStartInput.value : "";
+        const seqEndValue = stageSeqEndInput ? stageSeqEndInput.value : "";
+        stageDistributionForms.forEach((input) => {
+          if (input.getAttribute("name") === "stage_seq_start") {
+            input.value = seqStartValue;
+          } else if (input.getAttribute("name") === "stage_seq_end") {
+            input.value = seqEndValue;
+          }
+        });
+      };
+      if (stageSeqStartInput && stageSeqEndInput) {
+        stageSeqStartInput.addEventListener("input", syncStageDistributionSequenceFields);
+        stageSeqEndInput.addEventListener("input", syncStageDistributionSequenceFields);
+        syncStageDistributionSequenceFields();
+      }
+
       const previewButtons = Array.from(document.querySelectorAll(".js-segregation-pdf-preview, .js-report-pdf-preview"));
       if (!previewButtons.length || typeof window.openAttachmentPreviewFromButton !== "function") {
         return;
@@ -535,6 +558,9 @@
 
       previewButtons.forEach((button) => {
         button.addEventListener("click", async function () {
+          if (button.closest("#reports-stage-distribution-panel")) {
+            syncStageDistributionSequenceFields();
+          }
           const action = button.getAttribute("data-preview-action") || "";
           if (!action) return;
           const form = button.closest("form");
@@ -599,6 +625,8 @@
       if (!form) return;
       const beneficiaryDropdown = document.getElementById("seg-beneficiary-type");
       const itemDropdown = document.getElementById("seg-item-type");
+      const stageBeneficiaryDropdown = document.getElementById("stage-beneficiary-type");
+      const stageItemDropdown = document.getElementById("stage-item-type");
 
       function syncDropdownState(dropdown, checkboxName) {
         if (!dropdown) return;
@@ -623,15 +651,30 @@
 
       syncDropdownState(beneficiaryDropdown, "seg_beneficiary_type");
       syncDropdownState(itemDropdown, "seg_item_type");
+      syncDropdownState(stageBeneficiaryDropdown, "stage_beneficiary_type");
+      syncDropdownState(stageItemDropdown, "stage_item_type");
 
       document.addEventListener("click", function (event) {
-        [beneficiaryDropdown, itemDropdown].filter(Boolean).forEach((dropdown) => {
+        [beneficiaryDropdown, itemDropdown, stageBeneficiaryDropdown, stageItemDropdown].filter(Boolean).forEach((dropdown) => {
           if (!dropdown.open) return;
           if (!dropdown.contains(event.target)) {
             dropdown.open = false;
           }
         });
       });
+
+      const segregationPanel = document.getElementById("reports-segregation-panel");
+      const stageDistributionPanel = document.getElementById("reports-stage-distribution-panel");
+      const syncPanels = (openedPanel, closedPanel) => {
+        if (!openedPanel || !closedPanel) return;
+        if (openedPanel.open) {
+          closedPanel.open = false;
+        }
+      };
+      if (segregationPanel && stageDistributionPanel) {
+        segregationPanel.addEventListener("toggle", () => syncPanels(segregationPanel, stageDistributionPanel));
+        stageDistributionPanel.addEventListener("toggle", () => syncPanels(stageDistributionPanel, segregationPanel));
+      }
     });
   </script>
   <section class="card">
@@ -657,7 +700,7 @@
 
     {% if active_report_tab == "reports-home" %}
       <div class="segregation-shell">
-        <details class="reports-collapsible" open>
+        <details class="reports-collapsible" id="reports-segregation-panel" {% if reports_home_open_panel == "segregation" or not reports_home_open_panel %}open{% endif %}>
           <summary>
             <div class="reports-collapsible-title">Segregation</div>
             <div class="reports-collapsible-meta">
@@ -669,11 +712,23 @@
             </div>
           </summary>
           <div class="reports-collapsible-body">
-            <div class="toolbar" style="justify-content: flex-end; align-items: flex-start; margin: 14px 0 12px;">
-              <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
+            <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin: 14px 0 12px; gap: 12px; flex-wrap: nowrap;">
+              <div style="margin: 0; color: var(--text-secondary); font-size: 0.90rem; max-width: none; white-space: nowrap;">
+                {% if segregation_state.loaded %}
+                  <span style="color: #b91c1c; font-weight: 600;">{{ segregation_state.source }}</span>
+                  <span style="margin-left: 12px;">Rows: <strong style="color: var(--text-primary);">{{ segregation_row_count }}</strong></span>
+                  <span style="margin-left: 12px;">Columns: <strong style="color: var(--text-primary);">{{ segregation_state.headers|length }}</strong></span>
+                  <span style="margin-left: 12px;">Filtered: <strong style="color: var(--text-primary);">{{ segregation_filtered_row_count }}</strong></span>
+                  <span style="margin-left: 12px;">Synced: <strong style="color: var(--text-primary);">{{ segregation_state.synced_at }}</strong></span>
+                {% else %}
+                  <span>Sync Data or Upload to load segregation data.</span>
+                {% endif %}
+              </div>
+              <div class="toolbar" style="margin-left: auto; margin-bottom: 0; flex-wrap: nowrap;">
                 <form method="post" style="margin: 0;">
                   {% csrf_token %}
                   <input type="hidden" name="tab" value="reports-home">
+                  <input type="hidden" name="reports_panel" value="segregation">
                   {% for value in segregation_filter_values.beneficiary_types %}
                     <input type="hidden" name="segregation_beneficiary_type" value="{{ value }}">
                   {% endfor %}
@@ -685,6 +740,7 @@
                 <form method="post" enctype="multipart/form-data" style="margin: 0;">
                   {% csrf_token %}
                   <input type="hidden" name="tab" value="reports-home">
+                  <input type="hidden" name="reports_panel" value="segregation">
                   {% for value in segregation_filter_values.beneficiary_types %}
                     <input type="hidden" name="segregation_beneficiary_type" value="{{ value }}">
                   {% endfor %}
@@ -693,11 +749,12 @@
                   {% endfor %}
                   <input id="reports-segregation-upload-input" type="file" name="file" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="this.form.submit();" />
                   <input type="hidden" name="action" value="upload_reports_segregation" />
-                  <button class="btn report-download-trigger" type="button" onclick="document.getElementById('reports-segregation-upload-input').click();">Upload CSV / Excel</button>
+                  <button class="btn report-download-trigger" type="button" onclick="document.getElementById('reports-segregation-upload-input').click();">Upload</button>
                 </form>
                 <form method="post" style="margin: 0;">
                   {% csrf_token %}
                   <input type="hidden" name="tab" value="reports-home">
+                  <input type="hidden" name="reports_panel" value="segregation">
                   {% for value in segregation_filter_values.beneficiary_types %}
                     <input type="hidden" name="segregation_beneficiary_type" value="{{ value }}">
                   {% endfor %}
@@ -709,20 +766,9 @@
               </div>
             </div>
 
-            <div style="margin: 12px 0 16px; color: var(--text-secondary); font-size: 0.96rem;">
-              {% if segregation_state.loaded %}
-                <span style="color: #b91c1c; font-weight: 600;">{{ segregation_state.source }}</span>
-                <span style="margin-left: 12px;">Rows: <strong style="color: var(--text-primary);">{{ segregation_row_count }}</strong></span>
-                <span style="margin-left: 12px;">Columns: <strong style="color: var(--text-primary);">{{ segregation_state.headers|length }}</strong></span>
-                <span style="margin-left: 12px;">Filtered: <strong style="color: var(--text-primary);">{{ segregation_filtered_row_count }}</strong></span>
-                <span style="margin-left: 12px;">Loaded: <strong style="color: var(--text-primary);">{{ segregation_state.synced_at }}</strong></span>
-              {% else %}
-                <span>Use Sync Data to pull the current token file or upload CSV / Excel to stage segregation data.</span>
-              {% endif %}
-            </div>
-
             <form method="get" class="segregation-filter-grid" id="segregation-filter-form" style="margin-bottom: 18px;">
               <input type="hidden" name="tab" value="reports-home">
+              <input type="hidden" name="reports_panel" value="segregation">
               <div>
                 <label for="seg-beneficiary-type" style="display:block; margin-bottom: 6px; font-weight: 600;">Beneficiary Type</label>
                 <details class="segregation-multi-select" id="seg-beneficiary-type">
@@ -759,19 +805,10 @@
 
             <div class="segregation-card-grid">
               <section class="card" style="margin: 0;">
-              <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+              <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 2px;">
                 <div>
-                  <h4 style="margin: 0 0 6px;">1. Beneficiary-wise Article List</h4>
-                  <p style="margin: 0; color: var(--text-secondary);">Grouped by beneficiary/district with waiting hall quantity and signature space.</p>
+                  <h4 style="margin: 0 0 6px;">Beneficiary-wise Article List</h4>
                 </div>
-              </div>
-              <div style="margin-bottom: 10px; color: var(--text-secondary); font-size: 0.92rem;">
-                Beneficiaries: <strong style="color: var(--text-primary);">{{ segregation_file1.beneficiary_count }}</strong>
-                <span style="margin-left: 10px;">Rows: <strong style="color: var(--text-primary);">{{ segregation_file1.row_count }}</strong></span>
-                <span style="margin-left: 10px;">Waiting Hall Qty: <strong style="color: var(--text-primary);">{{ segregation_file1.total_quantity }}</strong></span>
-              </div>
-              <div class="segregation-summary-row">
-                <div style="color: var(--text-secondary); font-size: 0.94rem;">{% if not segregation_file1.groups %}No waiting hall rows available for File 1 with the current filters.{% endif %}</div>
                 <div class="segregation-summary-actions">
                   <button
                     class="btn report-preview-btn report-download-trigger js-segregation-pdf-preview"
@@ -798,22 +835,22 @@
                   </form>
                 </div>
               </div>
+              <div style="margin-bottom: 8px; color: var(--text-secondary); font-size: 0.92rem;">
+                Beneficiaries: <strong style="color: var(--text-primary);">{{ segregation_file1.beneficiary_count }}</strong>
+                <span style="margin-left: 10px;">Rows: <strong style="color: var(--text-primary);">{{ segregation_file1.row_count }}</strong></span>
+                <span style="margin-left: 10px;">Waiting Hall Qty: <strong style="color: var(--text-primary);">{{ segregation_file1.total_quantity }}</strong></span>
+              </div>
+              <div class="segregation-summary-row">
+                <div style="color: var(--text-secondary); font-size: 0.94rem;">{% if not segregation_file1.groups %}No waiting hall rows available for File 1 with the current filters.{% endif %}</div>
+                <div></div>
+              </div>
               </section>
 
               <section class="card" style="margin: 0;">
-              <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+              <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 2px;">
                 <div>
-                  <h4 style="margin: 0 0 6px;">2. Article-wise Beneficiaries</h4>
-                  <p style="margin: 0; color: var(--text-secondary);">Pivot-style article grouping with beneficiary names and waiting hall quantity.</p>
+                  <h4 style="margin: 0 0 6px;">Article-wise Beneficiaries</h4>
                 </div>
-              </div>
-              <div style="margin-bottom: 10px; color: var(--text-secondary); font-size: 0.92rem;">
-                Articles: <strong style="color: var(--text-primary);">{{ segregation_file2.article_count }}</strong>
-                <span style="margin-left: 10px;">Rows: <strong style="color: var(--text-primary);">{{ segregation_file2.row_count }}</strong></span>
-                <span style="margin-left: 10px;">Waiting Hall Qty: <strong style="color: var(--text-primary);">{{ segregation_file2.total_quantity }}</strong></span>
-              </div>
-              <div class="segregation-summary-row">
-                <div style="color: var(--text-secondary); font-size: 0.94rem;">{% if not segregation_file2.groups %}No waiting hall rows available for File 2 with the current filters.{% endif %}</div>
                 <div class="segregation-summary-actions">
                   <button
                     class="btn report-preview-btn report-download-trigger js-segregation-pdf-preview"
@@ -840,21 +877,22 @@
                   </form>
                 </div>
               </div>
+              <div style="margin-bottom: 8px; color: var(--text-secondary); font-size: 0.92rem;">
+                Articles: <strong style="color: var(--text-primary);">{{ segregation_file2.article_count }}</strong>
+                <span style="margin-left: 10px;">Rows: <strong style="color: var(--text-primary);">{{ segregation_file2.row_count }}</strong></span>
+                <span style="margin-left: 10px;">Waiting Hall Qty: <strong style="color: var(--text-primary);">{{ segregation_file2.total_quantity }}</strong></span>
+              </div>
+              <div class="segregation-summary-row">
+                <div style="color: var(--text-secondary); font-size: 0.94rem;">{% if not segregation_file2.groups %}No waiting hall rows available for File 2 with the current filters.{% endif %}</div>
+                <div></div>
+              </div>
               </section>
 
               <section class="card" style="margin: 0;">
-              <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+              <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 2px;">
                 <div>
-                  <h4 style="margin: 0 0 6px;">3. MASM Hall Moving List</h4>
-                  <p style="margin: 0; color: var(--text-secondary);">Sequence-ordered list of tokened items to move from waiting hall to stage.</p>
+                  <h4 style="margin: 0 0 6px;">MASM Hall Moving List</h4>
                 </div>
-              </div>
-              <div style="margin-bottom: 10px; color: var(--text-secondary); font-size: 0.92rem;">
-                Rows: <strong style="color: var(--text-primary);">{{ segregation_file3.row_count }}</strong>
-                <span style="margin-left: 10px;">Token Qty: <strong style="color: var(--text-primary);">{{ segregation_file3.total_token_quantity }}</strong></span>
-              </div>
-              <div class="segregation-summary-row">
-                <div style="color: var(--text-secondary); font-size: 0.94rem;">{% if not segregation_file3.rows %}No token rows available for File 3 with the current filters.{% endif %}</div>
                 <div class="segregation-summary-actions">
                   <button
                     class="btn report-preview-btn report-download-trigger js-segregation-pdf-preview"
@@ -881,14 +919,22 @@
                   </form>
                 </div>
               </div>
+              <div style="margin-bottom: 8px; color: var(--text-secondary); font-size: 0.92rem;">
+                Rows: <strong style="color: var(--text-primary);">{{ segregation_file3.row_count }}</strong>
+                <span style="margin-left: 10px;">Token Qty: <strong style="color: var(--text-primary);">{{ segregation_file3.total_token_quantity }}</strong></span>
+              </div>
+              <div class="segregation-summary-row">
+                <div style="color: var(--text-secondary); font-size: 0.94rem;">{% if not segregation_file3.rows %}No token rows available for File 3 with the current filters.{% endif %}</div>
+                <div></div>
+              </div>
               </section>
             </div>
           </div>
         </details>
 
-        <details class="reports-collapsible" open>
+        <details class="reports-collapsible" id="reports-stage-distribution-panel" {% if reports_home_open_panel == "stage-distribution" %}open{% endif %}>
           <summary>
-            <div class="reports-collapsible-title">Distribution</div>
+            <div class="reports-collapsible-title">Stage Distribution</div>
             <div class="reports-collapsible-meta">
               {% if distribution_state.loaded %}
                 Rows: {{ distribution_row_count }} | Columns: {{ distribution_state.headers|length }}
@@ -898,16 +944,22 @@
             </div>
           </summary>
           <div class="reports-collapsible-body">
-            <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin: 14px 0 12px;">
-              <div>
-                <p style="margin: 0; color: var(--text-secondary); max-width: 520px;">
-                  Sync the final token data or upload a CSV / Excel file to stage distribution report rows.
-                </p>
+            <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin: 14px 0 12px; gap: 12px; flex-wrap: nowrap;">
+              <div style="margin: 0; color: var(--text-secondary); font-size: 0.90rem; max-width: none; white-space: nowrap;">
+                {% if distribution_state.loaded %}
+                  <span style="color: #b91c1c; font-weight: 600;">{{ distribution_state.source }}</span>
+                  <span style="margin-left: 12px;">Rows: <strong style="color: var(--text-primary);">{{ distribution_row_count }}</strong></span>
+                  <span style="margin-left: 12px;">Columns: <strong style="color: var(--text-primary);">{{ distribution_state.headers|length }}</strong></span>
+                  <span style="margin-left: 12px;">Synced: <strong style="color: var(--text-primary);">{{ distribution_state.synced_at }}</strong></span>
+                {% else %}
+                  <span style="color: var(--text-secondary);">Sync Data or Upload to load stage distribution data.</span>
+                {% endif %}
               </div>
-              <div class="toolbar" style="margin-left: auto; margin-bottom: 0;">
+              <div class="toolbar" style="margin-left: auto; margin-bottom: 0; flex-wrap: nowrap;">
                 <form method="post" style="margin: 0;">
                   {% csrf_token %}
                   <input type="hidden" name="tab" value="reports-home">
+                  <input type="hidden" name="reports_panel" value="stage-distribution">
                   {% for value in segregation_filter_values.beneficiary_types %}
                     <input type="hidden" name="segregation_beneficiary_type" value="{{ value }}">
                   {% endfor %}
@@ -919,6 +971,7 @@
                 <form method="post" enctype="multipart/form-data" style="margin: 0;">
                   {% csrf_token %}
                   <input type="hidden" name="tab" value="reports-home">
+                  <input type="hidden" name="reports_panel" value="stage-distribution">
                   {% for value in segregation_filter_values.beneficiary_types %}
                     <input type="hidden" name="segregation_beneficiary_type" value="{{ value }}">
                   {% endfor %}
@@ -927,20 +980,304 @@
                   {% endfor %}
                   <input id="reports-distribution-upload-input" type="file" name="file" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="this.form.submit();" />
                   <input type="hidden" name="action" value="upload_reports_distribution" />
-                  <button class="btn report-download-trigger" type="button" onclick="document.getElementById('reports-distribution-upload-input').click();">Upload CSV / Excel</button>
+                  <button class="btn report-download-trigger" type="button" onclick="document.getElementById('reports-distribution-upload-input').click();">Upload</button>
+                </form>
+                <form method="post" style="margin: 0;">
+                  {% csrf_token %}
+                  <input type="hidden" name="tab" value="reports-home">
+                  <input type="hidden" name="reports_panel" value="stage-distribution">
+                  {% for value in stage_distribution_filter_values.beneficiary_types %}
+                    <input type="hidden" name="stage_beneficiary_type" value="{{ value }}">
+                  {% endfor %}
+                  {% for value in stage_distribution_filter_values.item_types %}
+                    <input type="hidden" name="stage_item_type" value="{{ value }}">
+                  {% endfor %}
+                  <input type="hidden" name="stage_premise" value="{{ stage_distribution_filter_values.premise }}">
+                  <input type="hidden" name="stage_seq_start" value="{{ stage_distribution_filter_values.seq_start }}">
+                  <input type="hidden" name="stage_seq_end" value="{{ stage_distribution_filter_values.seq_end }}">
+                  <button class="btn report-download-trigger" type="submit" name="action" value="download_reports_stage_distribution_excel">Download Excel</button>
                 </form>
               </div>
             </div>
-            <div style="margin: 12px 0 0; color: var(--text-secondary); font-size: 0.96rem;">
-              {% if distribution_state.loaded %}
-                <span style="color: #b91c1c; font-weight: 600;">{{ distribution_state.source }}</span>
-                <span style="margin-left: 12px;">Rows: <strong style="color: var(--text-primary);">{{ distribution_row_count }}</strong></span>
-                <span style="margin-left: 12px;">Columns: <strong style="color: var(--text-primary);">{{ distribution_state.headers|length }}</strong></span>
-                <span style="margin-left: 12px;">Loaded: <strong style="color: var(--text-primary);">{{ distribution_state.synced_at }}</strong></span>
-              {% else %}
-                <span style="color: var(--text-secondary);">Use Sync Data to pull the current token file or upload CSV / Excel to stage distribution data.</span>
-              {% endif %}
-            </div>
+
+            <form method="get" id="stage-distribution-filter-form" style="margin: 12px 0 12px;">
+              <input type="hidden" name="tab" value="reports-home">
+              <input type="hidden" name="reports_panel" value="stage-distribution">
+              <div style="display: grid; grid-template-columns: minmax(220px, 1.1fr) minmax(180px, 1fr) minmax(160px, 0.8fr) auto; gap: 12px; align-items: start;">
+                <label style="display: grid; gap: 6px;">
+                  <span style="font-size: 13px; font-weight: 600;">Beneficiary Type</span>
+                  <select class="input" name="stage_beneficiary_type">
+                    {% for value, label in stage_distribution_beneficiary_type_choices %}
+                      <option value="{{ value }}" {% if value == "all" and not stage_distribution_filter_values.beneficiary_types %}selected{% elif value in stage_distribution_filter_values.beneficiary_types %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label style="display: grid; gap: 6px;">
+                  <span style="font-size: 13px; font-weight: 600;">Item Type</span>
+                  <select class="input" name="stage_item_type">
+                    {% for value, label in stage_distribution_item_type_choices %}
+                      <option value="{{ value }}" {% if value == "all" and not stage_distribution_filter_values.item_types %}selected{% elif value in stage_distribution_filter_values.item_types %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <label style="display: grid; gap: 6px;">
+                  <span style="font-size: 13px; font-weight: 600;">Premise</span>
+                  <select class="input" name="stage_premise">
+                    {% for value, label in stage_distribution_premise_choices %}
+                      <option value="{{ value }}" {% if stage_distribution_filter_values.premise == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </label>
+                <div class="toolbar" style="margin: 0; gap: 8px; align-items: end; justify-content: flex-end; align-self: end;">
+                  <button class="btn btn-light-soft" type="submit" style="white-space: nowrap;">Filter Rows</button>
+                  <a class="btn btn-light-soft" href="{% url 'ui:reports' %}?tab=reports-home" style="text-decoration:none; white-space: nowrap;">Reset</a>
+                </div>
+              </div>
+            </form>
+
+            <section class="card" style="margin: 0 0 10px;">
+              <div class="toolbar" style="justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 8px;">
+                <div>
+                  <h4 style="margin: 0;">Beneficiary List</h4>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 0.88rem; white-space: nowrap;">
+                  <span style="font-weight: 600;">Sequence From</span>
+                  <input id="stage-distribution-seq-start" class="input" type="number" min="1" value="{{ stage_distribution_filter_values.seq_start }}" placeholder="1" style="width: 64px; min-width: 64px; max-width: 64px; padding-left: 10px; padding-right: 10px; font-size: 0.92rem;">
+                  <span style="font-weight: 600;">-</span>
+                  <input id="stage-distribution-seq-end" class="input" type="number" min="1" value="{{ stage_distribution_filter_values.seq_end }}" placeholder="20" style="width: 64px; min-width: 64px; max-width: 64px; padding-left: 10px; padding-right: 10px; font-size: 0.92rem;">
+                </div>
+              </div>
+              <div style="margin-bottom: 10px; color: var(--text-secondary); font-size: 0.92rem;">
+                Rows: <strong style="color: var(--text-primary);">{{ stage_distribution_file1.row_count }}</strong>
+                <span style="margin-left: 10px;">Grand Total: <strong style="color: var(--text-primary);">{{ stage_distribution_file1.total_token_quantity }}</strong></span>
+              </div>
+              <div class="segregation-summary-row">
+                <div style="color: var(--text-secondary); font-size: 0.94rem;">{% if not stage_distribution_file1.rows %}No stage distribution rows available with the current filters.{% endif %}</div>
+              <div class="segregation-summary-actions">
+                  <form method="post" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="tab" value="reports-home">
+                    <input type="hidden" name="reports_panel" value="stage-distribution">
+                    <input type="hidden" name="action" value="preview_reports_stage_distribution_file1_pdf">
+                    {% for value in stage_distribution_filter_values.beneficiary_types %}
+                      <input type="hidden" name="stage_beneficiary_type" value="{{ value }}">
+                    {% endfor %}
+                    {% for value in stage_distribution_filter_values.item_types %}
+                      <input type="hidden" name="stage_item_type" value="{{ value }}">
+                    {% endfor %}
+                    <input type="hidden" name="stage_premise" value="{{ stage_distribution_filter_values.premise }}">
+                    <input type="hidden" name="stage_seq_start" value="{{ stage_distribution_filter_values.seq_start }}">
+                    <input type="hidden" name="stage_seq_end" value="{{ stage_distribution_filter_values.seq_end }}">
+                    <button
+                      class="btn report-preview-btn report-download-trigger js-report-pdf-preview"
+                      type="button"
+                      data-preview-action="preview_reports_stage_distribution_file1_pdf"
+                      data-preview-title="Stage Distribution File 1 Preview"
+                      data-preview-source="stage_distribution_file_1_preview.pdf"
+                      {% if not stage_distribution_file1.rows %}disabled{% endif %}
+                    >
+                      Preview
+                    </button>
+                  </form>
+                  <form method="post" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="tab" value="reports-home">
+                    <input type="hidden" name="reports_panel" value="stage-distribution">
+                    <input type="hidden" name="action" value="download_reports_stage_distribution_file1_pdf">
+                    {% for value in stage_distribution_filter_values.beneficiary_types %}
+                      <input type="hidden" name="stage_beneficiary_type" value="{{ value }}">
+                    {% endfor %}
+                    {% for value in stage_distribution_filter_values.item_types %}
+                      <input type="hidden" name="stage_item_type" value="{{ value }}">
+                    {% endfor %}
+                    <input type="hidden" name="stage_premise" value="{{ stage_distribution_filter_values.premise }}">
+                    <input type="hidden" name="stage_seq_start" value="{{ stage_distribution_filter_values.seq_start }}">
+                    <input type="hidden" name="stage_seq_end" value="{{ stage_distribution_filter_values.seq_end }}">
+                    <button class="btn report-download-trigger" type="submit" {% if not stage_distribution_file1.rows %}disabled{% endif %}>Download PDF</button>
+                  </form>
+                </div>
+              </div>
+            </section>
+
+            <section class="card" style="margin: 0 0 10px;">
+              <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 2px;">
+                <div>
+                  <h4 style="margin: 0 0 6px;">District-wise Article List</h4>
+                </div>
+                <div class="segregation-summary-actions">
+                  <form method="post" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="tab" value="reports-home">
+                    <input type="hidden" name="reports_panel" value="stage-distribution">
+                    <input type="hidden" name="action" value="preview_reports_stage_distribution_file2_pdf">
+                    {% for value in stage_distribution_filter_values.beneficiary_types %}
+                      <input type="hidden" name="stage_beneficiary_type" value="{{ value }}">
+                    {% endfor %}
+                    {% for value in stage_distribution_filter_values.item_types %}
+                      <input type="hidden" name="stage_item_type" value="{{ value }}">
+                    {% endfor %}
+                    <input type="hidden" name="stage_premise" value="{{ stage_distribution_filter_values.premise }}">
+                    <button class="btn report-preview-btn report-download-trigger js-report-pdf-preview" type="button" data-preview-action="preview_reports_stage_distribution_file2_pdf" data-preview-title="Stage Distribution File 2 Preview" data-preview-source="stage_distribution_file_2_preview.pdf" {% if not stage_distribution_file2.groups %}disabled{% endif %}>Preview</button>
+                  </form>
+                  <form method="post" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="tab" value="reports-home">
+                    <input type="hidden" name="reports_panel" value="stage-distribution">
+                    <input type="hidden" name="action" value="download_reports_stage_distribution_file2_pdf">
+                    {% for value in stage_distribution_filter_values.beneficiary_types %}
+                      <input type="hidden" name="stage_beneficiary_type" value="{{ value }}">
+                    {% endfor %}
+                    {% for value in stage_distribution_filter_values.item_types %}
+                      <input type="hidden" name="stage_item_type" value="{{ value }}">
+                    {% endfor %}
+                    <input type="hidden" name="stage_premise" value="{{ stage_distribution_filter_values.premise }}">
+                    <button class="btn report-download-trigger" type="submit" {% if not stage_distribution_file2.groups %}disabled{% endif %}>Download PDF</button>
+                  </form>
+                </div>
+              </div>
+              <div style="margin-bottom: 8px; color: var(--text-secondary); font-size: 0.92rem;">
+                Rows: <strong style="color: var(--text-primary);">{{ stage_distribution_file2.row_count }}</strong>
+                <span style="margin-left: 10px;">Grand Total: <strong style="color: var(--text-primary);">{{ stage_distribution_file2.grand_total }}</strong></span>
+              </div>
+              <div class="segregation-summary-row">
+                <div style="color: var(--text-secondary); font-size: 0.94rem;">{% if not stage_distribution_file2.groups %}No district rows available with the current filters.{% endif %}</div>
+              </div>
+            </section>
+
+            <section class="card" style="margin: 0 0 10px;">
+              <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                <div>
+                  <h4 style="margin: 0 0 6px;">Public-wise Article List</h4>
+                </div>
+                <div class="segregation-summary-actions">
+                  <form method="post" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="tab" value="reports-home">
+                    <input type="hidden" name="reports_panel" value="stage-distribution">
+                    <input type="hidden" name="action" value="preview_reports_stage_distribution_file3_pdf">
+                    {% for value in stage_distribution_filter_values.beneficiary_types %}
+                      <input type="hidden" name="stage_beneficiary_type" value="{{ value }}">
+                    {% endfor %}
+                    {% for value in stage_distribution_filter_values.item_types %}
+                      <input type="hidden" name="stage_item_type" value="{{ value }}">
+                    {% endfor %}
+                    <input type="hidden" name="stage_premise" value="{{ stage_distribution_filter_values.premise }}">
+                    <button class="btn report-preview-btn report-download-trigger js-report-pdf-preview" type="button" data-preview-action="preview_reports_stage_distribution_file3_pdf" data-preview-title="Stage Distribution File 3 Preview" data-preview-source="stage_distribution_file_3_preview.pdf" {% if not stage_distribution_file3.groups %}disabled{% endif %}>Preview</button>
+                  </form>
+                  <form method="post" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="tab" value="reports-home">
+                    <input type="hidden" name="reports_panel" value="stage-distribution">
+                    <input type="hidden" name="action" value="download_reports_stage_distribution_file3_pdf">
+                    {% for value in stage_distribution_filter_values.beneficiary_types %}
+                      <input type="hidden" name="stage_beneficiary_type" value="{{ value }}">
+                    {% endfor %}
+                    {% for value in stage_distribution_filter_values.item_types %}
+                      <input type="hidden" name="stage_item_type" value="{{ value }}">
+                    {% endfor %}
+                    <input type="hidden" name="stage_premise" value="{{ stage_distribution_filter_values.premise }}">
+                    <button class="btn report-download-trigger" type="submit" {% if not stage_distribution_file3.groups %}disabled{% endif %}>Download PDF</button>
+                  </form>
+                </div>
+              </div>
+              <div style="margin-bottom: 10px; color: var(--text-secondary); font-size: 0.92rem;">
+                Rows: <strong style="color: var(--text-primary);">{{ stage_distribution_file3.row_count }}</strong>
+                <span style="margin-left: 10px;">Grand Total: <strong style="color: var(--text-primary);">{{ stage_distribution_file3.grand_total }}</strong></span>
+              </div>
+              <div class="segregation-summary-row">
+                <div style="color: var(--text-secondary); font-size: 0.94rem;">{% if not stage_distribution_file3.groups %}No public rows available with the current filters.{% endif %}</div>
+              </div>
+            </section>
+
+            <section class="card" style="margin: 0 0 10px;">
+              <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                <div>
+                  <h4 style="margin: 0 0 6px;">Institution-wise Article List</h4>
+                </div>
+                <div class="segregation-summary-actions">
+                  <form method="post" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="tab" value="reports-home">
+                    <input type="hidden" name="reports_panel" value="stage-distribution">
+                    <input type="hidden" name="action" value="preview_reports_stage_distribution_file4_pdf">
+                    {% for value in stage_distribution_filter_values.beneficiary_types %}
+                      <input type="hidden" name="stage_beneficiary_type" value="{{ value }}">
+                    {% endfor %}
+                    {% for value in stage_distribution_filter_values.item_types %}
+                      <input type="hidden" name="stage_item_type" value="{{ value }}">
+                    {% endfor %}
+                    <input type="hidden" name="stage_premise" value="{{ stage_distribution_filter_values.premise }}">
+                    <button class="btn report-preview-btn report-download-trigger js-report-pdf-preview" type="button" data-preview-action="preview_reports_stage_distribution_file4_pdf" data-preview-title="Stage Distribution File 4 Preview" data-preview-source="stage_distribution_file_4_preview.pdf" {% if not stage_distribution_file4.groups %}disabled{% endif %}>Preview</button>
+                  </form>
+                  <form method="post" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="tab" value="reports-home">
+                    <input type="hidden" name="reports_panel" value="stage-distribution">
+                    <input type="hidden" name="action" value="download_reports_stage_distribution_file4_pdf">
+                    {% for value in stage_distribution_filter_values.beneficiary_types %}
+                      <input type="hidden" name="stage_beneficiary_type" value="{{ value }}">
+                    {% endfor %}
+                    {% for value in stage_distribution_filter_values.item_types %}
+                      <input type="hidden" name="stage_item_type" value="{{ value }}">
+                    {% endfor %}
+                    <input type="hidden" name="stage_premise" value="{{ stage_distribution_filter_values.premise }}">
+                    <button class="btn report-download-trigger" type="submit" {% if not stage_distribution_file4.groups %}disabled{% endif %}>Download PDF</button>
+                  </form>
+                </div>
+              </div>
+              <div style="margin-bottom: 10px; color: var(--text-secondary); font-size: 0.92rem;">
+                Rows: <strong style="color: var(--text-primary);">{{ stage_distribution_file4.row_count }}</strong>
+                <span style="margin-left: 10px;">Grand Total: <strong style="color: var(--text-primary);">{{ stage_distribution_file4.grand_total }}</strong></span>
+              </div>
+              <div class="segregation-summary-row">
+                <div style="color: var(--text-secondary); font-size: 0.94rem;">{% if not stage_distribution_file4.groups %}No institution rows available with the current filters.{% endif %}</div>
+              </div>
+            </section>
+
+            <section class="card" style="margin: 0 0 10px;">
+              <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                <div>
+                  <h4 style="margin: 0 0 6px;">{{ stage_distribution_file5_title }}</h4>
+                </div>
+                <div class="segregation-summary-actions">
+                  <form method="post" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="tab" value="reports-home">
+                    <input type="hidden" name="reports_panel" value="stage-distribution">
+                    <input type="hidden" name="action" value="preview_reports_stage_distribution_file5_pdf">
+                    {% for value in stage_distribution_filter_values.beneficiary_types %}
+                      <input type="hidden" name="stage_beneficiary_type" value="{{ value }}">
+                    {% endfor %}
+                    {% for value in stage_distribution_filter_values.item_types %}
+                      <input type="hidden" name="stage_item_type" value="{{ value }}">
+                    {% endfor %}
+                    <input type="hidden" name="stage_premise" value="{{ stage_distribution_filter_values.premise }}">
+                    <button class="btn report-preview-btn report-download-trigger js-report-pdf-preview" type="button" data-preview-action="preview_reports_stage_distribution_file5_pdf" data-preview-title="Stage Distribution File 5 Preview" data-preview-source="stage_distribution_file_5_preview.pdf" {% if not stage_distribution_file5.groups %}disabled{% endif %}>Preview</button>
+                  </form>
+                  <form method="post" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="tab" value="reports-home">
+                    <input type="hidden" name="reports_panel" value="stage-distribution">
+                    <input type="hidden" name="action" value="download_reports_stage_distribution_file5_pdf">
+                    {% for value in stage_distribution_filter_values.beneficiary_types %}
+                      <input type="hidden" name="stage_beneficiary_type" value="{{ value }}">
+                    {% endfor %}
+                    {% for value in stage_distribution_filter_values.item_types %}
+                      <input type="hidden" name="stage_item_type" value="{{ value }}">
+                    {% endfor %}
+                    <input type="hidden" name="stage_premise" value="{{ stage_distribution_filter_values.premise }}">
+                    <button class="btn report-download-trigger" type="submit" {% if not stage_distribution_file5.groups %}disabled{% endif %}>Download PDF</button>
+                  </form>
+                </div>
+              </div>
+              <div style="margin-bottom: 10px; color: var(--text-secondary); font-size: 0.92rem;">
+                Rows: <strong style="color: var(--text-primary);">{{ stage_distribution_file5.row_count }}</strong>
+                <span style="margin-left: 10px;">Grand Total: <strong style="color: var(--text-primary);">{{ stage_distribution_file5.grand_total }}</strong></span>
+              </div>
+              <div class="segregation-summary-row">
+                <div style="color: var(--text-secondary); font-size: 0.94rem;">{% if not stage_distribution_file5.groups %}No rows available with the current filters.{% endif %}</div>
+              </div>
+            </section>
           </div>
         </details>
       </div>
