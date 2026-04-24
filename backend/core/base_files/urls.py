@@ -4,13 +4,10 @@ from __future__ import annotations
 
 from django.urls import path
 
-from .views import (
-    AidRecipientTemplateDownloadView,
-    MasterDataArticleView,
-    MasterDataDistrictView,
-    MasterDataHistoryView,
-    UpdatedPastBeneficiaryExportView,
-)
+from .views import MasterDataArticleView
+from .views import MasterDataDistrictView
+from .views import MasterDataHistoryView
+from .views import UpdatedPastBeneficiaryExportView
 
 urlpatterns = [
     path("master-data/districts/", MasterDataDistrictView.as_view(), name="master-data-districts"),
@@ -21,5 +18,4 @@ urlpatterns = [
         UpdatedPastBeneficiaryExportView.as_view(),
         name="master-data-history-export-updated",
     ),
-    path("master-data/templates/aid-recipients/", AidRecipientTemplateDownloadView.as_view(), name="aid-recipient-template"),
 ]

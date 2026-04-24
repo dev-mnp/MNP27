@@ -62,11 +62,54 @@ from core.reports.services import _segregation_file3_sheet_rows
 from core.reports.services import _segregation_filter_rows
 from core.reports.services import _segregation_master_sheet_rows
 from core.reports.services import _segregation_normalize_dataset
-from core.reports.services import _segregation_resolved_item_type
 from core.shared.csv_utils import _tabular_rows_from_upload
 from core.shared.permissions import RoleRequiredMixin
 from core.shared.phase2 import _phase2_unique_headers
 from core.shared.token_generation import _token_generation_saved_dataset
+
+
+def _reports_multi_value_list(data, key: str) -> list[str]:
+    values: list[str] = []
+    if hasattr(data, "getlist"):
+        raw_values = list(data.getlist(key))
+    else:
+        raw_values = [data.get(key)] if data.get(key) is not None else []
+    for raw_value in raw_values:
+        for part in str(raw_value or "").split(","):
+            value = str(part or "").strip()
+            if value:
+                values.append(value)
+    seen: set[str] = set()
+    unique_values: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        unique_values.append(value)
+    return unique_values
+
+
+def _reports_normalize_segmentation_filter(values: list[str], *, allowed_values: set[str]) -> list[str]:
+    cleaned = [value for value in values if value in allowed_values]
+    if not cleaned:
+        return []
+    if "all" in cleaned:
+        return []
+    if len(set(cleaned)) >= len(allowed_values):
+        return []
+    return cleaned
+
+
+def _reports_selection_summary(selected_values: list[str], choices: list[tuple[str, str]]) -> str:
+    selected_set = {str(value or "").strip() for value in selected_values if str(value or "").strip()}
+    if not selected_set:
+        return "All"
+    labels = [label for value, label in choices if value in selected_set]
+    if not labels:
+        return "All"
+    if len(labels) <= 3:
+        return ", ".join(labels)
+    return f"{len(labels)} selected"
 
 
 class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
@@ -118,23 +161,24 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         if active_tab == "reports-home":
             segregation_state = _reports_simple_report_session_state(request, REPORTS_SEGREGATION_STATE_KEY)
             distribution_state = _reports_simple_report_session_state(request, REPORTS_DISTRIBUTION_STATE_KEY)
-            segregation_beneficiary_type = str(request.POST.get("segregation_beneficiary_type") or "").strip()
-            allowed_beneficiary_types = {choice[0] for choice in SEGREGATION_BENEFICIARY_FILTER_CHOICES}
-            if segregation_beneficiary_type not in allowed_beneficiary_types:
-                segregation_beneficiary_type = ""
-            segregation_item_type = _segregation_resolved_item_type(
-                request.POST.get("segregation_item_type"),
-                default=models.ItemTypeChoices.ARTICLE,
+            segregation_beneficiary_types = _reports_normalize_segmentation_filter(
+                _reports_multi_value_list(request.POST, "segregation_beneficiary_type"),
+                allowed_values={choice[0] for choice in SEGREGATION_BENEFICIARY_FILTER_CHOICES},
+            )
+            segregation_item_types = _reports_normalize_segmentation_filter(
+                _reports_multi_value_list(request.POST, "segregation_item_type"),
+                allowed_values={choice[0] for choice in SEGREGATION_ITEM_FILTER_CHOICES},
             )
 
             def _reports_home_redirect():
                 params = {
                     "tab": "reports-home",
-                    "seg_item_type": segregation_item_type or models.ItemTypeChoices.ARTICLE,
                 }
-                if segregation_beneficiary_type:
-                    params["seg_beneficiary_type"] = segregation_beneficiary_type
-                return HttpResponseRedirect(f"{reverse('ui:reports')}?{urlencode(params)}")
+                if segregation_beneficiary_types:
+                    params["seg_beneficiary_type"] = segregation_beneficiary_types
+                if segregation_item_types:
+                    params["seg_item_type"] = segregation_item_types
+                return HttpResponseRedirect(f"{reverse('ui:reports')}?{urlencode(params, doseq=True)}")
 
             def _simple_report_sync(state, label: str):
                 session = _reports_active_session()
@@ -199,8 +243,8 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 normalized_dataset = _segregation_normalize_dataset(segregation_state)
                 filtered_rows = _segregation_filter_rows(
                     normalized_dataset.get("rows") or [],
-                    beneficiary_type=segregation_beneficiary_type,
-                    item_type=segregation_item_type,
+                    beneficiary_types=segregation_beneficiary_types,
+                    item_types=segregation_item_types,
                 )
                 file1_data = _segregation_build_file1(filtered_rows)
                 file2_data = _segregation_build_file2(filtered_rows)
@@ -437,7 +481,7 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 field_map = _reports_public_ack_field_map_with_defaults(
                     state.get("headers") or [],
                     template_fields,
-                    {**state.get("field_map", {}), **{key: value for key, value in submitted_map.items() if value}},
+                    {**state.get("field_map", {}), **submitted_map},
                 )
                 state["field_map"] = field_map
                 _reports_set_public_ack_state(request, state)
@@ -820,19 +864,19 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         public_ack_rows = list(public_ack_state.get("rows") or [])
         segregation_state = _reports_simple_report_session_state(self.request, REPORTS_SEGREGATION_STATE_KEY)
         segregation_rows = list(segregation_state.get("rows") or [])
-        segregation_beneficiary_type = str(self.request.GET.get("seg_beneficiary_type") or "").strip()
-        allowed_beneficiary_types = {choice[0] for choice in SEGREGATION_BENEFICIARY_FILTER_CHOICES}
-        if segregation_beneficiary_type not in allowed_beneficiary_types:
-            segregation_beneficiary_type = ""
-        segregation_item_type = _segregation_resolved_item_type(
-            self.request.GET.get("seg_item_type"),
-            default=models.ItemTypeChoices.ARTICLE,
+        segregation_beneficiary_types = _reports_normalize_segmentation_filter(
+            _reports_multi_value_list(self.request.GET, "seg_beneficiary_type"),
+            allowed_values={choice[0] for choice in SEGREGATION_BENEFICIARY_FILTER_CHOICES},
+        )
+        segregation_item_types = _reports_normalize_segmentation_filter(
+            _reports_multi_value_list(self.request.GET, "seg_item_type"),
+            allowed_values={choice[0] for choice in SEGREGATION_ITEM_FILTER_CHOICES},
         )
         segregation_dataset = _segregation_normalize_dataset(segregation_state)
         segregation_filtered_rows = _segregation_filter_rows(
             segregation_dataset.get("rows") or [],
-            beneficiary_type=segregation_beneficiary_type,
-            item_type=segregation_item_type,
+            beneficiary_types=segregation_beneficiary_types,
+            item_types=segregation_item_types,
         )
         segregation_file1 = _segregation_build_file1(segregation_filtered_rows)
         segregation_file2 = _segregation_build_file2(segregation_filtered_rows)
@@ -868,11 +912,19 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 "segregation_state": segregation_state,
                 "segregation_row_count": len(segregation_rows),
                 "segregation_filter_values": {
-                    "beneficiary_type": segregation_beneficiary_type,
-                    "item_type": segregation_item_type,
+                    "beneficiary_types": segregation_beneficiary_types,
+                    "item_types": segregation_item_types,
                 },
                 "segregation_beneficiary_type_choices": SEGREGATION_BENEFICIARY_FILTER_CHOICES,
                 "segregation_item_type_choices": SEGREGATION_ITEM_FILTER_CHOICES,
+                "segregation_beneficiary_summary": _reports_selection_summary(
+                    segregation_beneficiary_types,
+                    SEGREGATION_BENEFICIARY_FILTER_CHOICES,
+                ),
+                "segregation_item_summary": _reports_selection_summary(
+                    segregation_item_types,
+                    SEGREGATION_ITEM_FILTER_CHOICES,
+                ),
                 "segregation_filtered_row_count": len(segregation_filtered_rows),
                 "segregation_file1": segregation_file1,
                 "segregation_file2": segregation_file2,
@@ -893,6 +945,7 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                     (models.RecipientTypeChoices.DISTRICT, "District"),
                     (models.RecipientTypeChoices.PUBLIC, "Public"),
                     (models.RecipientTypeChoices.INSTITUTIONS, "Institutions"),
+                    (models.RecipientTypeChoices.OTHERS, "Others"),
                 ],
                 "waiting_hall_item_type_choices": [
                     (models.ItemTypeChoices.AID, "Aid"),

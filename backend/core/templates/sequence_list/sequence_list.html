@@ -233,7 +233,7 @@
       border-radius: 16px;
       overflow: hidden;
       box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
-      min-height: 480px;
+      min-height: 760px;
     }
     .sequence-panel-header {
       padding: 12px 14px;
@@ -251,12 +251,12 @@
     }
     .sequence-panel-tools {
       display: flex;
-      flex-wrap: nowrap;
-      gap: 6px;
+      flex-direction: column;
+      gap: 8px;
       align-items: center;
       justify-content: flex-start;
       flex: 1 1 auto;
-      overflow-x: auto;
+      overflow: visible;
       scrollbar-width: thin;
     }
     .sequence-panel-tools-group {
@@ -264,9 +264,25 @@
       align-items: center;
       gap: 6px;
       flex: 0 0 auto;
+      flex-wrap: nowrap;
+      width: 100%;
     }
     .sequence-panel-tools-group.is-spacer {
       margin-left: auto;
+    }
+    .sequence-panel-tools-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      flex-wrap: nowrap;
+      overflow: visible;
+    }
+    .sequence-panel-tools-row.is-bottom {
+      justify-content: flex-start;
+    }
+    .sequence-panel-tools-row.is-main {
+      justify-content: flex-start;
     }
     .sequence-panel-tools .btn {
       min-height: 32px;
@@ -322,7 +338,7 @@
       color: #3559e0;
     }
     .sequence-list {
-      max-height: 68vh;
+      max-height: 82vh;
       overflow: auto;
       padding: 8px;
       display: flex;
@@ -433,6 +449,12 @@
         flex-direction: row;
         padding-top: 0;
       }
+      .sequence-panel {
+        min-height: 560px;
+      }
+      .sequence-list {
+        max-height: 64vh;
+      }
     }
   </style>
 
@@ -530,7 +552,7 @@
         <div class="sequence-panel-header">
           <div class="sequence-panel-title">Unassigned Items</div>
           <div class="sequence-panel-tools">
-            <div class="sequence-panel-tools-group">
+            <div class="sequence-panel-tools-row is-main">
               <label class="sequence-select-toggle" for="sequence-left-toggle">
                 <input id="sequence-left-toggle" type="checkbox">
                 <span>Select all</span>
@@ -554,7 +576,7 @@
         <div class="sequence-panel-header">
           <div class="sequence-panel-title">Sequenced Items</div>
           <div class="sequence-panel-tools">
-            <div class="sequence-panel-tools-group">
+            <div class="sequence-panel-tools-row is-main">
               <label class="sequence-select-toggle" for="sequence-right-toggle">
                 <input id="sequence-right-toggle" type="checkbox">
                 <span>Select all</span>
@@ -563,16 +585,16 @@
                 <input id="sequence-sort-assigned" type="checkbox">
                 <span>Sort by Item</span>
               </label>
-              <select id="sequence-right-category">
-                <option value="all">All Categories</option>
-              </select>
-            </div>
-            <div class="sequence-panel-tools-group is-spacer">
               <button class="btn btn-subtle btn-light-soft" id="sequence-undo" type="button" disabled>Undo</button>
               <button class="btn btn-subtle btn-light-soft" id="sequence-reset" type="button">Reset</button>
               {% if can_create_edit %}
-                <button class="btn" id="sequence-save" type="button">Save and Reconcile</button>
+                <button class="btn" id="sequence-save" type="button">Save</button>
               {% endif %}
+            </div>
+            <div class="sequence-panel-tools-row is-bottom">
+              <select id="sequence-right-category">
+                <option value="all">All Categories</option>
+              </select>
             </div>
           </div>
         </div>
@@ -1384,10 +1406,6 @@
           setFeedback('warn', 'No Master Data items found to save.');
           return;
         }
-        if (sourceMode !== 'db') {
-          setFeedback('warn', 'Save Now works only for Seat Allocation database mode.');
-          return;
-        }
         const summary = reconciliationSummary();
         if (!dbSourceIsUploaded && (summary.missingInSeatAllocation.length || summary.extraInSeatAllocation.length)) {
           const parts = [];
@@ -1542,8 +1560,10 @@
 
       function updateSaveState() {
         if (!saveButton) return;
-        saveButton.disabled = !masterItems.length || sourceMode !== 'db';
-        saveButton.title = sourceMode === 'db' ? (dbSourceIsUploaded ? 'Applies sequence to the uploaded Seat Allocation working copy.' : '') : 'Save works only for database-backed sequence data.';
+        saveButton.disabled = !masterItems.length;
+        saveButton.title = dbSourceIsUploaded
+          ? 'Applies sequence to the uploaded Seat Allocation working copy.'
+          : 'Applies sequence to the current working copy.';
       }
 
       loadFromDb();

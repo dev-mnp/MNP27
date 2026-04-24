@@ -651,8 +651,15 @@ def _phase2_build_rows_from_master_export_rows(rows, *, source_file_name):
 def _phase2_master_export_rows():
     district_rows = _district_export_rows(_build_district_entry_summaries())
     public_rows = _public_export_rows(models.PublicBeneficiaryEntry.objects.active().select_related("article").all())
-    institution_rows = _institution_export_rows(_build_institution_entry_summaries())
-    return district_rows + public_rows + institution_rows
+    institution_rows = _institution_export_rows(
+        _build_institution_entry_summaries(institution_type_filter=models.InstitutionTypeChoices.INSTITUTIONS),
+        beneficiary_type_label="Institutions",
+    )
+    others_rows = _institution_export_rows(
+        _build_institution_entry_summaries(institution_type_filter=models.InstitutionTypeChoices.OTHERS),
+        beneficiary_type_label="Others",
+    )
+    return district_rows + public_rows + institution_rows + others_rows
 
 def _phase2_replace_session_rows(session, upload_rows, *, source_file_name, user, reconciliation=None):
     with transaction.atomic():

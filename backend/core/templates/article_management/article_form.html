@@ -62,6 +62,44 @@
       gap: 10px;
       border-top: 1px solid rgba(15, 23, 42, 0.08);
     }
+    .article-suggest-wrap {
+      position: relative;
+    }
+    .article-suggest-list {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 4px);
+      z-index: 30;
+      display: none;
+      max-height: 220px;
+      overflow: auto;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+      padding: 6px 0;
+    }
+    .article-suggest-wrap.is-open .article-suggest-list {
+      display: block;
+    }
+    .article-suggest-item {
+      width: 100%;
+      padding: 8px 12px;
+      border: 0;
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+    }
+    .article-suggest-item:hover {
+      background: #f1f5f9;
+    }
+    .article-suggest-empty {
+      padding: 8px 12px;
+      color: var(--text-secondary);
+      font-size: 0.92rem;
+    }
     @media (max-width: 720px) {
       .price-impact-grid {
         grid-template-columns: 1fr;
@@ -83,49 +121,68 @@
     {% if popup_mode %}
       <div class="field-hint" style="margin-bottom: 16px;">After save, this window will close and the new article will be available in the application form.</div>
     {% endif %}
-    <form method="post" {% if object %}data-confirm-message="Save changes to this article?" data-price-impact-form data-preview-url="{{ price_impact_preview_url }}" data-initial-cost="{{ object.cost_per_unit|floatformat:'-2' }}" data-initial-manual-price="{{ object.allow_manual_price|yesno:'true,false' }}"{% endif %}>
+    <form method="post" {% if object %}data-confirm-message="Save changes to this article?" data-price-impact-form data-preview-url="{{ price_impact_preview_url }}" data-initial-cost="{{ object.cost_per_unit|floatformat:'-2' }}"{% endif %}>
       {% csrf_token %}
-      <input type="hidden" name="price_update_scope" value="future_only" {% if object %}data-price-update-scope{% endif %}>
+      {% if form.non_field_errors %}
+        <div class="field-error" style="margin-bottom: 14px;">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+      <input type="hidden" name="price_update_scope" value="existing_and_future" {% if object %}data-price-update-scope{% endif %}>
       <div class="grid2">
         <div>
-          <label>Article name</label>
-          {{ form.article_name }}
-        </div>
-        <div>
-          <label>Token Name</label>
-          {{ form.article_name_tk }}
-        </div>
-        <div>
-          <label>Cost per unit</label>
-          {{ form.cost_per_unit }}
-        </div>
-        <div>
-          <label style="display:block; margin-bottom: 8px;">Pricing rule</label>
-          <label>{{ form.allow_manual_price }} {{ form.allow_manual_price.label }}</label>
-          <div class="field-hint">Enable this for user-defined price items. Disable it for fixed-price items that should follow Article Management.</div>
-        </div>
-        <div>
-          <label>Item type</label>
+          <label>Item type <span class="required-star">*</span></label>
           {{ form.item_type }}
         </div>
         <div>
-          <label>Category</label>
-          {{ form.category }}
-          <datalist id="article-category-options">
-            {% for value in category_suggestions %}
-              <option value="{{ value }}"></option>
-            {% endfor %}
-          </datalist>
+          <label>Article name <span class="required-star">*</span></label>
+          <div class="article-suggest-wrap" data-article-suggest-wrap>
+            {{ form.article_name }}
+            <div class="article-suggest-list" data-article-suggest-list>
+              {% for value in article_name_suggestions %}
+                <button type="button" class="article-suggest-item" data-article-suggest-item="{{ value|escape }}">{{ value }}</button>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        <div>
+          <label>Token Name <span class="required-star">*</span></label>
+          <div class="article-suggest-wrap" data-article-suggest-wrap>
+            {{ form.article_name_tk }}
+            <div class="article-suggest-list" data-article-suggest-list>
+              {% for value in article_name_tk_suggestions %}
+                <button type="button" class="article-suggest-item" data-article-suggest-item="{{ value|escape }}">{{ value }}</button>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="field-hint" style="font-size: 0.82rem;">(up to 25 chars is ideal)</div>
+        </div>
+        <div>
+          <label>Cost per unit <span class="required-star">*</span></label>
+          {{ form.cost_per_unit }}
+        </div>
+        <div>
+          <label>Category <span class="required-star">*</span></label>
+          <div class="article-suggest-wrap" data-article-suggest-wrap>
+            {{ form.category }}
+            <div class="article-suggest-list" data-article-suggest-list>
+              {% for value in category_suggestions %}
+                <button type="button" class="article-suggest-item" data-article-suggest-item="{{ value|escape }}">{{ value }}</button>
+              {% endfor %}
+            </div>
+          </div>
           <div class="field-hint">Choose an existing category or type a new one.</div>
         </div>
         <div>
-          <label>Master category</label>
-          {{ form.master_category }}
-          <datalist id="article-master-category-options">
-            {% for value in master_category_suggestions %}
-              <option value="{{ value }}"></option>
-            {% endfor %}
-          </datalist>
+          <label>Master category <span class="required-star">*</span></label>
+          <div class="article-suggest-wrap" data-article-suggest-wrap>
+            {{ form.master_category }}
+            <div class="article-suggest-list" data-article-suggest-list>
+              {% for value in master_category_suggestions %}
+                <button type="button" class="article-suggest-item" data-article-suggest-item="{{ value|escape }}">{{ value }}</button>
+              {% endfor %}
+            </div>
+          </div>
           <div class="field-hint">Choose an existing super category or type a new one.</div>
         </div>
       </div>
@@ -172,8 +229,7 @@
         </div>
         <div class="price-impact-actions">
           <button type="button" class="btn btn-light-soft" data-price-impact-cancel>Cancel</button>
-          <button type="button" class="btn" data-price-impact-future>Update New Records Only</button>
-          <button type="button" class="btn btn-edit" data-price-impact-existing>Update Existing + New</button>
+          <button type="button" class="btn btn-edit" data-price-impact-existing>Update All Matching Rows</button>
         </div>
       </div>
     </div>
@@ -185,13 +241,10 @@
         if (!form) return;
         const previewUrl = form.dataset.previewUrl;
         const initialCost = String(form.dataset.initialCost || "");
-        const initialManual = form.dataset.initialManualPrice === "true";
         const costInput = form.querySelector('input[name="cost_per_unit"]');
-        const manualInput = form.querySelector('input[name="allow_manual_price"]');
         const scopeInput = form.querySelector("[data-price-update-scope]");
         const modal = document.getElementById("price-impact-modal");
         const cancelBtn = modal.querySelector("[data-price-impact-cancel]");
-        const futureBtn = modal.querySelector("[data-price-impact-future]");
         const existingBtn = modal.querySelector("[data-price-impact-existing]");
         const warningNode = document.getElementById("price-impact-warning");
         const summaryNode = document.getElementById("price-impact-summary");
@@ -216,19 +269,17 @@
         function renderBucket(prefix, bucket) {
           document.getElementById("price-impact-" + prefix + "-count").textContent = (bucket.count || 0) + " rows";
           const samples = bucket.sample_labels || [];
-          document.getElementById("price-impact-" + prefix + "-samples").textContent = samples.length ? samples.join(", ") : "No saved rows";
+          document.getElementById("price-impact-" + prefix + "-samples").textContent = samples.length ? "" : "No saved rows";
         }
 
         function currentHasPricingChange() {
           const currentCost = normalizeNumberString(costInput.value);
-          const currentManual = !!manualInput.checked;
-          return currentCost !== normalizeNumberString(initialCost) || currentManual !== initialManual;
+          return currentCost !== normalizeNumberString(initialCost);
         }
 
         async function fetchPreview() {
           const params = new URLSearchParams({
-            cost_per_unit: String(costInput.value || "").trim(),
-            allow_manual_price: manualInput.checked ? "1" : "0"
+            cost_per_unit: String(costInput.value || "").trim()
           });
           const response = await fetch(previewUrl + "?" + params.toString(), {
             credentials: "same-origin",
@@ -249,9 +300,6 @@
         }
 
         cancelBtn.addEventListener("click", closeModal);
-        futureBtn.addEventListener("click", function() {
-          submitWithScope("future_only");
-        });
         existingBtn.addEventListener("click", function() {
           submitWithScope("existing_and_future");
         });
@@ -278,8 +326,6 @@
             renderBucket("institution", data.impact.institution || {count: 0, sample_labels: []});
             warningNode.hidden = !data.warning;
             warningNode.textContent = data.warning || "";
-            futureBtn.classList.toggle("btn-edit", data.recommended_scope === "future_only");
-            existingBtn.classList.toggle("btn-edit", data.recommended_scope === "existing_and_future");
             openModal();
           } catch (error) {
             window.alert(error.message || "Unable to preview article impact.");
@@ -288,4 +334,92 @@
       })();
     </script>
   {% endif %}
+  <script>
+    (function() {
+      const wraps = document.querySelectorAll("[data-article-suggest-wrap]");
+      if (!wraps.length) return;
+
+      function closeAll(except) {
+        wraps.forEach((wrap) => {
+          if (wrap !== except) {
+            wrap.classList.remove("is-open");
+          }
+        });
+      }
+
+      document.addEventListener("click", function(event) {
+        const wrap = event.target.closest("[data-article-suggest-wrap]");
+        if (!wrap) {
+          closeAll(null);
+        }
+      });
+
+      wraps.forEach((wrap) => {
+        const input = wrap.querySelector("input");
+        const list = wrap.querySelector("[data-article-suggest-list]");
+        if (!input || !list) return;
+        const items = Array.from(list.querySelectorAll("[data-article-suggest-item]"));
+        let emptyState = list.querySelector("[data-article-suggest-empty]");
+
+        function openList() {
+          closeAll(wrap);
+          wrap.classList.add("is-open");
+        }
+
+        function ensureEmptyState() {
+          if (emptyState) return emptyState;
+          emptyState = document.createElement("div");
+          emptyState.className = "article-suggest-empty";
+          emptyState.setAttribute("data-article-suggest-empty", "true");
+          emptyState.textContent = "No matches";
+          emptyState.hidden = true;
+          list.appendChild(emptyState);
+          return emptyState;
+        }
+
+        function filterItems() {
+          const query = (input.value || "").trim().toLowerCase();
+          let visibleCount = 0;
+          items.forEach((item) => {
+            const text = (item.dataset.articleSuggestItem || item.textContent || "").toLowerCase();
+            const show = query === "" || text.includes(query);
+            item.hidden = !show;
+            if (show) visibleCount += 1;
+          });
+          const empty = ensureEmptyState();
+          empty.hidden = visibleCount !== 0;
+          if (visibleCount === 0) {
+            openList();
+          }
+        }
+
+        input.addEventListener("focus", openList);
+        input.addEventListener("click", openList);
+        input.addEventListener("input", function() {
+          filterItems();
+          openList();
+        });
+        input.addEventListener("blur", function() {
+          window.setTimeout(function() {
+            if (!wrap.contains(document.activeElement)) {
+              wrap.classList.remove("is-open");
+            }
+          }, 120);
+        });
+
+        list.addEventListener("click", function(event) {
+          const button = event.target.closest("[data-article-suggest-item]");
+          if (!button) return;
+          input.value = button.dataset.articleSuggestItem || "";
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+          wrap.classList.remove("is-open");
+          input.focus();
+        });
+
+        wrap.classList.remove("is-open");
+        filterItems();
+      });
+    })();
+  </script>
 {% endblock %}

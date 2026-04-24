@@ -543,6 +543,40 @@
       <section class="labels-row">
         <div class="labels-row-main">
           <div class="labels-row-title">
+            <h3>Others Labels</h3>
+          </div>
+          <div></div>
+          <div class="labels-row-description">Badges to be given to other beneficiaries.</div>
+        </div>
+        <div class="labels-audit-grid">
+          <div class="labels-audit-card">
+            <div class="labels-audit-title">
+              <span>Others Labels</span>
+              <span class="{% if label_audits.others.status_class == 'ok' %}labels-audit-ok{% elif label_audits.others.status_class == 'neutral' %}labels-audit-neutral{% else %}labels-audit-bad{% endif %}">
+                {{ label_audits.others.status_label|default:"Check" }}
+              </span>
+            </div>
+            <div class="labels-audit-meta">
+              <span>Rows: {{ label_audits.others.included_rows|default:0 }}</span>
+              <span>Expected: {{ label_audits.others.expected_labels|default:0 }}</span>
+              <span>Generated: {{ label_audits.others.actual_labels|default:0 }}</span>
+              <span>Tokens: {{ label_audits.others.first_token|default:0 }} - {{ label_audits.others.last_token|default:0 }}</span>
+              <span>Duplicates: {{ label_audits.others.duplicate_tokens|default:0 }}</span>
+              <span>Invalid: {{ label_audits.others.invalid_range_rows|default:0 }}</span>
+              <span>Pages: {{ label_audits.others.page_count|default:0 }}</span>
+            </div>
+            {% if label_audits.others.reason %}<div class="labels-audit-reason">{{ label_audits.others.reason }}</div>{% endif %}
+            <div class="labels-audit-actions">
+              <button class="labels-menu-action labels-preview-btn js-label-pdf-preview" type="button" data-preview-request-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=others" data-preview-title="Others Labels" data-preview-source="others_labels.pdf" data-download-url="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=others" {% if not label_has_generated_tokens or label_sync_required or not label_audits.others.ready %}disabled{% endif %}>Preview</button>
+              <a class="labels-menu-action labels-download-btn" href="{% url 'ui:labels' %}?session={{ selected_session.pk }}&download=others" {% if not label_has_generated_tokens or label_sync_required or not label_audits.others.ready %}aria-disabled="true"{% endif %}>Download</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="labels-row">
+        <div class="labels-row-main">
+          <div class="labels-row-title">
             <h3>Public Labels</h3>
           </div>
           <div></div>

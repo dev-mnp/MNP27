@@ -150,6 +150,14 @@ class LabelGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             )
             label_buffer = services.generate_mnp_labels_pdf(entries, layout="12L", mode="continuous")
             filename = _labels_download_filename("5_Institution_Labels")
+        elif download_kind == "others":
+            entries = _labels_expand_entries(
+                rows,
+                row_filter=lambda row: token_qty(row) > 0 and str(row.get("Beneficiary Type") or "").strip() == "Others",
+                sort_key=sort_by_name_and_start,
+            )
+            label_buffer = services.generate_mnp_labels_pdf(entries, layout="12L", mode="continuous")
+            filename = _labels_download_filename("6_Others_Labels")
         elif download_kind == "public":
             entries = _labels_expand_entries(
                 rows,
@@ -196,6 +204,7 @@ class LabelGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             "district_continuous": _labels_audit_download(rows, download_kind="district_continuous", large_items=large_items) if rows else {},
             "district_separate": _labels_audit_download(rows, download_kind="district_separate", large_items=large_items) if rows else {},
             "institution": _labels_audit_download(rows, download_kind="institution", large_items=large_items) if rows else {},
+            "others": _labels_audit_download(rows, download_kind="others", large_items=large_items) if rows else {},
             "public": _labels_audit_download(rows, download_kind="public", large_items=large_items) if rows else {},
             "chair_continuous": _labels_audit_download(rows, download_kind="chair_continuous", large_items=large_items) if rows else {},
             "chair_separate": _labels_audit_download(rows, download_kind="chair_separate", large_items=large_items) if rows else {},

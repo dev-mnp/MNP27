@@ -2,6 +2,7 @@
   --bg-primary: #ffffff;
   --bg-secondary: #f5f7fb;
   --bg-tertiary: #eef4ff;
+  --panel-bg-muted: var(--bg-secondary);
   --text-primary: #111827;
   --text-secondary: #667085;
   --text-tertiary: #9ca3af;
@@ -27,6 +28,7 @@
   --bg-primary: #ffffff;
   --bg-secondary: #f5f7fb;
   --bg-tertiary: #eef4ff;
+  --panel-bg-muted: var(--bg-secondary);
   --text-primary: #111827;
   --text-secondary: #667085;
   --text-tertiary: #9ca3af;
@@ -40,6 +42,7 @@
   --bg-primary: #1f2937;
   --bg-secondary: #374151;
   --bg-tertiary: #4b5563;
+  --panel-bg-muted: var(--bg-secondary);
   --text-primary: #f9fafb;
   --text-secondary: #d1d5db;
   --text-tertiary: #9ca3af;

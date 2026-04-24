@@ -200,8 +200,25 @@ def build_dashboard_metrics() -> dict:
         )
     }
 
-    # 6) Institution rollup in one query.
-    institution_rollup = models.InstitutionsBeneficiaryEntry.objects.filter(active_filter).aggregate(
+    # 6) Institution / Others rollups in one query each.
+    institution_rollup = models.InstitutionsBeneficiaryEntry.objects.filter(
+        active_filter,
+        institution_type=models.InstitutionTypeChoices.INSTITUTIONS,
+    ).aggregate(
+        total_beneficiaries=Count("id"),
+        application_count=Count(
+            "application_number",
+            distinct=True,
+            filter=Q(application_number__isnull=False) & ~Q(application_number=""),
+        ),
+        total_articles_qty=Coalesce(Sum("quantity"), Value(0), output_field=IntegerField()),
+        unique_articles=Count("article", distinct=True),
+        total_value_accrued=_decimal_sum("total_amount"),
+    )
+    others_rollup = models.InstitutionsBeneficiaryEntry.objects.filter(
+        active_filter,
+        institution_type=models.InstitutionTypeChoices.OTHERS,
+    ).aggregate(
         total_beneficiaries=Count("id"),
         application_count=Count(
             "application_number",
@@ -230,8 +247,10 @@ def build_dashboard_metrics() -> dict:
     public_total = Decimal(str(public_rollup["total_value_accrued"] or 0))
     institution_total = Decimal(str(institution_rollup["total_value_accrued"] or 0))
     total_accrued = district_total + public_total + institution_total
-    district_contribution = Decimal(str(district_summary["overutilized_total"] or 0))
-    planning_total = total_accrued - district_contribution
+    district_underutilized = Decimal(str(district_summary["underutilized_total"] or 0))
+    district_overutilized = Decimal(str(district_summary["overutilized_total"] or 0))
+    district_net_variance = district_overutilized - district_underutilized
+    planning_total = total_accrued - district_net_variance
 
     preferred_female_order = ["Single", "Married", "Widowed", "Single Mother"]
     female_status_lines = [
@@ -277,14 +296,12 @@ def build_dashboard_metrics() -> dict:
             "total_allotted_fund": Decimal(str(district_summary["total_allocated"] or 0)),
             "total_value_accrued": district_total,
             "under_utilized_district_count": int(district_summary["underutilized_count"] or 0),
-            "under_utilized_value": Decimal(str(district_summary["underutilized_total"] or 0)),
+            "under_utilized_value": district_underutilized,
             "over_utilized_district_count": int(district_summary["overutilized_count"] or 0),
-            "over_utilized_value": district_contribution,
-            "net_variance": Decimal(str(district_summary["overutilized_total"] or 0))
-            - Decimal(str(district_summary["underutilized_total"] or 0)),
+            "over_utilized_value": district_overutilized,
+            "net_variance": district_net_variance,
             "net_variance_signed": _signed_currency_text(
-                Decimal(str(district_summary["overutilized_total"] or 0))
-                - Decimal(str(district_summary["underutilized_total"] or 0))
+                district_net_variance
             ),
         },
         "public": {
@@ -308,23 +325,34 @@ def build_dashboard_metrics() -> dict:
             "unique_articles": int(institution_rollup["unique_articles"] or 0),
             "total_value_accrued": institution_total,
         },
+        "others": {
+            "total_beneficiaries": int(others_rollup["total_beneficiaries"] or 0),
+            "application_count": int(others_rollup["application_count"] or 0),
+            "total_articles_qty": int(others_rollup["total_articles_qty"] or 0),
+            "unique_articles": int(others_rollup["unique_articles"] or 0),
+            "total_value_accrued": Decimal(str(others_rollup["total_value_accrued"] or 0)),
+        },
         "overall": {
             "total_beneficiaries": (
                 int(district_rollup["total_articles_qty"] or 0)
                 + int(public_rollup["total_articles_qty"] or 0)
                 + int(institution_rollup["application_count"] or 0)
+                + int(others_rollup["application_count"] or 0)
             ),
             "total_articles_qty": (
                 int(district_rollup["total_articles_qty"] or 0)
                 + int(public_rollup["total_articles_qty"] or 0)
                 + int(institution_rollup["total_articles_qty"] or 0)
+                + int(others_rollup["total_articles_qty"] or 0)
             ),
             "unique_articles": overall_unique_articles,
             "total_value_accrued": planning_total,
             "actual_total_value_accrued": total_accrued,
-            "district_variance": district_contribution,
-            "district_variance_signed": _signed_currency_text(district_contribution),
-            "district_contribution_signed": _signed_currency_text(district_contribution),
+            "district_variance": district_net_variance,
+            "district_variance_signed": _signed_currency_text(district_net_variance),
+            "district_contribution_signed": _signed_currency_text(district_overutilized),
+            "underutilized_signed": _signed_currency_text(district_underutilized),
+            "overutilized_signed": _signed_currency_text(district_overutilized),
         },
         "fund_requests": {
             "count": int(fund_request_rollup["count"] or 0),

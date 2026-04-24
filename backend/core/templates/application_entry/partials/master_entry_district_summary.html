@@ -9,7 +9,8 @@
       <col style="width: 13%;">
       <col style="width: 15%;">
       <col style="width: 22%;">
-      <col style="width: 14%;">
+      <col style="width: 11%;">
+      <col style="width: 11%;">
     </colgroup>
     <thead>
       <tr>
@@ -18,7 +19,8 @@
         <th>Unit Cost</th>
         <th>Total</th>
         <th>Details / Comments</th>
-        <th>Added / Modified On</th>
+        <th>Added On</th>
+        <th>Modified On</th>
       </tr>
     </thead>
     <tbody>
@@ -29,6 +31,7 @@
           <td>Rs.{{ row.article_cost_per_unit|rupees }}</td>
           <td>Rs.{{ row.total_amount|rupees }}</td>
           <td>{{ row.notes|default:"-" }}</td>
+          <td>{{ row.created_at|date:"d/m/Y H:i" }}</td>
           <td>{{ row.updated_at|date:"d/m/Y H:i" }}</td>
         </tr>
       {% endfor %}
@@ -37,4 +40,3 @@
 {% else %}
   <div class="small" style="color: var(--text-secondary);">No items found.</div>
 {% endif %}
-

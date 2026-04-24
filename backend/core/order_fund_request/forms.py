@@ -58,6 +58,7 @@ class FundRequestRecipientForm(forms.ModelForm):
                 models.RecipientTypeChoices.DISTRICT,
                 models.RecipientTypeChoices.PUBLIC,
                 models.RecipientTypeChoices.INSTITUTIONS,
+                models.RecipientTypeChoices.OTHERS,
             }
         ]
         beneficiary_choices = [("", "Select beneficiary")]

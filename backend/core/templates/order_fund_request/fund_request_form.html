@@ -347,6 +347,7 @@
                 <option value="District">District</option>
                 <option value="Public">Public</option>
                 <option value="Institutions">Institutions</option>
+                <option value="Others">Others</option>
               </select>
             </div>
           </div>
@@ -371,11 +372,7 @@
         <div>
           <h3 style="margin: 0 0 4px 0;">Recipients</h3>
         </div>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <button class="btn" type="button" id="upload-aid-csv-trigger">Upload</button>
-        </div>
       </div>
-      <div id="upload-aid-csv-feedback" class="upload-feedback" aria-live="polite"></div>
       <div id="aid-quick-tools" class="card" style="padding: 12px; background:#fff; border:1px solid #dbe7f4; margin-bottom: 12px;" hidden>
         <div style="display:grid; gap:10px;">
           <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
@@ -386,28 +383,32 @@
             <button type="button" class="btn btn-light-soft" id="reset-recipients">Reset</button>
           </div>
           <div id="quick-populate-body" style="display:grid; gap:8px;">
-            <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; align-items:start;">
+            <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:12px; align-items:start;">
               <div id="populate-district-box">
                 <div class="small" style="margin-bottom:6px; color: var(--text-secondary);">District</div>
                 <select class="input" id="populate-district-select" multiple size="5" style="min-height:140px;">
                 </select>
-                <button type="button" class="btn" id="populate-districts" style="margin-top:8px;">Add selected</button>
+                <button type="button" class="btn btn-light-soft" id="populate-districts" style="margin-top:8px;">+ Add selected</button>
               </div>
               <div id="populate-institutions-box">
                 <div class="small" style="margin-bottom:6px; color: var(--text-secondary);">Institutions</div>
                 <select class="input" id="populate-institutions-select" multiple size="5" style="min-height:140px;">
                 </select>
-                <button type="button" class="btn" id="populate-institutions" style="margin-top:8px;">Add selected</button>
+                <button type="button" class="btn btn-light-soft" id="populate-institutions" style="margin-top:8px;">+ Add selected</button>
+              </div>
+              <div id="populate-others-box">
+                <div class="small" style="margin-bottom:6px; color: var(--text-secondary);">Others</div>
+                <select class="input" id="populate-others-select" multiple size="5" style="min-height:140px;">
+                </select>
+                <button type="button" class="btn btn-light-soft" id="populate-others" style="margin-top:8px;">+ Add selected</button>
               </div>
               <div id="populate-public-box">
                 <div class="small" style="margin-bottom:6px; color: var(--text-secondary);">Public</div>
                 <select class="input" id="populate-public-select" multiple size="7" style="min-height:180px;">
                 </select>
-                <button type="button" class="btn" id="populate-publics" style="margin-top:8px;">Add selected</button>
+                <button type="button" class="btn btn-light-soft" id="populate-publics" style="margin-top:8px;">+ Add selected</button>
               </div>
             </div>
-            <div class="small" style="color: var(--text-secondary);">Use Command/Ctrl to select multiple entries before adding them.</div>
-            <input type="file" id="upload-aid-csv-input" accept=".csv,text/csv" hidden />
           </div>
         </div>
       </div>
@@ -441,14 +442,14 @@
       <div id="recipient-rows" style="display:grid; gap: 12px;">
         {% for row in recipient_formset.forms %}
           <div class="card js-recipient-row{% if row.errors %} field-group-error{% endif %}" style="padding: 14px; background:#fff; border:1px solid #dbe7f4;"{% if row.DELETE.value %} hidden{% endif %}>
-            {{ row.id }}<span hidden>{{ row.DELETE }}</span>{{ row.source_entry_id }}{{ row.recipient_name }}{{ row.notes }}{{ row.district_name }}{{ row.address }}{{ row.cheque_no }}
+            {{ row.id }}<span hidden>{{ row.DELETE }}</span>{{ row.source_entry_id }}{{ row.recipient_name }}{{ row.notes }}{{ row.district_name }}{{ row.address }}{{ row.cheque_no }}<input type="hidden" name="{{ row.prefix }}-beneficiary_type" value="{{ row.beneficiary_type.value|default_if_none:'' }}" class="js-beneficiary-type-hidden"><input type="hidden" name="{{ row.prefix }}-beneficiary" value="{{ row.beneficiary.value|default_if_none:'' }}" class="js-beneficiary-hidden">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:10px;">
               <button type="button" class="js-recipient-toggle" style="display:flex; flex:1; justify-content:flex-start; align-items:center; gap:10px; padding:0; border:none; background:none; text-align:left; cursor:pointer;">
                 <span class="js-recipient-index" style="min-width:20px; font-size:0.75rem; line-height:1; font-weight:700; color:var(--text-primary); text-align:right;"></span>
                 <span class="js-recipient-arrow" style="font-size:15px; line-height:1; color:var(--text-secondary);">−</span>
                 <span class="js-recipient-summary small" style="color:var(--text-secondary);"></span>
               </button>
-              <button type="button" class="btn icon-btn js-remove-row" title="Remove" aria-label="Remove">
+              <button type="button" class="btn icon-btn js-remove-row" title="Remove" aria-label="Remove" style="background:none; border:none; box-shadow:none; color:#dc2626;">
                 <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
               </button>
             </div>
@@ -461,6 +462,7 @@
                 <label>Beneficiary <span style="color:#dc2626;">*</span></label>
                 {{ row.beneficiary }}
                 <div class="small js-beneficiary-help" style="margin-top:4px; color: var(--text-secondary);"></div>
+                <div class="small js-beneficiary-warning" style="margin-top:4px; color:#b91c1c; font-weight:600;"></div>
               </div>
               <div{% if row.fund_requested.errors %} class="field-error"{% endif %}>
                 <label>Fund Requested <span style="color:#dc2626;">*</span></label>
@@ -492,14 +494,14 @@
       </div>
       <template id="recipient-empty-form">
         <div class="card js-recipient-row" style="padding: 14px; background:#fff; border:1px solid #dbe7f4;">
-          {{ recipient_formset.empty_form.id }}<span hidden>{{ recipient_formset.empty_form.DELETE }}</span>{{ recipient_formset.empty_form.source_entry_id }}{{ recipient_formset.empty_form.recipient_name }}{{ recipient_formset.empty_form.notes }}{{ recipient_formset.empty_form.district_name }}{{ recipient_formset.empty_form.address }}{{ recipient_formset.empty_form.cheque_no }}
+          {{ recipient_formset.empty_form.id }}<span hidden>{{ recipient_formset.empty_form.DELETE }}</span>{{ recipient_formset.empty_form.source_entry_id }}{{ recipient_formset.empty_form.recipient_name }}{{ recipient_formset.empty_form.notes }}{{ recipient_formset.empty_form.district_name }}{{ recipient_formset.empty_form.address }}{{ recipient_formset.empty_form.cheque_no }}<input type="hidden" name="{{ recipient_formset.empty_form.prefix }}-beneficiary_type" value="" class="js-beneficiary-type-hidden"><input type="hidden" name="{{ recipient_formset.empty_form.prefix }}-beneficiary" value="" class="js-beneficiary-hidden">
           <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:10px;">
             <button type="button" class="js-recipient-toggle" style="display:flex; flex:1; justify-content:flex-start; align-items:center; gap:10px; padding:0; border:none; background:none; text-align:left; cursor:pointer;">
               <span class="js-recipient-index" style="min-width:20px; font-size:0.75rem; line-height:1; font-weight:700; color:var(--text-primary); text-align:right;"></span>
               <span class="js-recipient-arrow" style="font-size:15px; line-height:1; color:var(--text-secondary);">−</span>
               <span class="js-recipient-summary small" style="color:var(--text-secondary);"></span>
             </button>
-            <button type="button" class="btn icon-btn js-remove-row" title="Remove" aria-label="Remove">
+            <button type="button" class="btn icon-btn js-remove-row" title="Remove" aria-label="Remove" style="background:none; border:none; box-shadow:none; color:#dc2626;">
               <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
             </button>
           </div>
@@ -512,6 +514,7 @@
               <label>Beneficiary <span style="color:#dc2626;">*</span></label>
               {{ recipient_formset.empty_form.beneficiary }}
               <div class="small js-beneficiary-help" style="margin-top:4px; color: var(--text-secondary);"></div>
+              <div class="small js-beneficiary-warning" style="margin-top:4px; color:#b91c1c; font-weight:600;"></div>
             </div>
             <div>
               <label>Fund Requested <span style="color:#dc2626;">*</span></label>
@@ -692,7 +695,7 @@
                 <label>Line Total</label>
                 <div style="display:flex; align-items:center; gap:8px;">
                   {{ row.value }}
-                  <button type="button" class="btn icon-btn js-remove-row" title="Remove" aria-label="Remove">
+                  <button type="button" class="btn icon-btn js-remove-row" title="Remove" aria-label="Remove" style="background:none; border:none; box-shadow:none; color:#dc2626;">
                     <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
                   </button>
                 </div>
@@ -758,7 +761,7 @@
               <label>Line Total</label>
               <div style="display:flex; align-items:center; gap:8px;">
                 {{ article_formset.empty_form.value }}
-                <button type="button" class="btn icon-btn js-remove-row" title="Remove" aria-label="Remove">
+                <button type="button" class="btn icon-btn js-remove-row" title="Remove" aria-label="Remove" style="background:none; border:none; box-shadow:none; color:#dc2626;">
                   <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
                 </button>
               </div>
@@ -874,7 +877,6 @@
   const vendorGroupsContainer = document.getElementById('vendor-groups');
   const vendorGroupTemplate = document.getElementById('vendor-group-template');
   const addVendorGroupButton = document.getElementById('add-vendor-group');
-  const uploadAidCsvFeedback = document.getElementById('upload-aid-csv-feedback');
   const excessWarningModal = document.getElementById('excess-warning-modal');
   const excessWarningList = document.getElementById('excess-warning-list');
   const excessWarningCancel = document.getElementById('excess-warning-cancel');
@@ -904,12 +906,13 @@
   const populateInstitutionsBox = document.getElementById('populate-institutions-box');
   const populateInstitutionsSelect = document.getElementById('populate-institutions-select');
   const populateInstitutionsButton = document.getElementById('populate-institutions');
+  const populateOthersBox = document.getElementById('populate-others-box');
+  const populateOthersSelect = document.getElementById('populate-others-select');
+  const populateOthersButton = document.getElementById('populate-others');
   const populatePublicBox = document.getElementById('populate-public-box');
   const populatePublicSelect = document.getElementById('populate-public-select');
   const populatePublicsButton = document.getElementById('populate-publics');
   const resetRecipientsButton = document.getElementById('reset-recipients');
-  const uploadAidCsvTriggerButton = document.getElementById('upload-aid-csv-trigger');
-  const uploadAidCsvInput = document.getElementById('upload-aid-csv-input');
   let availableBeneficiaryTypes = [];
   let aidOptionsByType = {};
   let blockedByType = {};
@@ -1512,12 +1515,6 @@
     if (aidTypeLockNote) aidTypeLockNote.hidden = !shouldLock;
   }
 
-  function showAidCsvFeedback(message, tone) {
-    if (!uploadAidCsvFeedback) return;
-    uploadAidCsvFeedback.textContent = message;
-    uploadAidCsvFeedback.className = 'upload-feedback is-visible ' + (tone || 'success');
-  }
-
   function closeExcessWarning() {
     if (!excessWarningModal) return;
     excessWarningModal.classList.remove('is-open');
@@ -1613,7 +1610,7 @@
     articleSection.hidden = !isArticle;
     aidTypeWrap.hidden = !isAid;
     if (changeAidTypeButton && !isAid) changeAidTypeButton.hidden = true;
-    quickTools.hidden = !isAid || !aidTypeSelect.value;
+    quickTools.hidden = !isAid;
     if (addRecipientButton) addRecipientButton.disabled = !isAid || !aidTypeSelect.value;
     syncSectionValidation(aidSection, isAid);
     syncSectionValidation(articleSection, isArticle);
@@ -1631,9 +1628,11 @@
     const showDistrict = showAll || selected === 'District';
     const showPublic = showAll || selected === 'Public';
     const showInstitutions = showAll || selected === 'Institutions';
+    const showOthers = showAll || selected === 'Others';
     if (populateDistrictBox) populateDistrictBox.hidden = !showDistrict;
     if (populatePublicBox) populatePublicBox.hidden = !showPublic;
     if (populateInstitutionsBox) populateInstitutionsBox.hidden = !showInstitutions;
+    if (populateOthersBox) populateOthersBox.hidden = !showOthers;
   }
 
   function formatQuantityLabel(value) {
@@ -1808,6 +1807,36 @@
     row.querySelector('textarea[name$="-details"]').value = '';
     row.querySelector('input[name$="-fund_requested"]').value = '';
     row.querySelector('textarea[name$="-cheque_in_favour"]').value = '';
+    const typeSelect = row.querySelector('select[name$="-beneficiary_type"]');
+    const beneficiarySelect = row.querySelector('select[name$="-beneficiary"]');
+    const typeHidden = row.querySelector('.js-beneficiary-type-hidden');
+    const beneficiaryHidden = row.querySelector('.js-beneficiary-hidden');
+    if (typeSelect) typeSelect.disabled = false;
+    if (beneficiarySelect) beneficiarySelect.disabled = false;
+    if (typeHidden) typeHidden.value = typeSelect ? (typeSelect.value || '') : '';
+    if (beneficiaryHidden) beneficiaryHidden.value = beneficiarySelect ? (beneficiarySelect.value || '') : '';
+    const warning = row.querySelector('.js-beneficiary-warning');
+    if (warning) {
+      warning.textContent = '';
+      warning.hidden = true;
+    }
+  }
+
+  function syncRecipientSelectMirrors(row) {
+    const typeSelect = row.querySelector('select[name$="-beneficiary_type"]');
+    const beneficiarySelect = row.querySelector('select[name$="-beneficiary"]');
+    const typeHidden = row.querySelector('.js-beneficiary-type-hidden');
+    const beneficiaryHidden = row.querySelector('.js-beneficiary-hidden');
+    if (typeHidden) typeHidden.value = typeSelect ? (typeSelect.value || '') : '';
+    if (beneficiaryHidden) beneficiaryHidden.value = beneficiarySelect ? (beneficiarySelect.value || '') : '';
+  }
+
+  function lockRecipientSelection(row) {
+    const typeSelect = row.querySelector('select[name$="-beneficiary_type"]');
+    const beneficiarySelect = row.querySelector('select[name$="-beneficiary"]');
+    if (typeSelect) typeSelect.disabled = true;
+    if (beneficiarySelect) beneficiarySelect.disabled = true;
+    syncRecipientSelectMirrors(row);
   }
 
   function clearAllRecipientRows() {
@@ -1826,6 +1855,7 @@
   }
 
   function applyAidPayload(row, payload) {
+    const typeSelect = row.querySelector('select[name$="-beneficiary_type"]');
     row.querySelector('input[name$="-recipient_name"]').value = '';
     row.querySelector('input[name$="-district_name"]').value = '';
     row.querySelector('input[name$="-name_of_beneficiary"]').value = '';
@@ -1842,6 +1872,13 @@
     row.querySelector('textarea[name$="-details"]').value = payload.details || '';
     row.querySelector('input[name$="-fund_requested"]').value = payload.fund_requested || '';
     row.querySelector('textarea[name$="-cheque_in_favour"]').value = payload.cheque_in_favour || '';
+    const warning = row.querySelector('.js-beneficiary-warning');
+    if (warning) {
+      warning.textContent = typeSelect && typeSelect.value === 'Public' ? (payload.aadhaar_warning || '') : '';
+      warning.hidden = !warning.textContent;
+    }
+    syncRecipientSelectMirrors(row);
+    lockRecipientSelection(row);
     updateRecipientSummary(row);
   }
 
@@ -1880,7 +1917,7 @@
     blockedByType = {};
     if (!aidTypeSelect.value) {
       recipientContainer.querySelectorAll('.js-recipient-row').forEach(populateBeneficiaryTypeSelect);
-      quickTools.hidden = true;
+      quickTools.hidden = false;
       if (addRecipientButton) addRecipientButton.disabled = true;
       refreshQuickPopulateSelectors();
       return;
@@ -1960,7 +1997,7 @@
       row._aidOptions[optionValue] = option;
       const choice = document.createElement('option');
       choice.value = optionValue;
-      choice.textContent = option.display_text;
+      choice.textContent = option.display_text + (option.aadhaar_warning ? '  -  Verification pending' : '');
       if (String(currentValue) === optionValue) {
         choice.selected = true;
       }
@@ -1973,7 +2010,13 @@
       preserved.selected = true;
       beneficiarySelect.appendChild(preserved);
     }
-    help.textContent = blocked.length ? ('Hidden because already present in: ' + blocked.join(', ')) : '';
+    help.textContent = blocked.length ? ('Aadhar already present in: ' + blocked.join(', ')) : '';
+    const warning = row.querySelector('.js-beneficiary-warning');
+    if (warning) {
+      const selectedOption = beneficiarySelect.value && row._aidOptions[beneficiarySelect.value] ? row._aidOptions[beneficiarySelect.value] : null;
+      warning.textContent = typeSelect.value === 'Public' && selectedOption && selectedOption.aadhaar_warning ? selectedOption.aadhaar_warning : '';
+      warning.hidden = !warning.textContent;
+    }
     const hasExistingSavedValues = Boolean(
       currentSourceId && (
         ((row.querySelector('input[name$="-name_of_beneficiary"]') || {}).value || '') ||
@@ -1990,6 +2033,7 @@
       } else {
         applyAidPayload(row, row._aidOptions[beneficiarySelect.value]);
       }
+      lockRecipientSelection(row);
     } else if (!currentValue) {
       clearRecipientPayload(row, true);
     }
@@ -2003,6 +2047,7 @@
     populateBeneficiaryTypeSelect(row);
     updateRecipientFieldRules(row);
     updateRecipientSummary(row);
+    syncRecipientSelectMirrors(row);
     if (!row.dataset.recipientToggleBound) {
       row.dataset.recipientToggleBound = '1';
       const toggleButton = row.querySelector('.js-recipient-toggle');
@@ -2019,6 +2064,7 @@
         clearFieldInvalid(typeSelect);
         clearRecipientPayload(row, false);
         loadAidOptions(row, true);
+        syncRecipientSelectMirrors(row);
         updateRecipientSummary(row);
         updateAidTypeLockState();
       });
@@ -2032,6 +2078,8 @@
         } else {
           clearRecipientPayload(row, true);
         }
+        syncRecipientSelectMirrors(row);
+        lockRecipientSelection(row);
         updateRecipientFieldRules(row);
         updateRecipientSummary(row);
         updateAidTypeLockState();
@@ -2143,12 +2191,17 @@
 
   function getInstitutionGroupLabel(option) {
     return String(
-      option.name_of_institution ||
+      (option.application_number ? (option.application_number + ' - ') : '') +
+      (option.name_of_institution ||
       option.recipient_name ||
       option.name_of_beneficiary ||
       option.display_text ||
-      ''
+      '')
     ).trim();
+  }
+
+  function getOthersGroupLabel(option) {
+    return getInstitutionGroupLabel(option);
   }
 
   function getPublicOptionLabel(option) {
@@ -2216,6 +2269,19 @@
     });
     setSelectOptions(populateInstitutionsSelect, institutionItems, selectedInstitutions, 'No institutions remaining');
 
+    const othersCounts = {};
+    getRemainingAidOptions('Others').forEach(function(option) {
+      const label = getOthersGroupLabel(option);
+      if (!label) return;
+      othersCounts[label] = (othersCounts[label] || 0) + 1;
+    });
+    const othersItems = Object.keys(othersCounts).sort(function(a, b) {
+      return a.localeCompare(b);
+    }).map(function(label) {
+      return { value: label, label: label + ' (' + othersCounts[label] + ')' };
+    });
+    setSelectOptions(populateOthersSelect, othersItems, getSelectedValues(populateOthersSelect), 'No others remaining');
+
     const publicItems = getRemainingAidOptions('Public').map(function(option) {
       const value = String(option.source_entry_id || '');
       return { value: value, label: getPublicOptionLabel(option) || value };
@@ -2224,6 +2290,7 @@
 
     populateDistrictsButton.disabled = getSelectedValues(populateDistrictSelect).length === 0;
     populateInstitutionsButton.disabled = getSelectedValues(populateInstitutionsSelect).length === 0;
+    if (populateOthersButton) populateOthersButton.disabled = getSelectedValues(populateOthersSelect).length === 0;
     populatePublicsButton.disabled = getSelectedValues(populatePublicSelect).length === 0;
     updateAidBeneficiaryFilterState();
   }
@@ -2305,7 +2372,8 @@
     if (!raw) return '';
     if (raw === 'district' || raw === 'districts') return 'District';
     if (raw === 'public' || raw === 'publics') return 'Public';
-    if (raw === 'institution' || raw === 'institutions' || raw === 'others' || raw === 'other') return 'Institutions';
+    if (raw === 'institution' || raw === 'institutions') return 'Institutions';
+    if (raw === 'others' || raw === 'other') return 'Others';
     return String(value || '').trim();
   }
 
@@ -2491,10 +2559,11 @@
     setQuickPopulateExpanded(isCollapsed);
   });
 
-  [populateDistrictSelect, populateInstitutionsSelect, populatePublicSelect].forEach(function(select) {
+  [populateDistrictSelect, populateInstitutionsSelect, populateOthersSelect, populatePublicSelect].forEach(function(select) {
     select.addEventListener('change', function() {
       populateDistrictsButton.disabled = getSelectedValues(populateDistrictSelect).length === 0;
       populateInstitutionsButton.disabled = getSelectedValues(populateInstitutionsSelect).length === 0;
+      if (populateOthersButton) populateOthersButton.disabled = getSelectedValues(populateOthersSelect).length === 0;
       populatePublicsButton.disabled = getSelectedValues(populatePublicSelect).length === 0;
     });
   });
@@ -2514,6 +2583,12 @@
     markFormDirty();
     populateAidRecipientsForLabels('Institutions', getSelectedValues(populateInstitutionsSelect), getInstitutionGroupLabel);
   });
+  if (populateOthersButton) {
+    populateOthersButton.addEventListener('click', function() {
+      markFormDirty();
+      populateAidRecipientsForLabels('Others', getSelectedValues(populateOthersSelect), getOthersGroupLabel);
+    });
+  }
   populatePublicsButton.addEventListener('click', function() {
     markFormDirty();
     populateAidRecipientsBySourceIds('Public', getSelectedValues(populatePublicSelect));
@@ -2540,61 +2615,6 @@
       }
     });
   }
-  uploadAidCsvTriggerButton.addEventListener('click', function() {
-    if (!aidTypeSelect.value) {
-      showAidCsvFeedback('Select an aid first before uploading a CSV.', 'warning');
-      return;
-    }
-    ensureAidAvailabilityLoaded();
-    uploadAidCsvInput.click();
-  });
-  uploadAidCsvInput.addEventListener('change', async function() {
-    const file = uploadAidCsvInput.files && uploadAidCsvInput.files[0];
-    if (!file) return;
-    await ensureAidAvailabilityLoaded();
-    const reader = new FileReader();
-    reader.onload = function() {
-      const rows = parseCsv(String(reader.result || ''));
-      if (!rows.length) {
-        showAidCsvFeedback('The selected CSV is empty.', 'warning');
-        return;
-      }
-      const headers = rows[0].map(normalizeCsvHeader);
-      let importedCount = 0;
-      let skippedCount = 0;
-      rows.slice(1).forEach(function(rawRow) {
-        const record = {};
-        headers.forEach(function(header, index) {
-          record[header] = String(rawRow[index] || '').trim();
-        });
-        if (!record.cheque_rtgs_in_favour && record.cheque_in_favour) {
-          record.cheque_rtgs_in_favour = record.cheque_in_favour;
-        }
-        const resolved = findAidPayloadFromCsv(record);
-        if (!resolved) {
-          skippedCount += 1;
-          return;
-        }
-        const row = addRow(recipientContainer, recipientTotalInput, 'recipient-empty-form');
-        initRecipientRow(row);
-        applyCsvRecordToRow(row, record, resolved.typeValue, resolved.payload);
-        importedCount += 1;
-      });
-      uploadAidCsvInput.value = '';
-      refreshRecipientLabels();
-      refreshQuickPopulateSelectors();
-      updateAidTypeLockState();
-      if (importedCount) markFormDirty();
-      if (importedCount && skippedCount) {
-        showAidCsvFeedback('Imported ' + importedCount + ' row(s). Skipped ' + skippedCount + ' row(s) that could not be matched to the selected aid.', 'warning');
-      } else if (importedCount) {
-        showAidCsvFeedback('Imported ' + importedCount + ' row(s) successfully.', 'success');
-      } else {
-        showAidCsvFeedback('No rows were imported. Check the aid type and CSV values.', 'warning');
-      }
-    };
-    reader.readAsText(file);
-  });
 
   const addArticleButton = document.getElementById('add-article-row');
   if (addArticleButton) {
@@ -2649,6 +2669,12 @@
     }
     initRecipientRow(row);
     setRecipientRowExpanded(row, true);
+    syncRecipientSelectMirrors(row);
+    const typeSelect = row.querySelector('select[name$="-beneficiary_type"]');
+    const beneficiarySelect = row.querySelector('select[name$="-beneficiary"]');
+    if (typeSelect && beneficiarySelect && typeSelect.value && beneficiarySelect.value) {
+      lockRecipientSelection(row);
+    }
   });
   refreshRecipientLabels();
   updateAidTypeLockState();
@@ -2699,6 +2725,13 @@
     syncVendorGroupsInput();
     formSubmitting = false;
     const submitter = event.submitter;
+    if (submitter && submitter.value === 'submit') {
+      const confirmed = window.confirm('Submitting cannot be reverted. Please recheck your draft once before continuing. Do you want to continue?');
+      if (!confirmed) {
+        event.preventDefault();
+        return;
+      }
+    }
     if (submitter && submitter.value === 'submit' && !validateVisibleSubmitFields()) {
       event.preventDefault();
       return;

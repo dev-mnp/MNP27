@@ -231,7 +231,7 @@
             <option value="">Select Article</option>
             <option value="__create_new__">+ Add New Article</option>
             {% for article in articles_master_list %}
-              <option value="{{ article.id }}" data-type="{{ article.item_type }}" data-cost="{{ article.cost_per_unit }}" data-manual-price="{{ article.allow_manual_price|yesno:'true,false' }}" data-short-label="{{ article.article_name }}" data-long-label="{{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}" {% if public_form_data.article_id == article.id|stringformat:"s" %}selected{% endif %}>
+              <option value="{{ article.id }}" data-type="{{ article.item_type }}" data-cost="{{ article.cost_per_unit }}" data-manual-price="{% if article.cost_per_unit <= 0 %}true{% else %}false{% endif %}" data-short-label="{{ article.article_name }}" data-long-label="{{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}" {% if public_form_data.article_id == article.id|stringformat:"s" %}selected{% endif %}>
                 {{ article.article_name }} - Rs.{{ article.cost_per_unit|rupees }}
               </option>
             {% endfor %}
@@ -243,7 +243,7 @@
             <div class="public-metric-block public-metric-cost">
               <label>Cost Per Unit<span class="required-star">*</span></label>
               <input class="input" type="number" min="0" step="0.01" name="article_cost_per_unit" id="public-unit-cost" value="{{ public_form_data.article_cost_per_unit|default:'0'|floatformat:'-2' }}" data-submit-required="true">
-              <div class="field-hint">Auto-filled and locked for fixed-price items. Editable only for articles marked as manual-price.</div>
+              <div class="field-hint">Price 0 stays editable. Any price above 0 is locked in application entry.</div>
             </div>
             <div class="public-metric-block public-metric-qty">
               <label>Quantity<span class="required-star">*</span></label>
@@ -271,10 +271,6 @@
                 <label id="public-notes-label">Details / Comments</label>
                 <textarea class="textarea" name="notes" id="public-notes" rows="2" {% if public_entry.article.item_type != "Aid" %}disabled{% endif %}>{{ public_form_data.notes }}</textarea>
               </div>
-              <div class="public-aid-field aid-only-field" id="public-aid-aadhar-wrap">
-                <label>Aadhar Number</label>
-                <input class="input" type="text" id="public-aid-aadhar" value="{{ public_form_data.aadhar_number }}" placeholder="Optional" maxlength="12" inputmode="numeric" pattern="[0-9]{12}">
-              </div>
               <div class="public-aid-field aid-only-field" id="public-cheque-wrap">
                 <label>Name of Institution</label>
                 <input class="input" type="text" name="name_of_institution" id="public-name-of-institution" value="{{ public_form_data.name_of_institution }}" placeholder="Optional">
@@ -298,7 +294,7 @@
         <div>
           <h3 class="section-title">Attachments</h3>
           <div class="section-note">{{ attachment_helper_text }}</div>
-          <div class="field-hint" style="margin-top: 6px;">{{ attachment_constraints_text }}</div>
+          <div class="field-hint" style="margin-top: 6px; font-size: 0.82rem; line-height: 1.35;">{{ attachment_constraints_text }}</div>
         </div>
       </div>
       <form class="js-attachment-upload-form" method="post" action="{{ attachment_upload_url }}" enctype="multipart/form-data" style="border:0;padding:0;margin:0;" data-attachment-card-id="public-attachments-card">
@@ -395,6 +391,14 @@
 
   <div class="modal-backdrop" id="article-create-modal" aria-hidden="true">
     <div class="modal-card" style="width:min(680px,94vw);height:auto;max-height:min(88vh,620px);overflow:auto;padding:14px 16px;background:#fff;">
+      <style>
+        .article-create-suggest-wrap { position: relative; }
+        .article-create-suggest-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30; display: none; max-height: 220px; overflow: auto; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 10px; background: #fff; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12); padding: 6px 0; }
+        .article-create-suggest-wrap.is-open .article-create-suggest-list { display: block; }
+        .article-create-suggest-item { width: 100%; padding: 8px 12px; border: 0; background: transparent; text-align: left; cursor: pointer; font: inherit; }
+        .article-create-suggest-item:hover { background: #f1f5f9; }
+        .article-create-suggest-empty { padding: 8px 12px; color: var(--text-secondary); font-size: 0.92rem; }
+      </style>
       <div class="toolbar" style="justify-content: flex-start; margin-bottom: 10px;">
         <h3 style="margin: 0;">Add New Article</h3>
       </div>
@@ -402,48 +406,62 @@
         <div id="article-create-errors" class="messages inline-feedback-group" style="display: none;"></div>
         <div class="grid2" style="gap: 10px 12px;">
           <div>
-            <label>Article name</label>
-            <input class="input" type="text" name="article_name" required>
-          </div>
-          <div>
-            <label>Token Name</label>
-            <input class="input" type="text" name="article_name_tk">
-          </div>
-          <div>
-            <label>Cost per unit</label>
-            <input class="input" type="number" name="cost_per_unit" min="0" step="0.01" required>
-            <div class="field-hint">Keep this at 0 only if the value is not known yet. Use the pricing rule below to decide fixed vs manual behavior.</div>
-          </div>
-          <div>
-            <label>Item type</label>
+            <label>Item type <span class="required-star">*</span></label>
             <select class="input" name="item_type">
-              <option value="Article">Article</option>
               <option value="Aid">Aid</option>
+              <option value="Article">Article</option>
+              <option value="Project">Project</option>
             </select>
           </div>
           <div>
-            <label>Category</label>
-            <input class="input" type="text" name="category" list="article-modal-category-options">
+            <label>Article name <span class="required-star">*</span></label>
+            <div class="article-create-suggest-wrap" data-article-create-suggest-wrap>
+              <input class="input" type="text" name="article_name" required autocomplete="off">
+              <div class="article-create-suggest-list" data-article-create-suggest-list>
+                {% for value in article_name_suggestions %}
+                  <button type="button" class="article-create-suggest-item" data-article-create-suggest-item="{{ value|escape }}">{{ value }}</button>
+                {% endfor %}
+              </div>
+            </div>
           </div>
           <div>
-            <label>Super Category</label>
-            <input class="input" type="text" name="master_category" list="article-modal-master-category-options">
+            <label>Token Name <span class="required-star">*</span></label>
+            <div class="article-create-suggest-wrap" data-article-create-suggest-wrap>
+              <input class="input" type="text" name="article_name_tk" autocomplete="off">
+              <div class="article-create-suggest-list" data-article-create-suggest-list>
+                {% for value in article_name_tk_suggestions %}
+                  <button type="button" class="article-create-suggest-item" data-article-create-suggest-item="{{ value|escape }}">{{ value }}</button>
+                {% endfor %}
+              </div>
+            </div>
           </div>
-          <div style="grid-column: span 2;">
-            <label><input type="checkbox" name="allow_manual_price"> User enters price manually</label>
-            <div class="field-hint">Enable this for variable-price items like Aid or any article where the operator should type the amount during entry. Leave unchecked for fixed-price items.</div>
+          <div>
+            <label>Cost per unit <span class="required-star">*</span></label>
+            <input class="input" type="number" name="cost_per_unit" min="0" step="0.01" required>
+          </div>
+          <div>
+            <label>Category <span class="required-star">*</span></label>
+            <div class="article-create-suggest-wrap" data-article-create-suggest-wrap>
+              <input class="input" type="text" name="category" autocomplete="off">
+              <div class="article-create-suggest-list" data-article-create-suggest-list>
+                {% for value in article_category_suggestions %}
+                  <button type="button" class="article-create-suggest-item" data-article-create-suggest-item="{{ value|escape }}">{{ value }}</button>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          <div>
+            <label>Super Category <span class="required-star">*</span></label>
+            <div class="article-create-suggest-wrap" data-article-create-suggest-wrap>
+              <input class="input" type="text" name="master_category" autocomplete="off">
+              <div class="article-create-suggest-list" data-article-create-suggest-list>
+                {% for value in article_master_category_suggestions %}
+                  <button type="button" class="article-create-suggest-item" data-article-create-suggest-item="{{ value|escape }}">{{ value }}</button>
+                {% endfor %}
+              </div>
+            </div>
           </div>
         </div>
-        <datalist id="article-modal-category-options">
-          {% for value in article_category_suggestions %}
-            <option value="{{ value }}"></option>
-          {% endfor %}
-        </datalist>
-        <datalist id="article-modal-master-category-options">
-          {% for value in article_master_category_suggestions %}
-            <option value="{{ value }}"></option>
-          {% endfor %}
-        </datalist>
         <div class="toolbar" style="margin-top: 8px; justify-content: flex-start; gap: 16px;">
           <label><input type="checkbox" name="is_active" checked> Active</label>
           <label><input type="checkbox" name="combo"> Combo</label>
@@ -455,6 +473,46 @@
       </form>
     </div>
   </div>
+
+  <script>
+    (function() {
+      const wraps = document.querySelectorAll("[data-article-create-suggest-wrap]");
+      if (!wraps.length) return;
+      function closeAll(except) { wraps.forEach(function(wrap) { if (wrap !== except) wrap.classList.remove("is-open"); }); }
+      document.addEventListener("click", function(event) { if (!event.target.closest("[data-article-create-suggest-wrap]")) closeAll(null); });
+      wraps.forEach(function(wrap) {
+        const input = wrap.querySelector("input");
+        const list = wrap.querySelector("[data-article-create-suggest-list]");
+        if (!input || !list) return;
+        const items = Array.from(list.querySelectorAll("[data-article-create-suggest-item]"));
+        let emptyState = list.querySelector("[data-article-create-suggest-empty]");
+        function openList() { closeAll(wrap); wrap.classList.add("is-open"); }
+        function ensureEmptyState() { if (emptyState) return emptyState; emptyState = document.createElement("div"); emptyState.className = "article-create-suggest-empty"; emptyState.setAttribute("data-article-create-suggest-empty", "true"); emptyState.textContent = "No matches"; emptyState.hidden = true; list.appendChild(emptyState); return emptyState; }
+        function filterItems() {
+          const query = (input.value || "").trim().toLowerCase();
+          let visibleCount = 0;
+          items.forEach(function(item) { const text = (item.dataset.articleCreateSuggestItem || item.textContent || "").toLowerCase(); const show = query === "" || text.includes(query); item.hidden = !show; if (show) visibleCount += 1; });
+          ensureEmptyState().hidden = visibleCount !== 0;
+          if (visibleCount === 0) openList();
+        }
+        input.addEventListener("focus", openList);
+        input.addEventListener("click", openList);
+        input.addEventListener("input", function() { filterItems(); openList(); });
+        input.addEventListener("blur", function() { window.setTimeout(function() { if (!wrap.contains(document.activeElement)) wrap.classList.remove("is-open"); }, 120); });
+        list.addEventListener("click", function(event) {
+          const button = event.target.closest("[data-article-create-suggest-item]");
+          if (!button) return;
+          input.value = button.dataset.articleCreateSuggestItem || "";
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+          wrap.classList.remove("is-open");
+          input.focus();
+        });
+        wrap.classList.remove("is-open");
+        filterItems();
+      });
+    })();
+  </script>
 
   <style>
     .duplicate-lock-zone {
@@ -515,15 +573,20 @@
       const hasTempUploads = {{ attachment_has_temp_uploads|yesno:"true,false" }};
       const cancelLink = document.getElementById("public-cancel-link");
       const clearForm = document.getElementById("public-temp-clear-form");
-      if (hasTempUploads && cancelLink && clearForm) {
+      let publicSavedBaseline = "";
+      if (cancelLink) {
         cancelLink.addEventListener("click", function(event) {
-          const shouldDelete = window.confirm("Temporary uploads are present. Click OK to delete uploads and cancel, or Cancel to continue editing.");
-          if (!shouldDelete) {
+          if (hasTempUploads && clearForm) {
+            const shouldDelete = window.confirm("Temporary uploads are present. Click OK to delete uploads and cancel, or Cancel to continue editing.");
+            if (!shouldDelete) {
+              event.preventDefault();
+              return;
+            }
             event.preventDefault();
+            clearForm.submit();
             return;
           }
-          event.preventDefault();
-          clearForm.submit();
+          allowNavigation = true;
         });
       }
 
@@ -561,8 +624,6 @@
       const inlineNotesInput = document.getElementById("public-inline-notes");
       const notesInput = document.getElementById("public-notes");
       const primaryAadharInput = document.getElementById("public-primary-aadhar");
-      const aidAadharInput = document.getElementById("public-aid-aadhar");
-      const aidAadharWrap = document.getElementById("public-aid-aadhar-wrap");
       const aadhaarNotAvailableInput = document.getElementById("public-aadhaar-not-available");
       const unitCostInput = document.getElementById("public-unit-cost");
       const chequeWrap = document.getElementById("public-cheque-wrap");
@@ -615,7 +676,7 @@
         }
         option.dataset.type = article.item_type || "";
         option.dataset.cost = article.cost_per_unit;
-        option.dataset.manualPrice = article.allow_manual_price ? "true" : "false";
+        option.dataset.manualPrice = Number(article.cost_per_unit || 0) <= 0 ? "true" : "false";
         option.dataset.shortLabel = article.article_name;
         option.dataset.longLabel = article.article_name + " - Rs." + Number(article.cost_per_unit || 0).toLocaleString("en-IN", {
           maximumFractionDigits: 2,
@@ -714,18 +775,82 @@
         }
       });
 
-      function formSnapshot() {
+      function normalizeSnapshotValue(value) {
+        if (value === null || value === undefined) return "";
+        if (typeof value === "number") {
+          return Number.isFinite(value) ? String(value) : "";
+        }
+        return String(value).trim();
+      }
+
+      function normalizedFormEntries() {
         const formData = new FormData(form);
         formData.delete("csrfmiddlewaretoken");
         formData.delete("action");
         formData.delete("confirm_duplicate");
-        return Array.from(formData.entries()).map(function(entry) {
-          return entry[0] + "=" + entry[1];
-        }).join("&");
+        const entries = Array.from(formData.entries()).map(function(entry) {
+          return [String(entry[0]), normalizeSnapshotValue(entry[1])];
+        });
+        entries.sort(function(a, b) {
+          return a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]);
+        });
+        return entries;
+      }
+
+      function normalizedAttachmentEntries() {
+        const card = document.getElementById("public-attachments-card");
+        if (!card) return [];
+        return Array.from(card.querySelectorAll("tbody tr")).map(function(row) {
+          const cells = Array.from(row.querySelectorAll("td")).map(function(cell) {
+            return normalizeSnapshotValue(cell.textContent);
+          });
+          const previewButton = row.querySelector(".js-attachment-preview");
+          const deleteButton = row.querySelector(".js-attachment-delete");
+          return [
+            cells.join("|"),
+            normalizeSnapshotValue(previewButton?.getAttribute("data-download-url") || previewButton?.getAttribute("data-preview-url") || ""),
+            normalizeSnapshotValue(deleteButton?.getAttribute("data-delete-url") || "")
+          ].join("::");
+        }).sort();
+      }
+
+      function buildNormalizedSnapshot() {
+        return JSON.stringify({
+          fields: normalizedFormEntries(),
+          attachments: normalizedAttachmentEntries(),
+        });
+      }
+
+      function hasUnsavedPublicChanges() {
+        const currentSnapshot = buildNormalizedSnapshot();
+        return currentSnapshot !== publicSavedBaseline;
+      }
+
+      function snapshotSections() {
+        const fields = normalizedFormEntries();
+        const attachments = normalizedAttachmentEntries();
+        return {
+          fields: fields,
+          attachments: attachments,
+        };
       }
 
       function updateSaveState() {
-        const hasChanges = formSnapshot() !== initialSnapshot;
+        const currentSnapshot = buildNormalizedSnapshot();
+        const hasChanges = currentSnapshot !== initialSnapshot;
+        if (window.console && typeof window.console.debug === "function") {
+          const baselineParts = initialSnapshot ? JSON.parse(initialSnapshot) : { fields: [], attachments: [] };
+          const currentParts = snapshotSections();
+          const changedSections = [];
+          if (JSON.stringify(currentParts.fields) !== JSON.stringify(baselineParts.fields)) changedSections.push("fields");
+          if (JSON.stringify(currentParts.attachments) !== JSON.stringify(baselineParts.attachments)) changedSections.push("attachments");
+          window.console.debug("[Public dirty]", {
+            baseline: baselineParts,
+            current: currentParts,
+            dirty: hasChanges,
+            changedSections: changedSections,
+          });
+        }
         form.dataset.isDirty = hasChanges ? "true" : "false";
         if (!isEditMode || !saveButtons.length) return;
         saveButtons.forEach(function(button) {
@@ -736,6 +861,25 @@
           submitButton.disabled = false;
           submitButton.classList.remove("btn-disabled");
         }
+      }
+
+      function markAttachmentDirty() {
+        updateSaveState();
+      }
+
+      function hasZeroPricedSelection() {
+        const selectedArticleId = articleSelect?.value || "";
+        if (!selectedArticleId || selectedArticleId === "__create_new__") return false;
+        const price = Number(unitCostInput?.value || 0);
+        return price <= 0;
+      }
+
+      function blockZeroPriceSave(event) {
+        if (!hasZeroPricedSelection()) return false;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        window.alert("Please enter a unit price greater than 0 before saving this item.");
+        return true;
       }
 
       function confirmLeave() {
@@ -796,9 +940,6 @@
           if (!showCheque && institutionNameInput) {
             institutionNameInput.value = "";
           }
-          if (!showCheque && aidAadharInput) {
-            aidAadharInput.value = "";
-          }
         }
         const cost = Number(unitCostInput.value || 0);
         totalValueInput.textContent = "Rs." + (quantity * cost).toLocaleString("en-IN", {
@@ -806,11 +947,6 @@
           minimumFractionDigits: 0
         });
         lastArticleId = selectedArticleId;
-      }
-
-      function syncAidAadhar(source, target) {
-        if (!source || !target || target.value === source.value) return;
-        target.value = source.value;
       }
 
       if (inlineNotesInput) {
@@ -910,57 +1046,112 @@
         updateSaveState();
       }
 
-      articleSelect.addEventListener("change", function() {
+      const publicAttachmentUploadForm = document.querySelector(".js-attachment-upload-form");
+      if (publicAttachmentUploadForm) {
+        const publicAttachmentFile = document.getElementById("public-attachment-file");
+        const publicAttachmentFileName = document.getElementById("public-attachment-file-name");
+        if (publicAttachmentFile) {
+          publicAttachmentFile.addEventListener("change", function() {
+            publicSessionChanged = true;
+            markAttachmentDirty();
+          });
+        }
+        if (publicAttachmentFileName) {
+          publicAttachmentFileName.addEventListener("input", function() {
+            publicSessionChanged = true;
+            markAttachmentDirty();
+          });
+        }
+        publicAttachmentUploadForm.addEventListener("submit", function() {
+          publicSessionChanged = true;
+          markAttachmentDirty();
+        });
+      }
+
+      const publicAttachmentCard = document.getElementById("public-attachments-card");
+      if (publicAttachmentCard && window.MutationObserver) {
+        const attachmentObserver = new MutationObserver(function() {
+          publicSessionChanged = true;
+          updateSaveState();
+        });
+        attachmentObserver.observe(publicAttachmentCard, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          characterData: true,
+        });
+      }
+
+      document.addEventListener("click", function(event) {
+        const attachmentDelete = event.target.closest(".js-attachment-delete");
+        if (attachmentDelete) {
+          publicSessionChanged = true;
+          markAttachmentDirty();
+        }
+      }, true);
+
+      articleSelect.addEventListener("change", function(event) {
         if (articleSelect.value === "__create_new__") {
           articleSelect.value = lastArticleId || "";
           syncSelectOptionLabels(articleSelect, "short");
           openArticleCreatePopup(articleSelect);
           return;
         }
+        publicSessionChanged = true;
         recalc();
       });
-      if (primaryAadharInput && aidAadharInput) {
-        primaryAadharInput.addEventListener("input", function() {
-          if (aadhaarNotAvailableInput && aadhaarNotAvailableInput.checked) return;
-          syncAidAadhar(primaryAadharInput, aidAadharInput);
-          updateSaveState();
-        });
-        aidAadharInput.addEventListener("input", function() {
-          if (aadhaarNotAvailableInput && aadhaarNotAvailableInput.checked) return;
-          syncAidAadhar(aidAadharInput, primaryAadharInput);
-          updateSaveState();
-        });
-      }
       if (aadhaarNotAvailableInput) {
         aadhaarNotAvailableInput.addEventListener("change", function() {
+          publicSessionChanged = true;
           updateAadhaarAvailabilityUI();
           updateSaveState();
         });
       }
-      quantityInput.addEventListener("input", recalc);
-      unitCostInput.addEventListener("input", recalc);
+      quantityInput.addEventListener("input", function(event) {
+        publicSessionChanged = true;
+        recalc();
+      });
+      unitCostInput.addEventListener("input", function(event) {
+        publicSessionChanged = true;
+        recalc();
+      });
       handicappedInputs.forEach(function(input) {
-        input.addEventListener("change", updateDisabilityCategoryUI);
+        input.addEventListener("change", function() {
+          publicSessionChanged = true;
+          updateDisabilityCategoryUI();
+        });
       });
       genderInputs.forEach(function(input) {
-        input.addEventListener("change", updateFemaleStatusUI);
+        input.addEventListener("change", function() {
+          publicSessionChanged = true;
+          updateFemaleStatusUI();
+        });
       });
-      disabilityCategorySelect.addEventListener("change", updateSaveState);
-      femaleStatusSelect.addEventListener("change", updateFemaleStatusUI);
+      disabilityCategorySelect.addEventListener("change", function() {
+        publicSessionChanged = true;
+        updateSaveState();
+      });
+      femaleStatusSelect.addEventListener("change", function() {
+        publicSessionChanged = true;
+        updateFemaleStatusUI();
+      });
       qtyMinusBtn.addEventListener("click", function() {
         const current = Math.max(1, Number(quantityInput.value || 1));
         quantityInput.value = Math.max(1, current - 1);
+        publicSessionChanged = true;
         recalc();
         updateSaveState();
       });
       qtyPlusBtn.addEventListener("click", function() {
         const current = Math.max(1, Number(quantityInput.value || 1));
         quantityInput.value = current + 1;
+        publicSessionChanged = true;
         recalc();
         updateSaveState();
       });
       form.querySelectorAll('button[name="action"]').forEach(function(button) {
-        button.addEventListener("click", function() {
+        button.addEventListener("click", function(event) {
+          if ((button.value === "draft" || button.value === "submit") && blockZeroPriceSave(event)) return;
           form.dataset.pendingAction = button.value;
           updateSubmitRequirements(button.value);
         });
@@ -973,6 +1164,7 @@
       document.addEventListener("click", function(event) {
         const link = event.target.closest("a[href]");
         if (!link || allowNavigation || form.dataset.isDirty !== "true") return;
+        if (link.id === "public-cancel-link") return;
         const href = link.getAttribute("href") || "";
         if (!href || href.startsWith("#") || href.startsWith("javascript:") || link.target === "_blank" || link.hasAttribute("download")) return;
         if (!confirmLeave()) {
@@ -983,6 +1175,7 @@
       }, true);
       form.addEventListener("submit", function(event) {
         const submitter = event.submitter;
+        if (submitter && (submitter.value === "draft" || submitter.value === "submit") && blockZeroPriceSave(event)) return;
         if (
           submitter
           && submitter.value === "verify"
@@ -1001,15 +1194,20 @@
         }
         allowNavigation = true;
       });
-      form.addEventListener("input", updateSaveState);
-      form.addEventListener("change", updateSaveState);
+      form.addEventListener("input", function() {
+        updateSaveState();
+      });
+      form.addEventListener("change", function() {
+        updateSaveState();
+      });
       form.dataset.pendingAction = "draft";
       updateFemaleStatusUI();
       recalc();
       updateDisabilityCategoryUI();
       updateAadhaarAvailabilityUI();
       updateSubmitRequirements("draft");
-      initialSnapshot = formSnapshot();
+      initialSnapshot = buildNormalizedSnapshot();
+      publicSavedBaseline = initialSnapshot;
       updateSaveState();
     })();
   </script>

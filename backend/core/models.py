@@ -1187,6 +1187,7 @@ class ApplicationAttachmentTypeChoices(models.TextChoices):
     DISTRICT = "district", "District"
     PUBLIC = "public", "Public"
     INSTITUTION = "institution", "Institution"
+    OTHERS = "others", "Others"
 
 
 class ApplicationAttachmentStatusChoices(models.TextChoices):

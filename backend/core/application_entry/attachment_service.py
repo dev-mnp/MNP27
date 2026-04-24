@@ -54,6 +54,44 @@ def mark_attachment_unavailable(attachment):
         attachment.save(update_fields=update_fields)
 
 
+def reconcile_linked_attachments(*, application_type, district=None, public_entry=None, institution_application_number=None):
+    filters = {
+        "application_type": application_type,
+        "status": models.ApplicationAttachmentStatusChoices.LINKED,
+    }
+    if district is not None:
+        filters["district"] = district
+    if public_entry is not None:
+        filters["public_entry"] = public_entry
+    if institution_application_number is not None:
+        filters["institution_application_number"] = institution_application_number
+
+    attachments = list(
+        models.ApplicationAttachment.objects.filter(**filters)
+        .select_related("uploaded_by")
+        .order_by("-created_at", "-id")
+    )
+    missing_attachments = []
+    for attachment in attachments:
+        file_id = str(getattr(attachment, "drive_file_id", "") or "").strip()
+        if not file_id:
+            missing_attachments.append(attachment)
+            mark_attachment_unavailable(attachment)
+            continue
+        try:
+            drive_service.attachment_exists(file_id)
+        except Exception as exc:
+            if is_probably_missing_drive_file_error(exc):
+                missing_attachments.append(attachment)
+                mark_attachment_unavailable(attachment)
+    available_attachments = [
+        attachment
+        for attachment in attachments
+        if str(getattr(attachment, "drive_file_id", "") or "").strip()
+    ]
+    return available_attachments, missing_attachments
+
+
 def attachment_form_token_session_key(application_type):
     return f"application_attachment_draft_uid:{str(application_type or '').strip().lower()}"
 
@@ -115,7 +153,31 @@ def attachment_application_reference(attachment):
     return ""
 
 
-def save_application_attachment(*, uploaded, display_name, application_type, uploaded_by, district=None, public_entry=None, institution_application_number=None):
+def upload_attachment_to_drive(*, uploaded, display_name, application_type, reference):
+    if not drive_service.is_configured():
+        raise RuntimeError("Google Drive is not configured for attachments in this environment.")
+    uploaded.seek(0)
+    content_type = str(getattr(uploaded, "content_type", "") or "").strip() or mimetypes.guess_type(display_name)[0] or "application/octet-stream"
+    return drive_service.upload_attachment(
+        application_type=application_type,
+        reference=reference,
+        filename=display_name,
+        content=uploaded.read(),
+        content_type=content_type,
+    )
+
+
+def save_application_attachment(
+    *,
+    uploaded,
+    display_name,
+    application_type,
+    uploaded_by,
+    district=None,
+    public_entry=None,
+    institution_application_number=None,
+    drive_result=None,
+):
     original_filename = str(getattr(uploaded, "name", "") or "").strip() or "attachment"
     display_filename = (display_name or "").strip() or original_filename
     prefix = ""
@@ -137,15 +199,11 @@ def save_application_attachment(*, uploaded, display_name, application_type, upl
         "uploaded_by": uploaded_by,
         "status": models.ApplicationAttachmentStatusChoices.LINKED,
     }
-    if not drive_service.is_configured():
-        raise RuntimeError("Google Drive is not configured for attachments in this environment.")
-    uploaded.seek(0)
-    result = drive_service.upload_attachment(
+    result = drive_result or upload_attachment_to_drive(
+        uploaded=uploaded,
+        display_name=display_name,
         application_type=application_type,
         reference=prefix,
-        filename=display_name,
-        content=uploaded.read(),
-        content_type=str(getattr(uploaded, "content_type", "") or mimetypes.guess_type(display_name)[0] or "application/octet-stream"),
     )
     attachment_kwargs.update(
         {
@@ -349,6 +407,20 @@ def save_temp_attachment_upload(
         return False, "A file with this name already exists. Please rename it before uploading."
 
     try:
+        drive_result = upload_attachment_to_drive(
+            uploaded=uploaded,
+            display_name=display_name,
+            application_type=application_type,
+            reference=draft_prefix,
+        )
+    except Exception as exc:
+        logger.exception("Temporary attachment upload failed for %s", application_type)
+        message = f"{exc.__class__.__name__}: {exc}".strip()
+        if message.endswith(":"):
+            message = "Attachment upload failed. Please check Google Drive configuration and try again."
+        return False, message
+
+    try:
         with transaction.atomic():
             locked_qs = (
                 models.ApplicationAttachment.objects.select_for_update()
@@ -370,10 +442,16 @@ def save_temp_attachment_upload(
                 display_name=display_name,
                 application_type=application_type,
                 uploaded_by=request.user,
+                drive_result=drive_result,
                 **(save_kwargs or {}),
             )
     except Exception as exc:
-        logger.exception("Temporary attachment upload failed for %s", application_type)
+        logger.exception("Temporary attachment DB save failed for %s; cleaning up uploaded Drive file", application_type)
+        try:
+            if drive_result and getattr(drive_result, "file_id", ""):
+                drive_service.delete_attachment(drive_result.file_id)
+        except Exception:
+            logger.warning("Could not clean up orphan Drive file after temp upload DB failure", exc_info=True)
         message = f"{exc.__class__.__name__}: {exc}".strip()
         if message.endswith(":"):
             message = "Attachment upload failed. Please check Google Drive configuration and try again."
@@ -401,24 +479,42 @@ def save_temp_attachment_upload(
 
 
 def save_linked_attachment_upload(*, request, uploaded, application_type, display_name, queryset_filters, save_kwargs):
-    with transaction.atomic():
-        attachments_qs = (
-            models.ApplicationAttachment.objects.select_for_update()
-            .filter(**queryset_filters)
-            .filter(available_attachment_q())
-        )
-        existing_count = attachments_qs.count()
-        if existing_count >= ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION:
-            return False, f"Maximum {ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION} files are allowed for one application."
-        if attachment_name_exists(attachments_qs, display_name):
-            return False, "A file with this name already exists for this application. Please rename it before uploading."
-        save_application_attachment(
-            uploaded=uploaded,
-            display_name=display_name,
-            application_type=application_type,
-            uploaded_by=request.user,
-            **save_kwargs,
-        )
+    drive_result = upload_attachment_to_drive(
+        uploaded=uploaded,
+        display_name=display_name,
+        application_type=application_type,
+        reference=(save_kwargs or {}).get("prefix", ""),
+    )
+    try:
+        with transaction.atomic():
+            attachments_qs = (
+                models.ApplicationAttachment.objects.select_for_update()
+                .filter(**queryset_filters)
+                .filter(available_attachment_q())
+            )
+            existing_count = attachments_qs.count()
+            if existing_count >= ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION:
+                raise RuntimeError(f"Maximum {ApplicationAttachmentUploadForm.MAX_FILES_PER_APPLICATION} files are allowed for one application.")
+            if attachment_name_exists(attachments_qs, display_name):
+                raise RuntimeError("A file with this name already exists for this application. Please rename it before uploading.")
+            save_application_attachment(
+                uploaded=uploaded,
+                display_name=display_name,
+                application_type=application_type,
+                uploaded_by=request.user,
+                drive_result=drive_result,
+                **save_kwargs,
+            )
+    except Exception as exc:
+        try:
+            if drive_result and getattr(drive_result, "file_id", ""):
+                drive_service.delete_attachment(drive_result.file_id)
+        except Exception:
+            logger.warning("Could not clean up orphan Drive file after linked upload DB failure", exc_info=True)
+        message = f"{exc.__class__.__name__}: {exc}".strip()
+        if message.endswith(":"):
+            message = "Attachment upload failed. Please check Google Drive configuration and try again."
+        return False, message
     return True, ""
 
 
@@ -428,7 +524,7 @@ def cleanup_stale_temp_attachments():
         status=models.ApplicationAttachmentStatusChoices.TEMP,
         temp_expires_at__lt=expiry_cutoff,
     )
-    for attachment in stale_qs.iterator():
+    for attachment in list(stale_qs):
         delete_application_attachment_file(attachment)
         attachment.delete()
 

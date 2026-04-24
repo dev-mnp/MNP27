@@ -87,6 +87,8 @@ class ArticleListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
             {
                 "item_type_choices": models.ItemTypeChoices.choices,
                 "combo_choices": [("combo", "Combo"), ("separate", "Separate")],
+                "article_name_suggestions": get_article_text_suggestions("article_name"),
+                "article_name_tk_suggestions": get_article_text_suggestions("article_name_tk"),
                 "category_choices": category_choices,
                 "master_category_choices": master_category_choices,
                 "filters": {
@@ -117,7 +119,6 @@ class ArticleListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
                 "Article Name",
                 "Token Name",
                 "Cost Per Unit",
-                "Price Mode",
                 "Item Type",
                 "Category",
                 "Super Category",
@@ -133,7 +134,6 @@ class ArticleListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
                     article.article_name,
                     article.article_name_tk or "",
                     article.cost_per_unit,
-                    "Manual" if article.allow_manual_price else "Fixed",
                     article.get_item_type_display(),
                     article.category or "",
                     article.master_category or "",
@@ -157,6 +157,8 @@ class ArticleCreateView(LoginRequiredMixin, WriteRoleMixin, CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["popup_mode"] = self.request.GET.get("popup") == "1"
+        context["article_name_suggestions"] = get_article_text_suggestions("article_name")
+        context["article_name_tk_suggestions"] = get_article_text_suggestions("article_name_tk")
         context["category_suggestions"] = get_article_text_suggestions("category")
         context["master_category_suggestions"] = get_article_text_suggestions("master_category")
         return context
@@ -171,7 +173,6 @@ class ArticleCreateView(LoginRequiredMixin, WriteRoleMixin, CreateView):
                         "id": self.object.id,
                         "article_name": self.object.article_name,
                         "cost_per_unit": str(self.object.cost_per_unit),
-                        "allow_manual_price": self.object.allow_manual_price,
                         "item_type": self.object.item_type,
                     },
                 }
@@ -182,7 +183,6 @@ class ArticleCreateView(LoginRequiredMixin, WriteRoleMixin, CreateView):
                     "id": self.object.id,
                     "article_name": self.object.article_name,
                     "cost_per_unit": str(self.object.cost_per_unit),
-                    "allow_manual_price": self.object.allow_manual_price,
                     "item_type": self.object.item_type,
                 }
             ).replace("</", "<\\/")
@@ -211,6 +211,11 @@ class ArticleCreateView(LoginRequiredMixin, WriteRoleMixin, CreateView):
         return HttpResponseRedirect(self.get_success_url())
 
     def form_invalid(self, form):
+        for field_name in ("article_name", "article_name_tk"):
+            if field_name not in form.errors:
+                continue
+            for error in form.errors.get(field_name, []):
+                messages.error(self.request, error)
         if self.request.GET.get("popup") == "1" and self.request.headers.get("x-requested-with") == "XMLHttpRequest":
             return JsonResponse({"ok": False, "errors": form.errors}, status=400)
         return super().form_invalid(form)
@@ -227,6 +232,8 @@ class ArticleUpdateView(LoginRequiredMixin, WriteRoleMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["popup_mode"] = False
+        context["article_name_suggestions"] = get_article_text_suggestions("article_name")
+        context["article_name_tk_suggestions"] = get_article_text_suggestions("article_name_tk")
         context["category_suggestions"] = get_article_text_suggestions("category")
         context["master_category_suggestions"] = get_article_text_suggestions("master_category")
         context["price_impact_preview_url"] = reverse_lazy("ui:article-price-impact", kwargs={"pk": self.object.pk})
@@ -235,7 +242,7 @@ class ArticleUpdateView(LoginRequiredMixin, WriteRoleMixin, UpdateView):
     def form_valid(self, form):
         original = (
             models.Article.objects.filter(pk=self.object.pk)
-            .values("cost_per_unit", "allow_manual_price")
+            .values("cost_per_unit")
             .first()
         )
         messages.success(self.request, "Article updated.")
@@ -247,11 +254,10 @@ class ArticleUpdateView(LoginRequiredMixin, WriteRoleMixin, UpdateView):
         if not original:
             return
         price_changed = original["cost_per_unit"] != self.object.cost_per_unit
-        mode_changed = original["allow_manual_price"] != self.object.allow_manual_price
-        if not price_changed and not mode_changed:
+        if not price_changed:
             return
 
-        update_scope = (self.request.POST.get("price_update_scope") or "future_only").strip().lower()
+        update_scope = (self.request.POST.get("price_update_scope") or "").strip().lower()
         if update_scope != "existing_and_future":
             return
 
@@ -269,6 +275,14 @@ class ArticleUpdateView(LoginRequiredMixin, WriteRoleMixin, UpdateView):
                 total_amount=total_expression,
             )
 
+    def form_invalid(self, form):
+        for field_name in ("article_name", "article_name_tk"):
+            if field_name not in form.errors:
+                continue
+            for error in form.errors.get(field_name, []):
+                messages.error(self.request, error)
+        return super().form_invalid(form)
+
 
 class ArticlePriceImpactPreviewView(LoginRequiredMixin, WriteRoleMixin, View):
     module_key = models.ModuleKeyChoices.ARTICLE_MANAGEMENT
@@ -285,9 +299,7 @@ class ArticlePriceImpactPreviewView(LoginRequiredMixin, WriteRoleMixin, View):
         except Exception:
             return JsonResponse({"ok": False, "message": "Enter a valid cost per unit."}, status=400)
 
-        allow_manual_price = str(request.GET.get("allow_manual_price") or "").strip().lower() in {"1", "true", "yes", "on"}
         price_changed = article.cost_per_unit != new_cost
-        mode_changed = article.allow_manual_price != allow_manual_price
 
         impact = {
             "district": _article_price_impact_summary(
@@ -304,26 +316,23 @@ class ArticlePriceImpactPreviewView(LoginRequiredMixin, WriteRoleMixin, View):
             ),
         }
         total_count = sum(bucket["count"] for bucket in impact.values())
-        recommended_scope = "future_only" if allow_manual_price or article.allow_manual_price else "existing_and_future"
+        if article.cost_per_unit == 0 and new_cost > 0:
+            warning = "This article currently has a zero price. Changing it to a fixed price will affect all saved rows using this article."
+        elif article.cost_per_unit > 0 and new_cost == 0:
+            warning = "This article currently has a fixed price. Changing it to zero will make it editable in applications and affect all saved rows using this article."
+        else:
+            warning = "Changing this price will affect all saved rows using this article."
 
         return JsonResponse(
             {
                 "ok": True,
-                "has_change": price_changed or mode_changed,
+                "has_change": price_changed,
                 "price_changed": price_changed,
-                "mode_changed": mode_changed,
                 "impact": impact,
                 "total_count": total_count,
                 "old_cost_per_unit": str(article.cost_per_unit),
                 "new_cost_per_unit": str(new_cost),
-                "old_allow_manual_price": article.allow_manual_price,
-                "new_allow_manual_price": allow_manual_price,
-                "recommended_scope": recommended_scope,
-                "warning": (
-                    "This article uses manual pricing. Existing saved rows may contain user-entered prices."
-                    if allow_manual_price or article.allow_manual_price
-                    else ""
-                ),
+                "warning": warning,
             }
         )
 

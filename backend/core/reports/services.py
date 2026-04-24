@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 from datetime import date
+import re
 
 from django.db.models import F
 from django.utils import timezone
@@ -239,16 +240,17 @@ def _reports_set_simple_report_state(request, state_key: str, state):
 
 
 SEGREGATION_BENEFICIARY_FILTER_CHOICES = [
-    ("", "All"),
+    ("all", "All"),
     (models.RecipientTypeChoices.DISTRICT, "District"),
     (models.RecipientTypeChoices.PUBLIC, "Public"),
     (models.RecipientTypeChoices.INSTITUTIONS, "Institutions"),
+    (models.RecipientTypeChoices.OTHERS, "Others"),
 ]
 
 SEGREGATION_ITEM_FILTER_CHOICES = [
+    ("all", "All"),
     (models.ItemTypeChoices.ARTICLE, "Article"),
     (models.ItemTypeChoices.AID, "Aid"),
-    ("", "All"),
 ]
 
 
@@ -394,14 +396,21 @@ def _segregation_normalize_dataset(dataset: dict) -> dict:
     }
 
 
-def _segregation_filter_rows(rows: list[dict], *, beneficiary_type: str, item_type: str) -> list[dict]:
+def _segregation_filter_rows(
+    rows: list[dict],
+    *,
+    beneficiary_types: list[str] | tuple[str, ...] | set[str] | None = None,
+    item_types: list[str] | tuple[str, ...] | set[str] | None = None,
+) -> list[dict]:
     filtered_rows = []
+    beneficiary_type_set = {str(value or "").strip() for value in list(beneficiary_types or []) if str(value or "").strip()}
+    item_type_set = {str(value or "").strip() for value in list(item_types or []) if str(value or "").strip()}
     for row in list(rows or []):
         row_beneficiary_type = str(row.get("beneficiary_type") or "").strip()
         row_item_type = str(row.get("item_type") or "").strip()
-        if beneficiary_type and row_beneficiary_type != beneficiary_type:
+        if beneficiary_type_set and row_beneficiary_type not in beneficiary_type_set:
             continue
-        if item_type and row_item_type != item_type:
+        if item_type_set and row_item_type not in item_type_set:
             continue
         filtered_rows.append(dict(row))
     return filtered_rows
@@ -1150,7 +1159,10 @@ def _reports_public_ack_field_map_with_defaults(headers, template_fields, existi
     merged = {}
     for field in template_fields or []:
         field_key = str(field.get("field_key") or "").strip()
-        merged[field_key] = existing_map.get(field_key) or defaults.get(field_key, "")
+        if field_key in existing_map:
+            merged[field_key] = existing_map[field_key]
+        else:
+            merged[field_key] = defaults.get(field_key, "")
     return merged
 
 

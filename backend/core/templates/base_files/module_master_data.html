@@ -19,7 +19,6 @@
       <a class="btn" {% if active_data_key == 'districts' %}style="background: #eff6ff; border-color: #93c5fd; color: #1d4ed8;"{% endif %} href="{% url 'ui:master-data-districts' %}">District Master</a>
       <a class="btn" {% if active_data_key == 'articles' %}style="background: #eff6ff; border-color: #93c5fd; color: #1d4ed8;"{% endif %} href="{% url 'ui:master-data-articles' %}">Article Price List</a>
       <a class="btn" {% if active_data_key == 'history' %}style="background: #eff6ff; border-color: #93c5fd; color: #1d4ed8;"{% endif %} href="{% url 'ui:master-data-history' %}">Past History</a>
-      <a style="margin-left:auto; color: var(--brand-600); text-decoration: underline; text-underline-offset: 2px;" href="{% url 'ui:aid-recipient-template' %}">Download current aid CSV template</a>
     </div>
 
     <div class="card" style="background: #f8fafc;">

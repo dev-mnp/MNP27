@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-"""Views for backbone base-files management and template download."""
+"""Views for backbone base-files management."""
 
-import csv
 from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponseRedirect
 from django.utils import timezone
 from django.views import View
 from django.views.generic import TemplateView
@@ -16,26 +15,6 @@ from core import models
 from core.base_files.forms import MasterDataUploadForm
 from core.shared.csv_utils import _csv_reader_from_upload
 from core.shared.permissions import RoleRequiredMixin
-
-
-class AidRecipientTemplateDownloadView(LoginRequiredMixin, RoleRequiredMixin, View):
-    module_key = models.ModuleKeyChoices.BASE_FILES
-    permission_action = "view"
-
-    def get(self, request, *args, **kwargs):
-        headers = [
-            "beneficiary_type",
-            "application_number",
-            "beneficiary",
-            "fund_requested",
-            "details",
-            "cheque_rtgs_in_favour",
-        ]
-        response = HttpResponse(content_type="text/csv")
-        response["Content-Disposition"] = 'attachment; filename="aid_recipients_template.csv"'
-        writer = csv.writer(response)
-        writer.writerow(headers)
-        return response
 
 
 class MasterDataBaseView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):

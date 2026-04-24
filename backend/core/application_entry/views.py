@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import logging
 import os
+import mimetypes
 import uuid
 from decimal import Decimal, InvalidOperation
 
@@ -87,6 +88,29 @@ def _public_visible_queryset(status_filter: str = ""):
         return _public_active_queryset()
     return _public_any_queryset()
 
+
+def _attachment_dirty_session_key(application_type):
+    return f"application_entry_attachment_dirty:{str(application_type or '').strip().lower()}"
+
+
+def _mark_attachment_dirty(request, application_type):
+    key = _attachment_dirty_session_key(application_type)
+    request.session[key] = True
+    request.session.modified = True
+
+
+def _pop_attachment_dirty(request, application_type):
+    key = _attachment_dirty_session_key(application_type)
+    return bool(request.session.pop(key, False))
+
+
+def _clear_attachment_dirty(request, application_type):
+    key = _attachment_dirty_session_key(application_type)
+    if key in request.session:
+        request.session.pop(key, None)
+        request.session.modified = True
+
+
 class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "view"
@@ -113,6 +137,7 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         district_groups = []
         public_entries = []
         institution_groups = []
+        others_groups = []
 
         context["beneficiary_type"] = beneficiary_type
         context["search_query"] = search_query
@@ -131,15 +156,22 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         district_count = models.DistrictBeneficiaryEntry.objects.values("district_id").distinct().count()
         public_count = _public_active_queryset().count()
         public_archived_count = models.PublicBeneficiaryEntry.objects.archived().count()
-        institution_count = models.InstitutionsBeneficiaryEntry.objects.values("application_number").distinct().count()
+        institution_count = models.InstitutionsBeneficiaryEntry.objects.filter(
+            institution_type=models.InstitutionTypeChoices.INSTITUTIONS
+        ).values("application_number").distinct().count()
+        others_count = models.InstitutionsBeneficiaryEntry.objects.filter(institution_type=models.InstitutionTypeChoices.OTHERS).values("application_number").distinct().count()
         district_row_count = models.DistrictBeneficiaryEntry.objects.count()
         public_row_count = _public_active_queryset().count()
-        institution_row_count = models.InstitutionsBeneficiaryEntry.objects.count()
+        institution_row_count = models.InstitutionsBeneficiaryEntry.objects.filter(
+            institution_type=models.InstitutionTypeChoices.INSTITUTIONS
+        ).count()
+        others_row_count = models.InstitutionsBeneficiaryEntry.objects.filter(institution_type=models.InstitutionTypeChoices.OTHERS).count()
         counts = {
             "district_count": district_count,
             "public_count": public_count,
             "institution_count": institution_count,
-            "total_material_rows": district_row_count + public_row_count + institution_row_count,
+            "others_count": others_count,
+            "total_material_rows": district_row_count + public_row_count + institution_row_count + others_row_count,
         }
 
         context.update(counts)
@@ -148,6 +180,7 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             int(counts.get("district_count") or 0)
             + int(counts.get("public_count") or 0)
             + int(counts.get("institution_count") or 0)
+            + int(counts.get("others_count") or 0)
         )
 
         if beneficiary_type == "district":
@@ -195,7 +228,20 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 )
         elif beneficiary_type == "institutions":
             institution_groups = _filter_sort_institution_summaries(
-                _build_institution_entry_summaries(),
+                _build_institution_entry_summaries(institution_type_filter=models.InstitutionTypeChoices.INSTITUTIONS),
+                search_query=search_query,
+                date_from=date_from,
+                date_to=date_to,
+                status_filter=status_filter,
+                sort_by=sort_by,
+                sort_dir=sort_dir,
+            )
+        elif beneficiary_type == "others":
+            others_groups = _filter_sort_institution_summaries(
+                _build_institution_entry_summaries(
+                    institution_type_filter=models.InstitutionTypeChoices.OTHERS,
+                    attachment_type=models.ApplicationAttachmentTypeChoices.OTHERS,
+                ),
                 search_query=search_query,
                 date_from=date_from,
                 date_to=date_to,
@@ -207,9 +253,11 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         context["district_groups"] = district_groups
         context["public_entries"] = public_entries
         context["institution_groups"] = institution_groups
+        context["others_groups"] = others_groups
         context["district_total_accrued"] = sum((row.get("total_accrued") or 0) for row in district_groups)
         context["public_total_accrued"] = sum((entry.total_amount or 0) for entry in public_entries)
         context["institution_total_accrued"] = sum((row.get("total_value") or 0) for row in institution_groups)
+        context["others_total_accrued"] = sum((row.get("total_value") or 0) for row in others_groups)
         context["public_submit_popup"] = self.request.session.pop("public_submit_popup", None)
         context["institution_submit_popup"] = self.request.session.pop("institution_submit_popup", None)
         return context
@@ -255,7 +303,28 @@ class InstitutionsMasterEntryInlineSummaryView(LoginRequiredMixin, RoleRequiredM
         context = super().get_context_data(**kwargs)
         application_number = self.kwargs["application_number"]
         entries = list(
-            models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).select_related("article").order_by("id")
+            models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number)
+            .select_related("article")
+            .only(
+                "id",
+                "application_number",
+                "article_id",
+                "quantity",
+                "article_cost_per_unit",
+                "total_amount",
+                "name_of_beneficiary",
+                "name_of_institution",
+                "aadhar_number",
+                "notes",
+                "internal_notes",
+                "cheque_rtgs_in_favour",
+                "status",
+                "created_at",
+                "updated_at",
+                "article__article_name",
+                "article__item_type",
+            )
+            .order_by("id")
         )
         context["application_number"] = application_number
         context["entries"] = entries
@@ -267,12 +336,6 @@ class InstitutionsMasterEntryInlineSummaryView(LoginRequiredMixin, RoleRequiredM
 def _public_attachment_latest_and_counts(entry_ids):
     if not entry_ids:
         return {}, {}
-    for entry in _public_any_queryset().filter(id__in=entry_ids).only("id", "application_number"):
-        attachment_service.sync_drive_attachments_for_application(
-            application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
-            application_reference=entry.application_number or f"PUBLIC-{entry.id}",
-            public_entry=entry,
-        )
     attachments = (
         models.ApplicationAttachment.objects.filter(
             application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
@@ -294,12 +357,6 @@ def _public_attachment_latest_and_counts(entry_ids):
 def _district_attachment_latest_and_counts(district_ids):
     if not district_ids:
         return {}, {}
-    for district in models.DistrictMaster.objects.filter(id__in=district_ids).only("id", "application_number"):
-        attachment_service.sync_drive_attachments_for_application(
-            application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
-            application_reference=district.application_number or f"DISTRICT-{district.id}",
-            district=district,
-        )
     attachments = (
         models.ApplicationAttachment.objects.filter(
             application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
@@ -318,18 +375,12 @@ def _district_attachment_latest_and_counts(district_ids):
     return latest_map, count_map
 
 
-def _institution_attachment_latest_and_counts(application_numbers):
+def _institution_attachment_latest_and_counts(application_numbers, *, application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION):
     if not application_numbers:
         return {}, {}
-    for application_number in application_numbers:
-        attachment_service.sync_drive_attachments_for_application(
-            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
-            application_reference=application_number,
-            institution_application_number=application_number,
-        )
     attachments = (
         models.ApplicationAttachment.objects.filter(
-            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+            application_type=application_type,
             institution_application_number__in=application_numbers,
         )
         .filter(_available_attachment_q())
@@ -577,7 +628,26 @@ def _sync_drive_attachments_for_application(
     )
 
 
-def _district_attachment_context(district):
+def _missing_attachment_error_message(missing_count: int) -> str:
+    if missing_count == 1:
+        return "1 attachment is missing from Google Drive. Please re-upload it before submitting."
+    return f"{missing_count} attachments are missing from Google Drive. Please re-upload them before submitting."
+
+
+def _ensure_linked_attachments_available(*, request, application_type, district=None, public_entry=None, institution_application_number=None, redirect_url=""):
+    _, missing_attachments = attachment_service.reconcile_linked_attachments(
+        application_type=application_type,
+        district=district,
+        public_entry=public_entry,
+        institution_application_number=institution_application_number,
+    )
+    if missing_attachments:
+        messages.error(request, _missing_attachment_error_message(len(missing_attachments)))
+        return False, HttpResponseRedirect(redirect_url or reverse("ui:master-entry"))
+    return True, None
+
+
+def _district_attachment_context(request, district):
     has_district = bool(district)
     attachments = []
     upload_url = ""
@@ -590,7 +660,7 @@ def _district_attachment_context(district):
                 district=district,
             ).select_related("uploaded_by")
         )
-        helper_text = "Upload sends file to Google Drive immediately. Save Draft / Submit saves application data and links uploaded files."
+        helper_text = ""
     context = _attachment_upload_context(
         attachments=attachments,
         enabled=has_district,
@@ -599,6 +669,7 @@ def _district_attachment_context(district):
     )
     context["attachment_district_id"] = district.id if district else ""
     context["attachment_has_temp_uploads"] = False
+    context["attachment_state_dirty"] = False
     return context
 
 
@@ -608,7 +679,9 @@ def _district_attachment_context_with_request(request, district):
         district and models.DistrictBeneficiaryEntry.objects.filter(district=district).exists()
     )
     if has_saved_application:
-        return _district_attachment_context(district)
+        context = _district_attachment_context(request, district)
+        context["attachment_state_dirty"] = False
+        return context
     form_token = _ensure_attachment_form_token(request, models.ApplicationAttachmentTypeChoices.DISTRICT)
     temp_query = _temp_attachment_queryset(
         application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
@@ -624,12 +697,13 @@ def _district_attachment_context_with_request(request, district):
         attachments=temp_items,
         enabled=bool(district),
         upload_url=reverse("ui:district-attachment-temp-upload") if district else "",
-        helper_text="Upload sends file to Google Drive immediately. Save Draft / Submit saves application data and links uploaded files.",
+        helper_text="",
     )
     context["attachment_form_token"] = form_token
     context["attachment_temp_delete_url"] = reverse("ui:district-attachment-temp-clear")
     context["attachment_district_id"] = district.id if district else ""
     context["attachment_has_temp_uploads"] = bool(temp_items)
+    context["attachment_state_dirty"] = bool(temp_items) or _pop_attachment_dirty(request, models.ApplicationAttachmentTypeChoices.DISTRICT)
     return context
 
 
@@ -640,7 +714,7 @@ def _attachment_upload_context(*, attachments, enabled, upload_url, helper_text)
         "application_attachments": list(attachments or []),
         "attachments_enabled": bool(enabled),
         "attachment_upload_url": upload_url or "",
-        "attachment_helper_text": helper_text or "",
+        "attachment_helper_text": "",
         "attachment_constraints_text": (
             "Allowed files: PDF, JPG, JPEG, PNG, WEBP, DOC, DOCX, XLS, XLSX, CSV. "
             "Maximum file size: 10 MB. Maximum 2 files per application."
@@ -658,7 +732,7 @@ def _attachment_upload_context(*, attachments, enabled, upload_url, helper_text)
     }
 
 
-def _public_attachment_context(entry):
+def _public_attachment_context(request, entry):
     has_saved_application = bool(entry and entry.pk)
     attachments = []
     upload_url = ""
@@ -674,13 +748,14 @@ def _public_attachment_context(entry):
         attachments=attachments,
         enabled=True,
         upload_url=upload_url,
-        helper_text="Upload sends file to Google Drive immediately. Save Draft / Submit saves application data and links uploaded files.",
+        helper_text="",
     )
     context["attachment_form_token"] = ""
     context["attachment_temp_delete_url"] = reverse("ui:public-attachment-temp-clear")
     context["attachment_upload_url"] = upload_url
     context["entry_id"] = entry.pk if has_saved_application else None
     context["attachment_has_temp_uploads"] = False
+    context["attachment_state_dirty"] = False
     return context
 
 
@@ -688,7 +763,8 @@ def _public_attachment_context_with_request(request, entry):
     _cleanup_stale_temp_attachments()
     has_saved_application = bool(entry and entry.pk)
     if has_saved_application:
-        context = _public_attachment_context(entry)
+        context = _public_attachment_context(request, entry)
+        context["attachment_state_dirty"] = False
         return context
     form_token = _ensure_attachment_form_token(request, models.ApplicationAttachmentTypeChoices.PUBLIC)
     temp_items = list(
@@ -702,7 +778,7 @@ def _public_attachment_context_with_request(request, entry):
         attachments=temp_items,
         enabled=True,
         upload_url=reverse("ui:public-attachment-temp-upload"),
-        helper_text="Upload sends file to Google Drive immediately. Save Draft / Submit saves application data and links uploaded files.",
+        helper_text="",
     )
     context["attachment_form_token"] = form_token
     context["attachment_temp_delete_url"] = reverse("ui:public-attachment-temp-clear")
@@ -711,7 +787,7 @@ def _public_attachment_context_with_request(request, entry):
     return context
 
 
-def _institution_attachment_context(application_number):
+def _institution_attachment_context(request, application_number):
     _cleanup_stale_temp_attachments()
     has_saved_application = bool(application_number)
     attachments = []
@@ -728,12 +804,13 @@ def _institution_attachment_context(application_number):
         attachments=attachments,
         enabled=True,
         upload_url=upload_url,
-        helper_text="Upload sends file to Google Drive immediately. Save Draft / Submit saves application data and links uploaded files.",
+        helper_text="",
     )
     context["attachment_form_token"] = ""
     context["attachment_temp_delete_url"] = reverse("ui:institution-attachment-temp-clear")
     context["attachment_upload_url"] = upload_url
     context["attachment_has_temp_uploads"] = False
+    context["attachment_state_dirty"] = False
     return context
 
 
@@ -741,7 +818,9 @@ def _institution_attachment_context_with_request(request, application_number):
     _cleanup_stale_temp_attachments()
     has_saved_application = bool(application_number)
     if has_saved_application:
-        return _institution_attachment_context(application_number)
+        context = _institution_attachment_context(request, application_number)
+        context["attachment_state_dirty"] = False
+        return context
     form_token = _ensure_attachment_form_token(request, models.ApplicationAttachmentTypeChoices.INSTITUTION)
     temp_items = list(
         _temp_attachment_queryset(
@@ -760,6 +839,63 @@ def _institution_attachment_context_with_request(request, application_number):
     context["attachment_temp_delete_url"] = reverse("ui:institution-attachment-temp-clear")
     context["attachment_upload_url"] = reverse("ui:institution-attachment-temp-upload")
     context["attachment_has_temp_uploads"] = bool(temp_items)
+    context["attachment_state_dirty"] = bool(temp_items) or _pop_attachment_dirty(request, models.ApplicationAttachmentTypeChoices.INSTITUTION)
+    return context
+
+
+def _others_attachment_context(request, application_number):
+    _cleanup_stale_temp_attachments()
+    has_saved_application = bool(application_number)
+    attachments = []
+    upload_url = ""
+    if has_saved_application:
+        attachments = list(
+            _linked_attachment_queryset(
+                application_type=models.ApplicationAttachmentTypeChoices.OTHERS,
+                institution_application_number=application_number,
+            ).select_related("uploaded_by")
+        )
+        upload_url = reverse("ui:others-attachment-upload", kwargs={"application_number": application_number})
+    context = _attachment_upload_context(
+        attachments=attachments,
+        enabled=True,
+        upload_url=upload_url,
+        helper_text="",
+    )
+    context["attachment_form_token"] = ""
+    context["attachment_temp_delete_url"] = reverse("ui:others-attachment-temp-clear")
+    context["attachment_upload_url"] = upload_url
+    context["attachment_has_temp_uploads"] = False
+    context["attachment_state_dirty"] = False
+    return context
+
+
+def _others_attachment_context_with_request(request, application_number):
+    _cleanup_stale_temp_attachments()
+    has_saved_application = bool(application_number)
+    if has_saved_application:
+        context = _others_attachment_context(request, application_number)
+        context["attachment_state_dirty"] = False
+        return context
+    form_token = _ensure_attachment_form_token(request, models.ApplicationAttachmentTypeChoices.OTHERS)
+    temp_items = list(
+        _temp_attachment_queryset(
+            application_type=models.ApplicationAttachmentTypeChoices.OTHERS,
+            form_token=form_token,
+            user=request.user,
+        )
+    )
+    context = _attachment_upload_context(
+        attachments=temp_items,
+        enabled=True,
+        upload_url=reverse("ui:others-attachment-temp-upload"),
+        helper_text="Upload sends file to Google Drive immediately. Save Draft / Submit saves application data and links uploaded files.",
+    )
+    context["attachment_form_token"] = form_token
+    context["attachment_temp_delete_url"] = reverse("ui:others-attachment-temp-clear")
+    context["attachment_upload_url"] = reverse("ui:others-attachment-temp-upload")
+    context["attachment_has_temp_uploads"] = bool(temp_items)
+    context["attachment_state_dirty"] = bool(temp_items) or _pop_attachment_dirty(request, models.ApplicationAttachmentTypeChoices.OTHERS)
     return context
 
 
@@ -823,15 +959,14 @@ def _public_attachment_preview_lists(entry_ids):
     return preview_lists
 
 
-def _institution_attachment_preview_data(application_numbers):
+def _institution_attachment_preview_data(application_numbers, *, application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION):
     if not application_numbers:
         return {}, {}
     attachments = (
         models.ApplicationAttachment.objects.filter(
-            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+            application_type=application_type,
             institution_application_number__in=application_numbers,
         )
-        .filter(_available_attachment_q())
         .order_by("institution_application_number", "-created_at", "-id")
     )
     preview_map = {}
@@ -845,13 +980,13 @@ def _institution_attachment_preview_data(application_numbers):
     return preview_map, preview_lists
 
 
-def _institution_attachment_preview_map(application_numbers):
-    preview_map, _preview_lists = _institution_attachment_preview_data(application_numbers)
+def _institution_attachment_preview_map(application_numbers, *, application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION):
+    preview_map, _preview_lists = _institution_attachment_preview_data(application_numbers, application_type=application_type)
     return preview_map
 
 
-def _institution_attachment_preview_lists(application_numbers):
-    _preview_map, preview_lists = _institution_attachment_preview_data(application_numbers)
+def _institution_attachment_preview_lists(application_numbers, *, application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION):
+    _preview_map, preview_lists = _institution_attachment_preview_data(application_numbers, application_type=application_type)
     return preview_lists
 
 
@@ -1060,7 +1195,7 @@ def _public_export_rows(filtered_entries):
     return rows
 
 
-def _institution_export_rows(filtered_summaries):
+def _institution_export_rows(filtered_summaries, *, beneficiary_type_label="Institutions"):
     application_numbers = [row["application_number"] for row in filtered_summaries]
     if not application_numbers:
         return []
@@ -1083,7 +1218,7 @@ def _institution_export_rows(filtered_summaries):
             "Handicapped Status": "",
             "Gender": "",
             "Gender Category": "",
-            "Beneficiary Type": "Institutions",
+            "Beneficiary Type": beneficiary_type_label,
             "Item Type": entry.article.item_type or "",
             "Article Category": entry.article.category or "",
             "Super Category Article": entry.article.master_category or "",
@@ -1099,6 +1234,7 @@ def _export_master_entry_csv(request, *, export_scope):
     district_rows = []
     public_rows = []
     institution_rows = []
+    others_rows = []
 
     if export_scope in {"all", "district"}:
         filtered_district_summaries = _filter_sort_district_summaries(
@@ -1127,7 +1263,7 @@ def _export_master_entry_csv(request, *, export_scope):
 
     if export_scope in {"all", "institutions"}:
         filtered_institution_summaries = _filter_sort_institution_summaries(
-            _build_institution_entry_summaries(),
+            _build_institution_entry_summaries(institution_type_filter=models.InstitutionTypeChoices.INSTITUTIONS),
             search_query=filters["search_query"],
             date_from=filters["date_from"],
             date_to=filters["date_to"],
@@ -1135,9 +1271,21 @@ def _export_master_entry_csv(request, *, export_scope):
             sort_by=filters["sort_by"],
             sort_dir=filters["sort_dir"],
         )
-        institution_rows = _institution_export_rows(filtered_institution_summaries)
+        institution_rows = _institution_export_rows(filtered_institution_summaries, beneficiary_type_label="Institutions")
 
-    rows = district_rows + public_rows + institution_rows
+    if export_scope in {"all", "others"}:
+        filtered_others_summaries = _filter_sort_institution_summaries(
+            _build_institution_entry_summaries(institution_type_filter=models.InstitutionTypeChoices.OTHERS),
+            search_query=filters["search_query"],
+            date_from=filters["date_from"],
+            date_to=filters["date_to"],
+            status_filter=filters["status_filter"],
+            sort_by=filters["sort_by"],
+            sort_dir=filters["sort_dir"],
+        )
+        others_rows = _institution_export_rows(filtered_others_summaries, beneficiary_type_label="Others")
+
+    rows = district_rows + public_rows + institution_rows + others_rows
     response = HttpResponse(content_type="text/csv")
     timestamp = timezone.localtime().strftime("%d_%b_%y_%H_%M")
     if export_scope == "all":
@@ -1178,7 +1326,6 @@ def _build_district_entry_summaries():
     That becomes noticeably slow as data grows. This version lets Postgres do the grouping/aggregation,
     then we enrich with attachment metadata in one shot.
     """
-
     latest_entry_qs = (
         models.DistrictBeneficiaryEntry.objects.filter(district_id=OuterRef("district_id"))
         .order_by("-created_at", "-id")
@@ -1231,6 +1378,8 @@ def _build_district_entry_summaries():
                 "aadhar_number": entry.aadhar_number or "",
                 "notes": entry.notes or "",
                 "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour or "",
+                "created_at": entry.created_at or timezone.now(),
+                "updated_at": entry.updated_at or entry.created_at or timezone.now(),
                 "changed_at": entry.updated_at or entry.created_at,
             }
         )
@@ -1307,9 +1456,15 @@ def _filter_sort_district_summaries(summaries, *, search_query="", date_from="",
         ]
 
     if date_from:
-        summaries = [row for row in summaries if row["created_at"].date().isoformat() >= date_from]
+        summaries = [
+            row for row in summaries
+            if timezone.localtime(row["created_at"]).date().isoformat() >= date_from
+        ]
     if date_to:
-        summaries = [row for row in summaries if row["created_at"].date().isoformat() <= date_to]
+        summaries = [
+            row for row in summaries
+            if timezone.localtime(row["created_at"]).date().isoformat() <= date_to
+        ]
     if status_filter:
         summaries = [row for row in summaries if (row.get("status") or "") == status_filter]
 
@@ -1337,6 +1492,8 @@ def _district_form_context(district=None, entries=None, errors=None):
     return {
         "district_master_list": districts,
         "articles_master_list": articles,
+        "article_name_suggestions": get_article_text_suggestions("article_name"),
+        "article_name_tk_suggestions": get_article_text_suggestions("article_name_tk"),
         "article_category_suggestions": get_article_text_suggestions("category"),
         "article_master_category_suggestions": get_article_text_suggestions("master_category"),
         "selected_district": district,
@@ -1645,9 +1802,19 @@ class DistrictMasterEntryCreateView(DistrictMasterEntryBaseView):
                 )
         action = (request.POST.get("action") or "draft").strip().lower()
         if action == "submit":
+            attachments_ok, attachment_response = _ensure_linked_attachments_available(
+                request=request,
+                application_type=models.ApplicationAttachmentTypeChoices.DISTRICT,
+                district=district,
+                redirect_url=reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}),
+            )
+            if not attachments_ok:
+                return attachment_response
+            _clear_attachment_dirty(request, models.ApplicationAttachmentTypeChoices.DISTRICT)
             messages.success(request, "District application submitted.")
             return HttpResponseRedirect(reverse("ui:master-entry"))
         else:
+            _clear_attachment_dirty(request, models.ApplicationAttachmentTypeChoices.DISTRICT)
             messages.success(request, "District application saved as draft.")
             return HttpResponseRedirect(reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}))
 
@@ -1655,7 +1822,9 @@ class DistrictMasterEntryCreateView(DistrictMasterEntryBaseView):
 class DistrictMasterEntryUpdateView(DistrictMasterEntryBaseView):
     def get(self, request, *args, **kwargs):
         district = self.get_district()
-        entries = list(models.DistrictBeneficiaryEntry.objects.filter(district=district).select_related("article").order_by("id"))
+        entries = list(
+            models.DistrictBeneficiaryEntry.objects.filter(district=district).select_related("article").order_by("id")
+        )
         if entries and entries[0].status == models.BeneficiaryStatusChoices.SUBMITTED:
             messages.error(request, "This district application is submitted and locked. Reopen it first.")
             return HttpResponseRedirect(reverse("ui:master-entry"))
@@ -1791,6 +1960,8 @@ def _public_form_context(entry=None, form_data=None, history_matches=None, curre
         "form_successes": successes or [],
         "allow_duplicate_save": allow_duplicate_save,
         "articles_master_list": list(models.Article.objects.filter(is_active=True).order_by("article_name")),
+        "article_name_suggestions": get_article_text_suggestions("article_name"),
+        "article_name_tk_suggestions": get_article_text_suggestions("article_name_tk"),
         "article_category_suggestions": get_article_text_suggestions("category"),
         "article_master_category_suggestions": get_article_text_suggestions("master_category"),
         "gender_choices": models.GenderChoices.choices,
@@ -1919,7 +2090,7 @@ def _resolve_public_aadhaar_status(form_data):
     return models.AadhaarVerificationStatusChoices.PENDING_VERIFICATION
 
 
-def _build_institution_entry_summaries():
+def _build_institution_entry_summaries(*, institution_type_filter=None, sort_by="", sort_dir="desc", attachment_type=models.ApplicationAttachmentTypeChoices.INSTITUTION):
     """
     Return per-application summaries for Institutions/Others in master-entry list view.
 
@@ -1931,10 +2102,12 @@ def _build_institution_entry_summaries():
         .order_by("-created_at", "-id")
     )
 
+    queryset = models.InstitutionsBeneficiaryEntry.objects.exclude(application_number__isnull=True).exclude(application_number__exact="")
+    if institution_type_filter is not None:
+        queryset = queryset.filter(institution_type=institution_type_filter)
+
     rows = list(
-        models.InstitutionsBeneficiaryEntry.objects.exclude(application_number__isnull=True)
-        .exclude(application_number__exact="")
-        .values("application_number")
+        queryset.values("application_number")
         .annotate(
             institution_name=Coalesce(
                 Subquery(latest_entry_qs.values("institution_name")[:1]),
@@ -1995,12 +2168,20 @@ def _build_institution_entry_summaries():
                 "aadhar_number": entry.aadhar_number or "",
                 "notes": entry.notes or "",
                 "cheque_rtgs_in_favour": entry.cheque_rtgs_in_favour or "",
+                "created_at": entry.created_at or timezone.now(),
+                "updated_at": entry.updated_at or entry.created_at or timezone.now(),
                 "changed_at": entry.updated_at or entry.created_at,
             }
         )
 
-    attachment_latest, attachment_counts = _institution_attachment_latest_and_counts(application_numbers)
-    attachment_lists = _institution_attachment_preview_lists(application_numbers)
+    attachment_latest, attachment_counts = _institution_attachment_latest_and_counts(
+        application_numbers,
+        application_type=attachment_type,
+    )
+    attachment_lists = _institution_attachment_preview_lists(
+        application_numbers,
+        application_type=attachment_type,
+    )
 
     summaries = []
     for row in rows:
@@ -2079,6 +2260,7 @@ def _filter_sort_public_entries(queryset, *, search_query="", date_from="", date
         "application_number": "application_number",
         "name": "name",
         "aadhar_number": "aadhar_number",
+        "article": "article__article_name",
         "total_amount": "total_amount",
         "status": "status",
         "created_at": "created_at",
@@ -2114,9 +2296,15 @@ def _filter_sort_institution_summaries(summaries, *, search_query="", date_from=
         ]
 
     if date_from:
-        summaries = [row for row in summaries if row["created_at"].date().isoformat() >= date_from]
+        summaries = [
+            row for row in summaries
+            if timezone.localtime(row["created_at"]).date().isoformat() >= date_from
+        ]
     if date_to:
-        summaries = [row for row in summaries if row["created_at"].date().isoformat() <= date_to]
+        summaries = [
+            row for row in summaries
+            if timezone.localtime(row["created_at"]).date().isoformat() <= date_to
+        ]
     if status_filter:
         summaries = [row for row in summaries if (row.get("status") or "") == status_filter]
 
@@ -2130,28 +2318,49 @@ def _filter_sort_institution_summaries(summaries, *, search_query="", date_from=
     }
     if sort_by in sort_map:
         summaries = sorted(summaries, key=sort_map[sort_by], reverse=reverse)
+
     return summaries
 
 
-def _institution_form_context(form_data=None, rows=None, errors=None, application_number=None):
+def _institution_form_context(
+    form_data=None,
+    rows=None,
+    errors=None,
+    application_number=None,
+    *,
+    page_title="Institution Application",
+    page_description="Institution applications can contain multiple articles or aids and do not require Aadhaar verification.",
+    beneficiary_label="Institutions",
+    beneficiary_type_value=models.InstitutionTypeChoices.INSTITUTIONS,
+    show_type_field=False,
+):
     return {
         "institution_form_data": form_data or {},
         "institution_rows": rows or [],
         "form_errors": errors or [],
         "articles_master_list": list(models.Article.objects.filter(is_active=True).order_by("article_name")),
+        "article_name_suggestions": get_article_text_suggestions("article_name"),
+        "article_name_tk_suggestions": get_article_text_suggestions("article_name_tk"),
         "article_category_suggestions": get_article_text_suggestions("category"),
         "article_master_category_suggestions": get_article_text_suggestions("master_category"),
         "institution_type_choices": models.InstitutionTypeChoices.choices,
         "institution_application_number": application_number,
         "application_status": (rows[0]["status"] if rows and isinstance(rows[0], dict) and rows[0].get("status") else ""),
         "internal_notes": (form_data or {}).get("internal_notes", ""),
+        "page_title": page_title,
+        "page_description": page_description,
+        "beneficiary_label": beneficiary_label,
+        "beneficiary_type_value": beneficiary_type_value,
+        "show_type_field": show_type_field,
+        "draft_prefix": "DRAFT-OTH-" if beneficiary_type_value == models.InstitutionTypeChoices.OTHERS else "DRAFT-INS-",
+        "list_type_query": "others" if beneficiary_type_value == models.InstitutionTypeChoices.OTHERS else "institutions",
     }
 
 
-def _build_institution_form_data(post_data):
+def _build_institution_form_data(post_data, *, default_institution_type=models.InstitutionTypeChoices.INSTITUTIONS):
     return {
         "institution_name": (post_data.get("institution_name") or "").strip(),
-        "institution_type": (post_data.get("institution_type") or "").strip(),
+        "institution_type": (post_data.get("institution_type") or default_institution_type).strip(),
         "address": (post_data.get("address") or "").strip(),
         "mobile": (post_data.get("mobile") or "").strip(),
         "internal_notes": (post_data.get("internal_notes") or "").strip(),
@@ -2499,6 +2708,7 @@ class PublicMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, TemplateView
                         public_entry=entry,
                     )
                     _clear_attachment_form_token(self.request, models.ApplicationAttachmentTypeChoices.PUBLIC)
+                _clear_attachment_dirty(self.request, models.ApplicationAttachmentTypeChoices.PUBLIC)
         except RuntimeError as exc:
             return self._render_form(
                 entry=entry,
@@ -2565,12 +2775,22 @@ class PublicMasterEntryCreateView(PublicMasterEntryBaseView):
             return response
         action = (request.POST.get("action") or "draft").strip().lower()
         if action == "submit":
+            attachments_ok, attachment_response = _ensure_linked_attachments_available(
+                request=request,
+                application_type=models.ApplicationAttachmentTypeChoices.PUBLIC,
+                public_entry=saved_entry,
+                redirect_url=reverse("ui:master-entry-public-edit", kwargs={"pk": saved_entry.pk}),
+            )
+            if not attachments_ok:
+                return attachment_response
+            _clear_attachment_dirty(request, models.ApplicationAttachmentTypeChoices.PUBLIC)
             request.session["public_submit_popup"] = {"application_number": saved_entry.application_number, "name": saved_entry.name}
             messages.success(request, "Public application submitted.")
             return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public")
         else:
+            _clear_attachment_dirty(request, models.ApplicationAttachmentTypeChoices.PUBLIC)
             messages.success(request, "Public application saved as draft.")
-            return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": saved_entry.pk}))
+            return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": saved_entry.pk}) + "?saved=1")
 
 
 class PublicMasterEntryUpdateView(PublicMasterEntryBaseView):
@@ -2657,7 +2877,7 @@ class PublicMasterEntryUpdateView(PublicMasterEntryBaseView):
             return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public")
         else:
             messages.success(request, "Public application saved as draft.")
-            return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": saved_entry.pk}))
+            return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": saved_entry.pk}) + "?saved=1")
 
 
 class PublicMasterEntryDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
@@ -2711,7 +2931,7 @@ class PublicMasterEntryArchiveView(LoginRequiredMixin, AdminRequiredMixin, View)
             **get_request_audit_meta(request),
         )
         messages.success(request, "Public application archived.")
-        return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public")
+        return HttpResponseRedirect(reverse("ui:master-entry") + "?type=public&status=archived")
 
 
 class PublicMasterEntryUnarchiveView(LoginRequiredMixin, AdminRequiredMixin, View):
@@ -2766,6 +2986,20 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "create_edit"
     template_name = "application_entry/master_entry_institution_form.html"
+    beneficiary_label = "Institutions"
+    beneficiary_name_label = "Institution"
+    beneficiary_type_value = models.InstitutionTypeChoices.INSTITUTIONS
+    application_prefix = "I"
+    draft_prefix = "DRAFT-INS-"
+    application_entity_type = "institution_application"
+    application_type_choice = models.ApplicationAttachmentTypeChoices.INSTITUTION
+    page_title = "Institution Application"
+    page_description = "Institution applications can contain multiple articles or aids and do not require Aadhaar verification."
+    show_type_field = False
+    create_route_name = "ui:master-entry-institution-create"
+    edit_route_name = "ui:master-entry-institution-edit"
+    list_type_query = "institutions"
+    attachment_redirect_name = "ui:master-entry-institution-edit"
 
     def _render_form(self, *, form_data=None, rows=None, errors=None, application_number=None):
         context = self.get_context_data(
@@ -2774,6 +3008,11 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                 rows=rows,
                 errors=errors,
                 application_number=application_number,
+                page_title=self.page_title,
+                page_description=self.page_description,
+                beneficiary_label=self.beneficiary_label,
+                beneficiary_type_value=self.beneficiary_type_value,
+                show_type_field=self.show_type_field,
             )
         )
         context.update(_institution_attachment_context_with_request(self.request, application_number))
@@ -2785,9 +3024,7 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
         require_complete = action == "submit"
         errors = []
         if require_complete and not form_data["institution_name"]:
-            errors.append("Institution name is required.")
-        if require_complete and not form_data["institution_type"]:
-            errors.append("Institution type is required.")
+            errors.append(f"{self.beneficiary_name_label} name is required.")
         if require_complete and not form_data["address"]:
             errors.append("Address is required.")
         if require_complete and not form_data["mobile"]:
@@ -2833,12 +3070,16 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
             )
 
         source_application_number = application_number
-        is_draft_placeholder = bool(application_number and application_number.startswith("DRAFT-INS-"))
+        is_draft_placeholder = bool(application_number and application_number.startswith(self.draft_prefix))
         if action == "submit":
             if not application_number or is_draft_placeholder:
-                application_number = base_file_services.next_institution_application_number()
+                application_number = (
+                    base_file_services.next_others_application_number()
+                    if self.beneficiary_type_value == models.InstitutionTypeChoices.OTHERS
+                    else base_file_services.next_institution_application_number()
+                )
         elif not application_number:
-            application_number = f"DRAFT-INS-{uuid.uuid4().hex[:12].upper()}"
+            application_number = f"{self.draft_prefix}{uuid.uuid4().hex[:12].upper()}"
         target_status = models.BeneficiaryStatusChoices.SUBMITTED if action == "submit" else models.BeneficiaryStatusChoices.DRAFT
         for built in built_rows:
             built["status"] = target_status
@@ -2861,12 +3102,12 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                     )
                     if lookup_application_number != application_number:
                         models.ApplicationAttachment.objects.filter(
-                            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+                            application_type=self.application_type_choice,
                             institution_application_number=lookup_application_number,
                         ).update(institution_application_number=application_number)
                         _rename_attachment_display_names_for_reference(
                             attachments_qs=models.ApplicationAttachment.objects.filter(
-                                application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+                                application_type=self.application_type_choice,
                                 institution_application_number=application_number,
                             ),
                             new_reference=application_number,
@@ -2874,7 +3115,7 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                     log_audit(
                         user=self.request.user,
                         action_type=models.ActionTypeChoices.UPDATE,
-                        entity_type="institution_application",
+                        entity_type=self.application_entity_type,
                         entity_id=application_number,
                         details={"before": before_snapshot, "after": _institution_audit_snapshot(application_number)},
                         **get_request_audit_meta(self.request),
@@ -2883,7 +3124,7 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                         log_audit(
                             user=self.request.user,
                             action_type=models.ActionTypeChoices.STATUS_CHANGE,
-                            entity_type="institution_application",
+                            entity_type=self.application_entity_type,
                             entity_id=application_number,
                             details={"from": previous_status, "to": target_status},
                             **get_request_audit_meta(self.request),
@@ -2895,7 +3136,7 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                             created_by=self.request.user,
                             application_number=application_number,
                             institution_name=form_data["institution_name"],
-                            institution_type=form_data["institution_type"],
+                            institution_type=self.beneficiary_type_value,
                             address=form_data["address"] or None,
                             mobile=form_data["mobile"] or None,
                             **create_kwargs,
@@ -2903,7 +3144,7 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                     log_audit(
                         user=self.request.user,
                         action_type=models.ActionTypeChoices.CREATE,
-                        entity_type="institution_application",
+                        entity_type=self.application_entity_type,
                         entity_id=application_number,
                         details={"after": _institution_audit_snapshot(application_number)},
                         **get_request_audit_meta(self.request),
@@ -2911,7 +3152,7 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                     log_audit(
                         user=self.request.user,
                         action_type=models.ActionTypeChoices.STATUS_CHANGE,
-                        entity_type="institution_application",
+                        entity_type=self.application_entity_type,
                         entity_id=application_number,
                         details={"from": None, "to": target_status},
                         **get_request_audit_meta(self.request),
@@ -2920,12 +3161,13 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                 if form_token:
                     _link_temp_attachments_to_application(
                         request=self.request,
-                        application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+                        application_type=self.application_type_choice,
                         form_token=form_token,
                         application_reference=application_number,
                         institution_application_number=application_number,
                     )
-                    _clear_attachment_form_token(self.request, models.ApplicationAttachmentTypeChoices.INSTITUTION)
+                    _clear_attachment_form_token(self.request, self.application_type_choice)
+                _clear_attachment_dirty(self.request, self.application_type_choice)
         except RuntimeError as exc:
             return self._render_form(
                 form_data=form_data,
@@ -2942,7 +3184,7 @@ class InstitutionsMasterEntryCreateView(InstitutionsMasterEntryBaseView):
         return self._render_form()
 
     def post(self, request, *args, **kwargs):
-        form_data = _build_institution_form_data(request.POST)
+        form_data = _build_institution_form_data(request.POST, default_institution_type=self.beneficiary_type_value)
         rows = _parse_district_rows(request.POST)
         action = (request.POST.get("action") or "draft").strip().lower()
         response = self._save_group(form_data=form_data, raw_rows=rows)
@@ -2950,17 +3192,25 @@ class InstitutionsMasterEntryCreateView(InstitutionsMasterEntryBaseView):
             return response
         saved_application_number = getattr(self, "_saved_institution_application_number", None)
         if action == "submit":
+            attachments_ok, attachment_response = _ensure_linked_attachments_available(
+                request=request,
+                application_type=self.application_type_choice,
+                institution_application_number=saved_application_number,
+                redirect_url=reverse(self.attachment_redirect_name, kwargs={"application_number": saved_application_number}),
+            )
+            if not attachments_ok:
+                return attachment_response
             popup_entry = models.InstitutionsBeneficiaryEntry.objects.filter(application_number=saved_application_number).order_by("-updated_at").first()
             if popup_entry:
                 request.session["institution_submit_popup"] = {
                     "application_number": popup_entry.application_number,
                     "name": popup_entry.institution_name,
                 }
-            messages.success(request, "Institution application submitted.")
-            return HttpResponseRedirect(reverse("ui:master-entry") + "?type=institutions")
+            messages.success(request, f"{self.beneficiary_label} application submitted.")
+            return HttpResponseRedirect(reverse("ui:master-entry") + f"?type={self.list_type_query}")
         else:
-            messages.success(request, "Institution application saved as draft.")
-            return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": saved_application_number}))
+            messages.success(request, f"{self.beneficiary_label} application saved as draft.")
+            return HttpResponseRedirect(reverse(self.edit_route_name, kwargs={"application_number": saved_application_number}) + "?saved=1")
 
 
 class InstitutionsMasterEntryUpdateView(InstitutionsMasterEntryBaseView):
@@ -2970,8 +3220,8 @@ class InstitutionsMasterEntryUpdateView(InstitutionsMasterEntryBaseView):
             models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).select_related("article").order_by("id")
         )
         if entries and entries[0].status == models.BeneficiaryStatusChoices.SUBMITTED:
-            messages.error(request, "This institution application is submitted and locked. Reopen it first.")
-            return HttpResponseRedirect(reverse("ui:master-entry") + "?type=institutions")
+            messages.error(request, f"This {self.beneficiary_label.lower()} application is submitted and locked. Reopen it first.")
+            return HttpResponseRedirect(reverse("ui:master-entry") + f"?type={self.list_type_query}")
         first = entries[0]
         rows = [
             {
@@ -2993,7 +3243,7 @@ class InstitutionsMasterEntryUpdateView(InstitutionsMasterEntryBaseView):
         ]
         form_data = {
             "institution_name": first.institution_name,
-            "institution_type": first.institution_type,
+            "institution_type": first.institution_type or self.beneficiary_type_value,
             "address": first.address or "",
             "mobile": first.mobile or "",
             "internal_notes": first.internal_notes or "",
@@ -3004,14 +3254,14 @@ class InstitutionsMasterEntryUpdateView(InstitutionsMasterEntryBaseView):
         application_number = kwargs["application_number"]
         existing_entries = list(models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).order_by("id"))
         if existing_entries and existing_entries[0].status == models.BeneficiaryStatusChoices.SUBMITTED:
-            messages.error(request, "This institution application is submitted and locked. Reopen it first.")
-            return HttpResponseRedirect(reverse("ui:master-entry") + "?type=institutions")
+            messages.error(request, f"This {self.beneficiary_label.lower()} application is submitted and locked. Reopen it first.")
+            return HttpResponseRedirect(reverse("ui:master-entry") + f"?type={self.list_type_query}")
         submitted_conflict_token = request.POST.get("_conflict_token", "")
         current_conflict_token = _institution_conflict_token(application_number)
         if submitted_conflict_token and current_conflict_token and submitted_conflict_token != current_conflict_token:
-            messages.error(request, _conflict_message("institution application"), extra_tags="persistent")
-            return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": application_number}))
-        form_data = _build_institution_form_data(request.POST)
+            messages.error(request, _conflict_message(f"{self.beneficiary_label.lower()} application"), extra_tags="persistent")
+            return HttpResponseRedirect(reverse(self.edit_route_name, kwargs={"application_number": application_number}))
+        form_data = _build_institution_form_data(request.POST, default_institution_type=self.beneficiary_type_value)
         rows = _parse_district_rows(request.POST)
         action = (request.POST.get("action") or "draft").strip().lower()
         response = self._save_group(application_number=application_number, form_data=form_data, raw_rows=rows, replace=True)
@@ -3025,21 +3275,29 @@ class InstitutionsMasterEntryUpdateView(InstitutionsMasterEntryBaseView):
                     "application_number": popup_entry.application_number,
                     "name": popup_entry.institution_name,
                 }
-            messages.success(request, "Institution application submitted.")
-            return HttpResponseRedirect(reverse("ui:master-entry") + "?type=institutions")
+            _clear_attachment_dirty(request, self.application_type_choice)
+            messages.success(request, f"{self.beneficiary_label} application submitted.")
+            return HttpResponseRedirect(reverse("ui:master-entry") + f"?type={self.list_type_query}")
         else:
-            messages.success(request, "Institution application saved as draft.")
-            return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": saved_application_number}))
+            _clear_attachment_dirty(request, self.application_type_choice)
+            messages.success(request, f"{self.beneficiary_label} application saved as draft.")
+            return HttpResponseRedirect(reverse(self.edit_route_name, kwargs={"application_number": saved_application_number}) + "?saved=1")
 
 
 class InstitutionsMasterEntryDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "delete"
+    attachment_type_choice = models.ApplicationAttachmentTypeChoices.INSTITUTION
+    list_type_query = "institutions"
+    application_entity_type = "institution_application"
+    deleted_message = "Institution entry deleted."
+    deleted_label = "Institution"
+
     def post(self, request, *args, **kwargs):
         application_number = kwargs["application_number"]
         snapshot = _institution_audit_snapshot(application_number)
         cleanup_ok, cleaned_count, failure_count = _cleanup_application_attachments(
-            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+            application_type=self.attachment_type_choice,
             institution_application_number=application_number,
         )
         if not cleanup_ok:
@@ -3047,23 +3305,28 @@ class InstitutionsMasterEntryDeleteView(LoginRequiredMixin, AdminRequiredMixin, 
                 request,
                 f"Could not delete {failure_count} attachment file(s). Institution application was not deleted.",
             )
-            return HttpResponseRedirect(reverse("ui:master-entry") + "?type=institutions")
+            return HttpResponseRedirect(reverse("ui:master-entry") + f"?type={self.list_type_query}")
         models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).delete()
         log_audit(
             user=request.user,
             action_type=models.ActionTypeChoices.DELETE,
-            entity_type="institution_application",
+            entity_type=self.application_entity_type,
             entity_id=application_number,
             details={"before": snapshot, "deleted_attachment_count": cleaned_count},
             **get_request_audit_meta(request),
         )
-        messages.warning(request, "Institution entry deleted.")
-        return HttpResponseRedirect(reverse("ui:master-entry") + "?type=institutions")
+        messages.warning(request, self.deleted_message)
+        return HttpResponseRedirect(reverse("ui:master-entry") + f"?type={self.list_type_query}")
 
 
 class InstitutionsMasterEntryReopenView(LoginRequiredMixin, AdminRequiredMixin, View):
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "reopen"
+    list_type_query = "institutions"
+    application_entity_type = "institution_application"
+    reopened_message = "Institution application reopened as draft."
+    reopened_label = "Institution"
+
     def post(self, request, *args, **kwargs):
         application_number = kwargs["application_number"]
         models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).update(
@@ -3072,13 +3335,13 @@ class InstitutionsMasterEntryReopenView(LoginRequiredMixin, AdminRequiredMixin, 
         log_audit(
             user=request.user,
             action_type=models.ActionTypeChoices.STATUS_CHANGE,
-            entity_type="institution_application",
+            entity_type=self.application_entity_type,
             entity_id=application_number,
             details={"from": models.BeneficiaryStatusChoices.SUBMITTED, "to": models.BeneficiaryStatusChoices.DRAFT},
             **get_request_audit_meta(request),
         )
-        messages.success(request, "Institution application reopened as draft.")
-        return HttpResponseRedirect(reverse("ui:master-entry") + "?type=institutions")
+        messages.success(request, self.reopened_message)
+        return HttpResponseRedirect(reverse("ui:master-entry") + f"?type={self.list_type_query}")
 
 
 class ApplicationAttachmentDownloadView(LoginRequiredMixin, RoleRequiredMixin, View):
@@ -3195,6 +3458,7 @@ class DistrictApplicationAttachmentTempUploadView(LoginRequiredMixin, WriteRoleM
                 {"ok": bool(success), "refresh_url": target_url, "message": "" if success else "Attachment upload failed."},
                 status=200 if success else 400,
             )
+        _mark_attachment_dirty(request, models.ApplicationAttachmentTypeChoices.DISTRICT)
         return HttpResponseRedirect(target_url)
 
 
@@ -3237,7 +3501,8 @@ class DistrictApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin
             if not attachment_service.is_configured():
                 error_message = (
                     "Google Drive is not configured for uploads in this environment. "
-                    "Set GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID and provide application default credentials."
+                    "Set GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID, GOOGLE_DRIVE_CLIENT_ID, "
+                    "GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_DRIVE_REFRESH_TOKEN."
                 )
                 messages.error(
                     request,
@@ -3250,6 +3515,7 @@ class DistrictApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin
                 return JsonResponse({"ok": False, "refresh_url": target_url, "message": error_message}, status=500)
             return HttpResponseRedirect(target_url)
         messages.success(request, "Attachment uploaded.")
+        _mark_attachment_dirty(request, models.ApplicationAttachmentTypeChoices.DISTRICT)
         if is_ajax:
             return JsonResponse({"ok": True, "refresh_url": target_url})
         return HttpResponseRedirect(target_url)
@@ -3269,6 +3535,7 @@ class DistrictApplicationAttachmentDeleteView(LoginRequiredMixin, WriteRoleMixin
         _delete_application_attachment_file(attachment)
         attachment.delete()
         messages.success(request, "Attachment removed.")
+        _mark_attachment_dirty(request, models.ApplicationAttachmentTypeChoices.DISTRICT)
         return HttpResponseRedirect(reverse("ui:master-entry-district-edit", kwargs={"district_id": district.id}))
 
 
@@ -3330,6 +3597,7 @@ class DistrictApplicationAttachmentTempClearView(LoginRequiredMixin, WriteRoleMi
         if district is None:
             _clear_attachment_form_token(request, models.ApplicationAttachmentTypeChoices.DISTRICT)
         messages.success(request, "Uploaded temporary files were removed.")
+        _mark_attachment_dirty(request, models.ApplicationAttachmentTypeChoices.DISTRICT)
         return HttpResponseRedirect(target_url)
 
 
@@ -3378,7 +3646,8 @@ class PublicApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin, 
             if not attachment_service.is_configured():
                 error_message = (
                     "Google Drive is not configured for uploads in this environment. "
-                    "Set GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID and provide application default credentials."
+                    "Set GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID, GOOGLE_DRIVE_CLIENT_ID, "
+                    "GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_DRIVE_REFRESH_TOKEN."
                 )
                 messages.error(
                     request,
@@ -3391,6 +3660,7 @@ class PublicApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin, 
                 return JsonResponse({"ok": False, "refresh_url": target_url, "message": error_message}, status=500)
             return HttpResponseRedirect(target_url)
         messages.success(request, "Attachment uploaded.")
+        _mark_attachment_dirty(request, models.ApplicationAttachmentTypeChoices.PUBLIC)
         if is_ajax:
             return JsonResponse({"ok": True, "refresh_url": target_url})
         return HttpResponseRedirect(target_url)
@@ -3435,6 +3705,7 @@ class PublicApplicationAttachmentDeleteView(LoginRequiredMixin, WriteRoleMixin, 
         _delete_application_attachment_file(attachment)
         attachment.delete()
         messages.success(request, "Attachment removed.")
+        _mark_attachment_dirty(request, models.ApplicationAttachmentTypeChoices.PUBLIC)
         return HttpResponseRedirect(reverse("ui:master-entry-public-edit", kwargs={"pk": entry.pk}))
 
 
@@ -3480,16 +3751,22 @@ class PublicApplicationAttachmentTempClearView(LoginRequiredMixin, WriteRoleMixi
             attachment.delete()
         _clear_attachment_form_token(request, models.ApplicationAttachmentTypeChoices.PUBLIC)
         messages.success(request, "Uploaded temporary files were removed.")
+        _mark_attachment_dirty(request, models.ApplicationAttachmentTypeChoices.PUBLIC)
         return HttpResponseRedirect(reverse("ui:master-entry-public-create"))
 
 
 class InstitutionApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMixin, View):
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "create_edit"
+    attachment_type_choice = models.ApplicationAttachmentTypeChoices.INSTITUTION
+    create_route_name = "ui:master-entry-institution-create"
+    edit_route_name = "ui:master-entry-institution-edit"
+    list_type_query = "institutions"
+
     def post(self, request, *args, **kwargs):
         is_ajax = _is_ajax_request(request)
         application_number = kwargs["application_number"]
-        target_url = reverse("ui:master-entry-institution-edit", kwargs={"application_number": application_number})
+        target_url = reverse(self.edit_route_name, kwargs={"application_number": application_number})
         if not models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).exists():
             raise Http404("Institution application not found.")
         form = ApplicationAttachmentUploadForm(request.POST, request.FILES)
@@ -3505,10 +3782,10 @@ class InstitutionApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMi
             ok, error_message = _save_linked_attachment_upload(
                 request=request,
                 uploaded=uploaded,
-                application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+                application_type=self.attachment_type_choice,
                 display_name=display_name,
                 queryset_filters={
-                    "application_type": models.ApplicationAttachmentTypeChoices.INSTITUTION,
+                    "application_type": self.attachment_type_choice,
                     "institution_application_number": application_number,
                     "status": models.ApplicationAttachmentStatusChoices.LINKED,
                 },
@@ -3524,7 +3801,8 @@ class InstitutionApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMi
             if not attachment_service.is_configured():
                 error_message = (
                     "Google Drive is not configured for uploads in this environment. "
-                    "Set GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID and provide application default credentials."
+                    "Set GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID, GOOGLE_DRIVE_CLIENT_ID, "
+                    "GOOGLE_DRIVE_CLIENT_SECRET, and GOOGLE_DRIVE_REFRESH_TOKEN."
                 )
                 messages.error(
                     request,
@@ -3537,6 +3815,7 @@ class InstitutionApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMi
                 return JsonResponse({"ok": False, "refresh_url": target_url, "message": error_message}, status=500)
             return HttpResponseRedirect(target_url)
         messages.success(request, "Attachment uploaded.")
+        _mark_attachment_dirty(request, self.attachment_type_choice)
         if is_ajax:
             return JsonResponse({"ok": True, "refresh_url": target_url})
         return HttpResponseRedirect(target_url)
@@ -3545,75 +3824,84 @@ class InstitutionApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMi
 class InstitutionApplicationAttachmentTempUploadView(LoginRequiredMixin, WriteRoleMixin, View):
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "create_edit"
+    attachment_type_choice = models.ApplicationAttachmentTypeChoices.INSTITUTION
+    create_route_name = "ui:master-entry-institution-create"
 
     def post(self, request, *args, **kwargs):
         is_ajax = _is_ajax_request(request)
         form_token = (request.POST.get("attachment_form_token") or "").strip() or _ensure_attachment_form_token(
-            request, models.ApplicationAttachmentTypeChoices.INSTITUTION
+            request, self.attachment_type_choice
         )
         success = _save_temp_attachment_upload(
             request=request,
-            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+            application_type=self.attachment_type_choice,
             form_token=form_token,
         )
         if is_ajax:
             return JsonResponse(
-                {"ok": bool(success), "refresh_url": reverse("ui:master-entry-institution-create"), "message": "" if success else "Attachment upload failed."},
+                {"ok": bool(success), "refresh_url": reverse(self.create_route_name), "message": "" if success else "Attachment upload failed."},
                 status=200 if success else 400,
             )
-        return HttpResponseRedirect(reverse("ui:master-entry-institution-create"))
+        return HttpResponseRedirect(reverse(self.create_route_name))
 
 
 class InstitutionApplicationAttachmentDeleteView(LoginRequiredMixin, WriteRoleMixin, View):
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "create_edit"
+    attachment_type_choice = models.ApplicationAttachmentTypeChoices.INSTITUTION
+    edit_route_name = "ui:master-entry-institution-edit"
     def post(self, request, *args, **kwargs):
         application_number = kwargs["application_number"]
         attachment = get_object_or_404(
             models.ApplicationAttachment,
             pk=kwargs["attachment_id"],
-            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+            application_type=self.attachment_type_choice,
             institution_application_number=application_number,
         )
         _delete_application_attachment_file(attachment)
         attachment.delete()
         messages.success(request, "Attachment removed.")
-        return HttpResponseRedirect(reverse("ui:master-entry-institution-edit", kwargs={"application_number": application_number}))
+        _mark_attachment_dirty(request, self.attachment_type_choice)
+        return HttpResponseRedirect(reverse(self.edit_route_name, kwargs={"application_number": application_number}))
 
 
 class InstitutionApplicationAttachmentTempDeleteView(LoginRequiredMixin, WriteRoleMixin, View):
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "create_edit"
+    attachment_type_choice = models.ApplicationAttachmentTypeChoices.INSTITUTION
+    create_route_name = "ui:master-entry-institution-create"
 
     def post(self, request, *args, **kwargs):
         form_token = (request.POST.get("attachment_form_token") or "").strip()
         attachment = get_object_or_404(
             models.ApplicationAttachment,
             pk=kwargs["attachment_id"],
-            application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+            application_type=self.attachment_type_choice,
             status=models.ApplicationAttachmentStatusChoices.TEMP,
             uploaded_by=request.user,
         )
         if form_token and attachment.draft_uid and attachment.draft_uid != form_token:
             messages.error(request, "Attachment token mismatch. Refresh and try again.")
-            return HttpResponseRedirect(reverse("ui:master-entry-institution-create"))
+            return HttpResponseRedirect(reverse(self.create_route_name))
         _delete_application_attachment_file(attachment)
         attachment.delete()
         messages.success(request, "Attachment removed.")
-        return HttpResponseRedirect(reverse("ui:master-entry-institution-create"))
+        return HttpResponseRedirect(reverse(self.create_route_name))
 
 
 class InstitutionApplicationAttachmentTempClearView(LoginRequiredMixin, WriteRoleMixin, View):
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "create_edit"
+    attachment_type_choice = models.ApplicationAttachmentTypeChoices.INSTITUTION
+    create_route_name = "ui:master-entry-institution-create"
 
     def post(self, request, *args, **kwargs):
         form_token = (request.POST.get("attachment_form_token") or "").strip()
         if not form_token:
-            return HttpResponseRedirect(reverse("ui:master-entry-institution-create"))
+            return HttpResponseRedirect(reverse(self.create_route_name))
         temp_items = list(
             _temp_attachment_queryset(
-                application_type=models.ApplicationAttachmentTypeChoices.INSTITUTION,
+                application_type=self.attachment_type_choice,
                 form_token=form_token,
                 user=request.user,
             )
@@ -3621,6 +3909,107 @@ class InstitutionApplicationAttachmentTempClearView(LoginRequiredMixin, WriteRol
         for attachment in temp_items:
             _delete_application_attachment_file(attachment)
             attachment.delete()
-        _clear_attachment_form_token(request, models.ApplicationAttachmentTypeChoices.INSTITUTION)
+        _clear_attachment_form_token(request, self.attachment_type_choice)
         messages.success(request, "Uploaded temporary files were removed.")
-        return HttpResponseRedirect(reverse("ui:master-entry-institution-create"))
+        _mark_attachment_dirty(request, self.attachment_type_choice)
+        return HttpResponseRedirect(reverse(self.create_route_name))
+
+
+class OthersMasterEntryBaseView(InstitutionsMasterEntryBaseView):
+    beneficiary_label = "Others"
+    beneficiary_name_label = "Others"
+    beneficiary_type_value = models.InstitutionTypeChoices.OTHERS
+    application_type_choice = models.ApplicationAttachmentTypeChoices.OTHERS
+    application_prefix = "O"
+    draft_prefix = "DRAFT-OTH-"
+    application_entity_type = "others_application"
+    page_title = "Others Application"
+    page_description = "Others applications can contain multiple articles or aids and do not require Aadhaar verification."
+    create_route_name = "ui:master-entry-others-create"
+    edit_route_name = "ui:master-entry-others-edit"
+    list_type_query = "others"
+    template_name = "application_entry/master_entry_others_form.html"
+
+    def _render_form(self, *, form_data=None, rows=None, errors=None, application_number=None):
+        context = self.get_context_data(
+            **_institution_form_context(
+                form_data=form_data,
+                rows=rows,
+                errors=errors,
+                application_number=application_number,
+                page_title=self.page_title,
+                page_description=self.page_description,
+                beneficiary_label=self.beneficiary_label,
+                beneficiary_type_value=self.beneficiary_type_value,
+                show_type_field=self.show_type_field,
+            )
+        )
+        attachment_context = _others_attachment_context_with_request(self.request, application_number)
+        context.update(attachment_context)
+        context["conflict_token"] = _institution_conflict_token(application_number)
+        return self.render_to_response(context)
+
+
+class OthersMasterEntryCreateView(OthersMasterEntryBaseView, InstitutionsMasterEntryCreateView):
+    def get(self, request, *args, **kwargs):
+        lingering_temp_attachments = list(
+            models.ApplicationAttachment.objects.filter(
+                application_type=self.application_type_choice,
+                status=models.ApplicationAttachmentStatusChoices.TEMP,
+                uploaded_by=request.user,
+            )
+        )
+        for attachment in lingering_temp_attachments:
+            _delete_application_attachment_file(attachment)
+            attachment.delete()
+        _clear_attachment_form_token(request, self.application_type_choice)
+        return super().get(request, *args, **kwargs)
+
+
+class OthersMasterEntryUpdateView(OthersMasterEntryBaseView, InstitutionsMasterEntryUpdateView):
+    pass
+
+
+class OthersMasterEntryInlineSummaryView(InstitutionsMasterEntryInlineSummaryView):
+    template_name = "application_entry/partials/master_entry_others_summary.html"
+
+
+class OthersMasterEntryDeleteView(InstitutionsMasterEntryDeleteView):
+    list_type_query = "others"
+    application_entity_type = "others_application"
+    deleted_message = "Others entry deleted."
+    deleted_label = "Others"
+
+
+class OthersMasterEntryReopenView(InstitutionsMasterEntryReopenView):
+    list_type_query = "others"
+    application_entity_type = "others_application"
+    reopened_message = "Others application reopened as draft."
+    reopened_label = "Others"
+
+
+class OthersApplicationAttachmentUploadView(InstitutionApplicationAttachmentUploadView):
+    attachment_type_choice = models.ApplicationAttachmentTypeChoices.OTHERS
+    create_route_name = "ui:master-entry-others-create"
+    edit_route_name = "ui:master-entry-others-edit"
+    list_type_query = "others"
+
+
+class OthersApplicationAttachmentTempUploadView(InstitutionApplicationAttachmentTempUploadView):
+    attachment_type_choice = models.ApplicationAttachmentTypeChoices.OTHERS
+    create_route_name = "ui:master-entry-others-create"
+
+
+class OthersApplicationAttachmentDeleteView(InstitutionApplicationAttachmentDeleteView):
+    attachment_type_choice = models.ApplicationAttachmentTypeChoices.OTHERS
+    edit_route_name = "ui:master-entry-others-edit"
+
+
+class OthersApplicationAttachmentTempDeleteView(InstitutionApplicationAttachmentTempDeleteView):
+    attachment_type_choice = models.ApplicationAttachmentTypeChoices.OTHERS
+    create_route_name = "ui:master-entry-others-create"
+
+
+class OthersApplicationAttachmentTempClearView(InstitutionApplicationAttachmentTempClearView):
+    attachment_type_choice = models.ApplicationAttachmentTypeChoices.OTHERS
+    create_route_name = "ui:master-entry-others-create"

@@ -60,20 +60,24 @@ class SeatAllocationListView(LoginRequiredMixin, RoleRequiredMixin, TemplateView
 
         normalized_type = _phase2_normalize_text(beneficiary_type_filter)
         is_district_type = normalized_type == "district"
-        is_institution_like_type = normalized_type in {"institutions", "others"}
+        is_public_type = normalized_type == "public"
+        is_institution_type = normalized_type == "institutions"
+        is_others_type = normalized_type == "others"
 
         type_scoped_rows = [
             row for row in all_rows
             if beneficiary_type_filter == "all"
-            or (normalized_type == "institutions" and _phase2_normalize_text(row.beneficiary_type) in {"institution", "institutions", "instn"})
-            or _phase2_normalize_text(row.beneficiary_type) == normalized_type
+            or (is_district_type and _phase2_normalize_text(row.beneficiary_type) == "district")
+            or (is_public_type and _phase2_normalize_text(row.beneficiary_type) == "public")
+            or (is_institution_type and _phase2_normalize_text(row.beneficiary_type) in {"institution", "institutions", "instn"})
+            or (is_others_type and _phase2_normalize_text(row.beneficiary_type) == "others")
         ]
         district_options_source = type_scoped_rows
         if item_filter != "all":
             district_options_source = [row for row in district_options_source if row.requested_item == item_filter]
         if is_district_type:
             district_options = sorted({row.district for row in district_options_source if row.district})
-        elif is_institution_like_type:
+        elif is_institution_type or is_others_type:
             district_options = sorted({row.beneficiary_name for row in district_options_source if row.beneficiary_name})
         else:
             district_options = []
@@ -82,7 +86,7 @@ class SeatAllocationListView(LoginRequiredMixin, RoleRequiredMixin, TemplateView
         if district_filter != "all":
             if is_district_type:
                 article_options_source = [row for row in article_options_source if row.district == district_filter]
-            elif is_institution_like_type:
+            elif is_institution_type or is_others_type:
                 article_options_source = [row for row in article_options_source if row.beneficiary_name == district_filter]
         article_options = sorted({row.requested_item for row in article_options_source if row.requested_item})
 
@@ -90,7 +94,7 @@ class SeatAllocationListView(LoginRequiredMixin, RoleRequiredMixin, TemplateView
         if district_filter != "all":
             if is_district_type:
                 rows = [row for row in rows if row.district == district_filter]
-            elif is_institution_like_type:
+            elif is_institution_type or is_others_type:
                 rows = [row for row in rows if row.beneficiary_name == district_filter]
         if item_filter != "all":
             rows = [row for row in rows if row.requested_item == item_filter]
@@ -192,7 +196,9 @@ class SeatAllocationListView(LoginRequiredMixin, RoleRequiredMixin, TemplateView
                     ("all", "All Types"),
                 ],
                 "is_district_type": is_district_type,
-                "is_institution_like_type": is_institution_like_type,
+                "is_public_type": is_public_type,
+                "is_institution_type": is_institution_type,
+                "is_others_type": is_others_type,
                 "sort_querystrings": {
                     "district": build_sort_params("district"),
                     "application_number": build_sort_params("application_number"),
@@ -343,25 +349,17 @@ class SeatAllocationListView(LoginRequiredMixin, RoleRequiredMixin, TemplateView
                 )
             source_rows = _phase2_master_export_rows()
             upload_result = _phase2_build_rows_from_master_export_rows(source_rows, source_file_name="master-entry-db")
-            preserve_result = _phase2_preserve_existing_split_state(session, upload_result["rows"])
-            upload_rows = preserve_result["rows"]
             _phase2_replace_session_rows(
                 session,
-                upload_rows,
+                upload_result["rows"],
                 source_file_name="master-entry-db",
                 user=request.user,
                 reconciliation=upload_result,
             )
             messages.success(
                 request,
-                f"Synced {upload_result['source_row_count']} master row(s) into {upload_result['grouped_row_count']} seat-allocation working row(s). "
-                f"Preserved {preserve_result['preserved_count']} existing split row(s), added {preserve_result['new_count']}, removed {preserve_result['removed_count']}.",
+                f"Synced {upload_result['source_row_count']} master row(s) into {upload_result['grouped_row_count']} seat-allocation working row(s).",
             )
-            if preserve_result["removed_count"]:
-                messages.warning(
-                    request,
-                    f"Master sync removed {preserve_result['removed_count']} seat-allocation row(s) that no longer exist in master data.",
-                )
             return HttpResponseRedirect(
                 _phase2_url_with_extra_params(
                     request,

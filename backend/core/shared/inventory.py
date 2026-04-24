@@ -38,7 +38,7 @@ def _ensure_order_summary_row(rows_map, order_name: str, article: models.Article
             "quantity_received": 0,
             "quantity_pending": 0,
             "total_value": Decimal("0"),
-            "breakdown": {"district": 0, "public": 0, "institutions": 0},
+            "breakdown": {"district": 0, "public": 0, "institutions": 0, "others": 0},
             "source_items": set(),
             "beneficiaries": [],
             "statuses": set(),
@@ -138,7 +138,7 @@ def build_order_management_rows():
             row["statuses"].add(entry.status)
             row["beneficiaries"].append(
                 {
-                    "beneficiary_type": "Institutions",
+                    "beneficiary_type": "Others" if getattr(entry, "institution_type", "") == models.InstitutionTypeChoices.OTHERS else "Institutions",
                     "application_number": entry.application_number or "",
                     "beneficiary_name": entry.institution_name,
                     "quantity": entry.quantity,
@@ -150,6 +150,10 @@ def build_order_management_rows():
                     "created_at": entry.created_at,
                 }
             )
+            if getattr(entry, "institution_type", "") == models.InstitutionTypeChoices.OTHERS:
+                row["breakdown"]["others"] += entry.quantity
+            else:
+                row["breakdown"]["institutions"] += entry.quantity
 
     order_entries = (
         models.OrderEntry.objects.select_related("article")

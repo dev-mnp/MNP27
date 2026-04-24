@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 from decimal import Decimal
 
 from django.conf import settings
@@ -106,6 +107,10 @@ def _fund_request_article_beneficiary_display(article_item) -> str:
     if labels:
         return " & ".join(labels)
     return str(getattr(article_item, "beneficiary", "") or "").strip() or "-"
+
+
+def _normalize_aadhaar_number(value: str | None) -> str:
+    return re.sub(r"\D+", "", str(value or "").strip())
 
 
 def _normalize_vendor_group_payload(raw_group):
@@ -334,6 +339,7 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        all_fund_requests = self.get_queryset()
         for fr in context["fund_requests"]:
             recipients = list(fr.recipients.all())
             articles = list(fr.articles.all())
@@ -353,6 +359,16 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
                 1 for recipient in recipients if recipient.beneficiary_type == models.RecipientTypeChoices.OTHERS
             )
             fr.article_total_quantity = sum(int(article.quantity or 0) for article in articles)
+        context["aid_request_count"] = sum(
+            fr.recipients.count()
+            for fr in all_fund_requests
+            if fr.fund_request_type == models.FundRequestTypeChoices.AID
+        )
+        context["article_request_count"] = sum(
+            fr.articles.count()
+            for fr in all_fund_requests
+            if fr.fund_request_type == models.FundRequestTypeChoices.ARTICLE
+        )
         current_sort = getattr(self, "_sort_key", "created_at")
         current_dir = getattr(self, "_sort_dir", "desc")
 
@@ -709,9 +725,17 @@ def _aid_entry_queryset(aid_type, beneficiary_type):
         return (
             models.PublicBeneficiaryEntry.objects.active()
             .select_related("article", "fund_request")
-            .filter(aadhaar_status=models.AadhaarVerificationStatusChoices.VERIFIED, **filters)
+            .filter(**filters)
         )
-    return models.InstitutionsBeneficiaryEntry.objects.select_related("article", "fund_request").filter(**filters)
+    if beneficiary_type == models.RecipientTypeChoices.INSTITUTIONS:
+        return (
+            models.InstitutionsBeneficiaryEntry.objects.select_related("article", "fund_request")
+            .filter(institution_type=models.InstitutionTypeChoices.INSTITUTIONS, **filters)
+        )
+    return (
+        models.InstitutionsBeneficiaryEntry.objects.select_related("article", "fund_request")
+        .filter(institution_type=models.InstitutionTypeChoices.OTHERS, **filters)
+    )
 
 
 def _build_aid_option_payload(entry, beneficiary_type):
@@ -749,6 +773,15 @@ def _build_aid_option_payload(entry, beneficiary_type):
             "cheque_in_favour": entry.cheque_rtgs_in_favour or "",
             "district_name": "",
             "source_item": entry.article.article_name,
+            "aadhaar_status": getattr(entry, "aadhaar_status", ""),
+            "aadhaar_warning": (
+                "Verification pending, please verify Aadhaar in application to proceed"
+                if getattr(entry, "aadhaar_status", models.AadhaarVerificationStatusChoices.PENDING_VERIFICATION)
+                != models.AadhaarVerificationStatusChoices.VERIFIED
+                else ""
+            ),
+            "disabled": getattr(entry, "aadhaar_status", models.AadhaarVerificationStatusChoices.PENDING_VERIFICATION)
+            != models.AadhaarVerificationStatusChoices.VERIFIED,
         }
     beneficiary_name = entry.institution_name
     return {
@@ -761,10 +794,17 @@ def _build_aid_option_payload(entry, beneficiary_type):
         "details": entry.notes or "",
         "fund_requested": amount,
         "aadhar_number": entry.aadhar_number or "",
-        "cheque_in_favour": entry.cheque_rtgs_in_favour or "",
-        "district_name": "",
-        "source_item": entry.article.article_name,
-    }
+            "cheque_in_favour": entry.cheque_rtgs_in_favour or "",
+            "district_name": "",
+            "source_item": entry.article.article_name,
+            "aadhaar_status": getattr(entry, "aadhaar_status", ""),
+            "aadhaar_warning": (
+                "Verification pending, please verify Aadhaar in application to proceed"
+                if getattr(entry, "aadhaar_status", models.AadhaarVerificationStatusChoices.PENDING_VERIFICATION)
+                != models.AadhaarVerificationStatusChoices.VERIFIED
+                else ""
+            ),
+        }
 
 
 def _get_aid_beneficiary_options(aid_type, beneficiary_type, current_fund_request=None):
@@ -775,11 +815,17 @@ def _get_aid_beneficiary_options(aid_type, beneficiary_type, current_fund_reques
         models.RecipientTypeChoices.DISTRICT,
         models.RecipientTypeChoices.PUBLIC,
         models.RecipientTypeChoices.INSTITUTIONS,
+        models.RecipientTypeChoices.OTHERS,
     }:
         return options, []
 
     for entry in _aid_entry_queryset(aid_type, beneficiary_type).order_by("application_number", "created_at"):
-        if entry.fund_request_id and (not current_fund_request or entry.fund_request_id != current_fund_request.id):
+        is_public_pending = (
+            beneficiary_type == models.RecipientTypeChoices.PUBLIC
+            and getattr(entry, "aadhaar_status", models.AadhaarVerificationStatusChoices.PENDING_VERIFICATION)
+            != models.AadhaarVerificationStatusChoices.VERIFIED
+        )
+        if entry.fund_request_id and (not current_fund_request or entry.fund_request_id != current_fund_request.id) and not is_public_pending:
             label = entry.fund_request.formatted_fund_request_number if entry.fund_request and entry.fund_request.fund_request_number else f"Draft #{entry.fund_request_id}"
             if entry.fund_request:
                 blocked.add(f"{label} ({entry.fund_request.get_status_display()})")
@@ -796,6 +842,7 @@ def _get_aid_available_beneficiary_type_choices(aid_type, current_fund_request=N
         (models.RecipientTypeChoices.DISTRICT, "District"),
         (models.RecipientTypeChoices.PUBLIC, "Public"),
         (models.RecipientTypeChoices.INSTITUTIONS, "Institutions"),
+        (models.RecipientTypeChoices.OTHERS, "Others"),
     ]:
         options, _blocked = _get_aid_beneficiary_options(aid_type, value, current_fund_request=current_fund_request)
         if options:
@@ -820,6 +867,7 @@ class FundRequestAidOptionsView(LoginRequiredMixin, RoleRequiredMixin, View):
             models.RecipientTypeChoices.DISTRICT,
             models.RecipientTypeChoices.PUBLIC,
             models.RecipientTypeChoices.INSTITUTIONS,
+            models.RecipientTypeChoices.OTHERS,
         ]:
             type_options, type_blocked = _get_aid_beneficiary_options(aid_type, type_key, current_fund_request=current_fund_request)
             options_by_type[str(type_key)] = type_options
@@ -991,15 +1039,6 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
             entry = models.InstitutionsBeneficiaryEntry.objects.select_related("fund_request").filter(pk=source_entry_id).first()
         if not entry:
             return False, "This beneficiary is no longer available."
-        if (
-            beneficiary_type == models.RecipientTypeChoices.PUBLIC
-            and getattr(entry, "aadhaar_status", models.AadhaarVerificationStatusChoices.PENDING_VERIFICATION)
-            != models.AadhaarVerificationStatusChoices.VERIFIED
-        ):
-            return False, (
-                "This application does not have a verified Aadhaar. "
-                "Update and validate in Application Entry to proceed."
-            )
         if entry.fund_request_id and (not current_fund_request or entry.fund_request_id != current_fund_request.id):
             label = entry.fund_request.formatted_fund_request_number if entry.fund_request and entry.fund_request.fund_request_number else f"Draft #{entry.fund_request_id}"
             if entry.fund_request:
@@ -1016,10 +1055,25 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
             if action == "submit" and not active_forms:
                 recipient_formset._non_form_errors = recipient_formset.error_class(["Add at least one recipient."])
                 return False
+            submitted_aadhaar_map = {}
+            if action == "submit":
+                submitted_rows = (
+                    models.FundRequestRecipient.objects.filter(
+                        fund_request__status=models.FundRequestStatusChoices.SUBMITTED,
+                        aadhar_number__isnull=False,
+                    )
+                    .exclude(aadhar_number="")
+                    .values("aadhar_number", "fund_request__fund_request_number")
+                )
+                for row in submitted_rows:
+                    aadhaar = _normalize_aadhaar_number(row.get("aadhar_number"))
+                    if aadhaar and aadhaar not in submitted_aadhaar_map:
+                        submitted_aadhaar_map[aadhaar] = str(row.get("fund_request__fund_request_number") or "").strip() or "Draft"
             seen_source_keys = {}
             for form in active_forms:
                 beneficiary_type = form.cleaned_data.get("beneficiary_type")
                 source_entry_id = form.cleaned_data.get("source_entry_id")
+                aadhaar_number = _normalize_aadhaar_number(form.cleaned_data.get("aadhar_number"))
                 if beneficiary_type and source_entry_id:
                     source_key = (str(beneficiary_type), str(source_entry_id))
                     if source_key in seen_source_keys:
@@ -1036,6 +1090,16 @@ class FundRequestCreateUpdateMixin(WriteRoleMixin):
                     )
                     if not ok:
                         form.add_error("beneficiary", message)
+                        is_valid = False
+                    if beneficiary_type == models.RecipientTypeChoices.PUBLIC:
+                        public_entry = models.PublicBeneficiaryEntry.objects.active().filter(pk=source_entry_id).first()
+                        if public_entry and public_entry.aadhaar_status != models.AadhaarVerificationStatusChoices.VERIFIED:
+                            form.add_error("beneficiary", "Verification pending, please verify Aadhaar in application to proceed.")
+                            is_valid = False
+                if action == "submit" and aadhaar_number:
+                    duplicate_fund_request = submitted_aadhaar_map.get(aadhaar_number)
+                    if duplicate_fund_request:
+                        form.add_error("aadhar_number", f"Duplicate Aadhaar found in {duplicate_fund_request}.")
                         is_valid = False
                 if action == "submit":
                     required_fields = ["beneficiary_type", "beneficiary", "source_entry_id", "fund_requested", "name_of_beneficiary", "name_of_institution", "details", "cheque_in_favour"]

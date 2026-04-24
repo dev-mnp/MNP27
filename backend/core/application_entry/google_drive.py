@@ -5,9 +5,11 @@ import importlib.metadata as importlib_metadata
 import os
 from functools import lru_cache
 
-from google.auth import default
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials as UserCredentials
 
 GOOGLE_DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
+GOOGLE_OAUTH_TOKEN_URI = "https://oauth2.googleapis.com/token"
 
 
 # Python 3.9 compatibility shim for newer google-auth/google-api-core internals.
@@ -19,13 +21,36 @@ if not hasattr(importlib_metadata, "packages_distributions"):
 
 
 def is_configured() -> bool:
-    return bool((os.getenv("GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID") or "").strip())
+    client_id = (os.getenv("GOOGLE_DRIVE_CLIENT_ID") or "").strip()
+    client_secret = (os.getenv("GOOGLE_DRIVE_CLIENT_SECRET") or "").strip()
+    refresh_token = (os.getenv("GOOGLE_DRIVE_REFRESH_TOKEN") or "").strip()
+    root_folder_id = (os.getenv("GOOGLE_DRIVE_APPLICATIONS_FOLDER_ID") or "").strip()
+    has_user_oauth = bool(client_id and client_secret and refresh_token)
+    return bool(root_folder_id and has_user_oauth)
 
 
 def get_drive_service():
     from googleapiclient.discovery import build
 
-    credentials, _ = default(scopes=GOOGLE_DRIVE_SCOPES)
+    client_id = (os.getenv("GOOGLE_DRIVE_CLIENT_ID") or "").strip()
+    client_secret = (os.getenv("GOOGLE_DRIVE_CLIENT_SECRET") or "").strip()
+    refresh_token = (os.getenv("GOOGLE_DRIVE_REFRESH_TOKEN") or "").strip()
+
+    if client_id and client_secret and refresh_token:
+        credentials = UserCredentials(
+            token=None,
+            refresh_token=refresh_token,
+            token_uri=GOOGLE_OAUTH_TOKEN_URI,
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=GOOGLE_DRIVE_SCOPES,
+        )
+        credentials.refresh(Request())
+    else:
+        raise RuntimeError(
+            "Google Drive is not configured. Set GOOGLE_DRIVE_CLIENT_ID / "
+            "GOOGLE_DRIVE_CLIENT_SECRET / GOOGLE_DRIVE_REFRESH_TOKEN."
+        )
     return build("drive", "v3", credentials=credentials, cache_discovery=False)
 
 
@@ -53,6 +78,8 @@ def _folder_label(application_type: str) -> str:
         return "Public"
     if value == "institution":
         return "Institution"
+    if value == "others":
+        return "Others"
     return "Others"
 
 

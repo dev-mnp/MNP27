@@ -275,10 +275,22 @@
           </select>
         </div>
         <div>
-          <label for="seat-district-filter">{% if is_district_type %}District{% elif is_institution_like_type %}Institution{% else %}Filter{% endif %}</label>
-          <select id="seat-district-filter" name="district_filter" {% if not is_district_type and not is_institution_like_type %}disabled{% endif %}>
+          <label for="seat-district-filter">
+            {% if is_district_type %}
+              District
+            {% elif is_institution_type %}
+              Institution
+            {% elif is_others_type %}
+              Others
+            {% elif is_public_type %}
+              N/A
+            {% else %}
+              Filter
+            {% endif %}
+          </label>
+          <select id="seat-district-filter" name="district_filter" {% if not is_district_type and not is_institution_type and not is_others_type %}disabled{% endif %}>
             <option value="all">
-              {% if is_district_type %}All Districts{% elif is_institution_like_type %}All Institutions{% else %}N/A{% endif %}
+              {% if is_district_type %}All Districts{% elif is_institution_type %}All Institutions{% elif is_others_type %}All Others{% else %}N/A{% endif %}
             </option>
             {% for option in district_options %}
               <option value="{{ option }}" {% if filters.district_filter == option %}selected{% endif %}>{{ option }}</option>

@@ -448,6 +448,9 @@ def _labels_audit_download(rows, *, download_kind, large_items):
     elif download_kind == "institution":
         row_filter = lambda row: token_qty(row) > 0 and str(row.get("Beneficiary Type") or "").strip() == "Institutions"
         sort_key = sort_by_name_and_start
+    elif download_kind == "others":
+        row_filter = lambda row: token_qty(row) > 0 and str(row.get("Beneficiary Type") or "").strip() == "Others"
+        sort_key = sort_by_name_and_start
     elif download_kind == "public":
         row_filter = lambda row: token_qty(row) > 0 and str(row.get("Beneficiary Type") or "").strip() == "Public"
         sort_key = sort_by_item_and_start

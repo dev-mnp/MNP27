@@ -11,6 +11,7 @@
       --bg-primary: #ffffff;
       --bg-secondary: #f5f7fb;
       --bg-tertiary: #eef4ff;
+      --panel-bg-muted: var(--bg-secondary);
       --text-primary: #111827;
       --text-secondary: #667085;
       --text-tertiary: #9ca3af;
@@ -1227,6 +1228,10 @@
   (function() {
     document.querySelectorAll("form[data-confirm-message]").forEach(function(form) {
       form.addEventListener("submit", function(event) {
+        var submitter = event.submitter;
+        if (submitter && submitter.value === "verify") {
+          return;
+        }
         var message = form.getAttribute("data-confirm-message") || "Are you sure?";
         if (!window.confirm(message)) {
           event.preventDefault();

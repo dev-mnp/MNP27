@@ -12,9 +12,9 @@
   <section class="card">
     <div class="toolbar" style="justify-content: space-between;">
       <div>
-        <h2 style="margin: 0 0 6px;">{{ page_title|default:"Institution Application" }}</h2>
+        <h2 style="margin: 0 0 6px;">{{ page_title|default:"Others Application" }}</h2>
         <p style="margin: 0; color: var(--text-secondary);">
-          {{ page_description|default:"Institution applications can contain multiple articles or aids and do not require Aadhaar verification." }}
+          {{ page_description|default:"Others applications can contain multiple articles or aids and do not require Aadhaar verification." }}
         </p>
         {% if application_status %}
           <div class="status-pill status-{{ application_status }}" style="margin-top: 10px;">{{ application_status|title }}</div>
@@ -30,7 +30,7 @@
       </ul>
     {% endif %}
 
-    <form method="post" enctype="multipart/form-data" id="institution-entry-form" data-unsaved-guard="true" {% if request.resolver_match.url_name == 'master-entry-institution-edit' %}data-edit-mode="true" data-confirm-message="Save changes to this institution entry?"{% else %}data-edit-mode="false"{% endif %}>
+    <form method="post" enctype="multipart/form-data" id="others-entry-form" data-unsaved-guard="true" {% if request.resolver_match.url_name == 'master-entry-others-edit' %}data-edit-mode="true" data-confirm-message="Save changes to this others entry?"{% else %}data-edit-mode="false"{% endif %}>
       {% csrf_token %}
       <input type="hidden" name="attachment_form_token" value="{{ attachment_form_token|default:'' }}">
       {% if conflict_token %}
@@ -51,10 +51,10 @@
           <label>{{ beneficiary_label|default:"Institution" }} Name<span class="required-star">*</span></label>
           <input class="input" type="text" name="institution_name" value="{{ institution_form_data.institution_name }}">
         </div>
-        <input type="hidden" name="institution_type" value="{{ beneficiary_type_value|default:'institutions' }}">
+        <input type="hidden" name="institution_type" value="{{ beneficiary_type_value|default:'others' }}">
         <div>
           <label>Beneficiary Type</label>
-          <div class="info-field">{{ beneficiary_label|default:"Institutions" }}</div>
+          <div class="info-field">{{ beneficiary_label|default:"Others" }}</div>
         </div>
         <div>
           <label>Mobile Number<span class="required-star">*</span></label>
@@ -78,16 +78,16 @@
           <div class="section-note">Use the headers to sort the current rows. All items can include comments, and aids include additional beneficiary fields.</div>
         </div>
       </div>
-      <div class="multi-select-card" id="institution-article-picker">
+      <div class="multi-select-card" id="others-article-picker">
         <label>Pick Articles</label>
         <div class="picker-input-wrap">
-          <input class="input picker-search" id="institution-picker-search" type="text" placeholder="Search and select articles...">
-          <div class="picker-dropdown" id="institution-picker-dropdown" hidden></div>
+          <input class="input picker-search" id="others-picker-search" type="text" placeholder="Search and select articles...">
+          <div class="picker-dropdown" id="others-picker-dropdown" hidden></div>
         </div>
-        <div class="picker-meta" id="institution-picker-count">0 article(s) selected</div>
+        <div class="picker-meta" id="others-picker-count">0 article(s) selected</div>
       </div>
 
-      <table id="institution-items-table">
+      <table id="others-items-table">
         <colgroup>
           <col style="width: 6%;">
           <col style="width: 34%;">
@@ -110,9 +110,9 @@
             <th>Action</th>
           </tr>
         </thead>
-        <tbody id="institution-items-body">
+        <tbody id="others-items-body">
           {% for row in institution_rows %}
-            <tr class="institution-item-row">
+            <tr class="others-item-row">
               <td class="row-serial-cell">
                 <input type="hidden" name="entry_id" value="{{ row.entry_id|default:'' }}">
                 <div class="row-serial-wrap">
@@ -159,7 +159,7 @@
                 </button>
               </td>
             </tr>
-            <tr class="institution-item-aid-row" {% if row.item_type != 'Aid' %}hidden{% endif %}>
+            <tr class="others-item-aid-row" {% if row.item_type != 'Aid' %}hidden{% endif %}>
               <td colspan="8" class="aid-row-shell">
                 <div class="cheque-wrap aid-details-card">
                   <div class="item-row-subfield aid-only-field aid-row-primary">
@@ -172,7 +172,7 @@
                   </div>
                   <div class="item-row-subfield aid-only-field aid-row-secondary">
                     <div class="item-row-subfield-label">Name of Institution</div>
-                    <input class="input institution-name-input" name="name_of_institution" value="{{ row.name_of_institution }}" placeholder="Optional">
+                    <input class="input others-name-input" name="name_of_institution" value="{{ row.name_of_institution }}" placeholder="Optional">
                   </div>
                   <div class="item-row-subfield item-row-details-block aid-row-secondary">
                     <div class="item-row-subfield-label notes-field-label">Details / Comments</div>
@@ -190,11 +190,11 @@
       </table>
 
       <div class="item-actions-row">
-        <div class="multi-aid-summary" id="institution-multi-aid-summary" hidden></div>
+        <div class="multi-aid-summary" id="others-multi-aid-summary" hidden></div>
       </div>
 
-      <template id="institution-item-row-template">
-        <tr class="institution-item-row">
+      <template id="others-item-row-template">
+        <tr class="others-item-row">
           <td class="row-serial-cell">
             <input type="hidden" name="entry_id" value="">
             <div class="row-serial-wrap">
@@ -241,7 +241,7 @@
             </button>
           </td>
         </tr>
-        <tr class="institution-item-aid-row" hidden>
+        <tr class="others-item-aid-row" hidden>
           <td colspan="8" class="aid-row-shell">
             <div class="cheque-wrap aid-details-card">
               <div class="item-row-subfield aid-only-field aid-row-primary">
@@ -254,7 +254,7 @@
               </div>
               <div class="item-row-subfield aid-only-field aid-row-secondary">
                 <div class="item-row-subfield-label">Name of Institution</div>
-                <input class="input institution-name-input" name="name_of_institution" value="" placeholder="Optional">
+                <input class="input others-name-input" name="name_of_institution" value="" placeholder="Optional">
               </div>
               <div class="item-row-subfield item-row-details-block aid-row-secondary">
                 <div class="item-row-subfield-label notes-field-label">Details / Comments</div>
@@ -272,7 +272,7 @@
 
     </form>
 
-    <div class="form-section-card js-attachment-card" id="institution-attachments-card" style="margin-top: 20px;">
+    <div class="form-section-card js-attachment-card" id="others-attachments-card" style="margin-top: 20px;">
       <div class="section-title-row">
         <div>
           <h3 class="section-title">Attachments</h3>
@@ -280,19 +280,19 @@
           <div class="field-hint" style="margin-top: 6px; font-size: 0.82rem; line-height: 1.35;">{{ attachment_constraints_text }}</div>
         </div>
       </div>
-      <form class="js-attachment-upload-form" method="post" action="{{ attachment_upload_url }}" enctype="multipart/form-data" style="border:0;padding:0;margin:0;" data-attachment-card-id="institution-attachments-card">
+      <form class="js-attachment-upload-form" method="post" action="{{ attachment_upload_url }}" enctype="multipart/form-data" style="border:0;padding:0;margin:0;" data-attachment-card-id="others-attachments-card">
         {% csrf_token %}
         <input type="hidden" name="attachment_form_token" value="{{ attachment_form_token|default:'' }}">
         <div class="toolbar" style="align-items: end;">
           <div style="flex: 1;">
             <label>Upload file</label>
-            <input class="input" type="file" id="institution-attachment-file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv" {% if not attachment_upload_url %}disabled{% endif %}>
+            <input class="input" type="file" id="others-attachment-file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv" {% if not attachment_upload_url %}disabled{% endif %}>
           </div>
           <div style="flex: 1;">
             <label>File name</label>
-            <input class="input" type="text" id="institution-attachment-file-name" name="file_name" placeholder="Optional display name" {% if not attachment_upload_url %}disabled{% endif %}>
+            <input class="input" type="text" id="others-attachment-file-name" name="file_name" placeholder="Optional display name" {% if not attachment_upload_url %}disabled{% endif %}>
           </div>
-          <button class="btn js-camera-capture" type="button" data-camera-file-input="institution-attachment-file" data-camera-name-input="institution-attachment-file-name">
+          <button class="btn js-camera-capture" type="button" data-camera-file-input="others-attachment-file" data-camera-name-input="others-attachment-file-name">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h4l2-3h4l2 3h4v13H4z"/><circle cx="12" cy="14" r="4"/></svg>
             <span>Camera</span>
           </button>
@@ -329,8 +329,8 @@
                         <button
                           class="btn btn-danger icon-btn js-attachment-delete"
                           type="button"
-                          data-delete-url="{% url 'ui:institution-attachment-temp-delete' attachment.id %}"
-                          data-attachment-card-id="institution-attachments-card"
+                          data-delete-url="{% url 'ui:others-attachment-temp-delete' attachment.id %}"
+                          data-attachment-card-id="others-attachments-card"
                           data-attachment-form-token="{{ attachment_form_token|default:'' }}"
                           title="Delete file"
                           aria-label="Delete file"
@@ -342,8 +342,8 @@
                         <button
                           class="btn btn-danger icon-btn js-attachment-delete"
                           type="button"
-                          data-delete-url="{% url 'ui:institution-attachment-delete' institution_application_number attachment.id %}"
-                          data-attachment-card-id="institution-attachments-card"
+                          data-delete-url="{% url 'ui:others-attachment-delete' institution_application_number attachment.id %}"
+                          data-attachment-card-id="others-attachments-card"
                           title="Delete file"
                           aria-label="Delete file"
                           onclick="return window.confirm('Delete this attachment?');"
@@ -362,11 +362,11 @@
       {% endif %}
     </div>
     <div class="toolbar" style="justify-content: flex-end; margin-top: 20px;">
-      <a class="btn btn-light-soft" id="institution-cancel-link" href="{% url 'ui:master-entry' %}?type=institutions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg><span>Cancel</span></a>
-      <button class="btn js-save-button{% if request.resolver_match.url_name == 'master-entry-institution-edit' %} btn-disabled{% endif %}" type="submit" name="action" value="draft" form="institution-entry-form" {% if request.resolver_match.url_name == 'master-entry-institution-edit' %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v6h6V3"/><path d="M9 17h6"/></svg><span>Save as Draft</span></button>
-      <button class="btn js-submit-button" type="submit" name="action" value="submit" form="institution-entry-form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Submit</span></button>
+      <a class="btn btn-light-soft" id="others-cancel-link" href="{% url 'ui:master-entry' %}?type=others"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg><span>Cancel</span></a>
+      <button class="btn js-save-button{% if request.resolver_match.url_name == 'master-entry-others-edit' %} btn-disabled{% endif %}" type="submit" name="action" value="draft" form="others-entry-form" {% if request.resolver_match.url_name == 'master-entry-others-edit' %}disabled{% endif %}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M9 3v6h6V3"/><path d="M9 17h6"/></svg><span>Save as Draft</span></button>
+      <button class="btn js-submit-button" type="submit" name="action" value="submit" form="others-entry-form"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg><span>Submit</span></button>
     </div>
-    <form id="institution-temp-clear-form" method="post" action="{{ attachment_temp_delete_url }}" style="display:none;">
+    <form id="others-temp-clear-form" method="post" action="{{ attachment_temp_delete_url }}" style="display:none;">
       {% csrf_token %}
       <input type="hidden" name="attachment_form_token" value="{{ attachment_form_token|default:'' }}">
     </form>
@@ -500,8 +500,8 @@
   <script>
     (function() {
       const hasTempUploads = {{ attachment_has_temp_uploads|yesno:"true,false" }};
-      const cancelLink = document.getElementById("institution-cancel-link");
-      const clearForm = document.getElementById("institution-temp-clear-form");
+      const cancelLink = document.getElementById("others-cancel-link");
+      const clearForm = document.getElementById("others-temp-clear-form");
       if (hasTempUploads && cancelLink && clearForm) {
         cancelLink.addEventListener("click", function(event) {
           const shouldDelete = window.confirm("Temporary uploads are present. Click OK to delete uploads and cancel, or Cancel to continue editing.");
@@ -533,20 +533,20 @@
         select.addEventListener("blur", function() { syncSelectOptionLabels(select, "short"); });
       }
 
-      const form = document.getElementById("institution-entry-form");
-      const formId = form ? form.id : "institution-entry-form";
+      const form = document.getElementById("others-entry-form");
+      const formId = form ? form.id : "others-entry-form";
       const saveButtons = Array.from(document.querySelectorAll(".js-save-button")).filter(function(button) {
         return button.form === form || button.getAttribute("form") === formId || form.contains(button);
       });
       const submitButton = Array.from(document.querySelectorAll(".js-submit-button")).find(function(button) {
         return button.form === form || button.getAttribute("form") === formId || form.contains(button);
       }) || null;
-      const itemsBody = document.getElementById("institution-items-body");
-      const rowTemplate = document.getElementById("institution-item-row-template");
-      const pickerSearch = document.getElementById("institution-picker-search");
-      const pickerDropdown = document.getElementById("institution-picker-dropdown");
-      const pickerCount = document.getElementById("institution-picker-count");
-      const sortButtons = document.querySelectorAll("#institution-items-table .table-sort-btn");
+      const itemsBody = document.getElementById("others-items-body");
+      const rowTemplate = document.getElementById("others-item-row-template");
+      const pickerSearch = document.getElementById("others-picker-search");
+      const pickerDropdown = document.getElementById("others-picker-dropdown");
+      const pickerCount = document.getElementById("others-picker-count");
+      const sortButtons = document.querySelectorAll("#others-items-table .table-sort-btn");
       const articleCreateUrl = "{% url 'ui:article-create' %}?popup=1";
       const articleCreateModal = document.getElementById("article-create-modal");
       const articleCreateForm = document.getElementById("article-create-form");
@@ -720,7 +720,7 @@
       }
 
       function hasZeroPricedSelection() {
-        return Array.from(itemsBody.querySelectorAll(".institution-item-row")).some(function(row) {
+        return Array.from(itemsBody.querySelectorAll(".others-item-row")).some(function(row) {
           const articleSelect = row.querySelector(".article-select");
           const unitCostInput = row.querySelector(".unit-cost-input");
           const selectedArticleId = articleSelect?.value || "";
@@ -753,7 +753,7 @@
       }
 
       function bindRow(row) {
-        const aidRow = row.nextElementSibling && row.nextElementSibling.classList.contains("institution-item-aid-row")
+        const aidRow = row.nextElementSibling && row.nextElementSibling.classList.contains("others-item-aid-row")
           ? row.nextElementSibling
           : null;
         const articleSelect = row.querySelector(".article-select");
@@ -810,7 +810,7 @@
           if (chequeWrap) {
             const showCheque = itemType === "Aid";
             const beneficiaryNameInput = aidRow?.querySelector(".beneficiary-name-input");
-            const institutionNameInput = aidRow?.querySelector(".institution-name-input");
+            const othersNameInput = aidRow?.querySelector(".others-name-input");
             const collapsed = row.dataset.aidCollapsed === "true";
             if (aidRow) {
               aidRow.hidden = !showCheque || !hasSelection || collapsed;
@@ -838,8 +838,8 @@
             if (!showCheque && aadharInput) {
               aadharInput.value = "";
             }
-            if (!showCheque && institutionNameInput) {
-              institutionNameInput.value = "";
+            if (!showCheque && othersNameInput) {
+              othersNameInput.value = "";
             }
             syncAidToggle(showCheque);
           }
@@ -933,8 +933,8 @@
       }
 
       function pickerSourceSelect() {
-        return itemsBody.querySelector(".institution-item-row .article-select")
-          || rowTemplate.content.querySelector(".institution-item-row .article-select");
+        return itemsBody.querySelector(".others-item-row .article-select")
+          || rowTemplate.content.querySelector(".others-item-row .article-select");
       }
 
       function pickerArticles() {
@@ -953,7 +953,7 @@
 
       function selectedArticleIds() {
         return new Set(
-          Array.from(itemsBody.querySelectorAll(".institution-item-row .article-select"))
+          Array.from(itemsBody.querySelectorAll(".others-item-row .article-select"))
             .map(function(select) { return select.value; })
             .filter(function(value) { return !!value && value !== "__create_new__"; })
         );
@@ -991,7 +991,7 @@
         const opts = options || {};
         withPreservedScroll(function() {
           const fragment = rowTemplate.content.cloneNode(true);
-          const row = fragment.querySelector(".institution-item-row");
+          const row = fragment.querySelector(".others-item-row");
           itemsBody.appendChild(fragment);
           bindRow(row);
           const select = row?.querySelector(".article-select");
@@ -1008,17 +1008,17 @@
         updatePickerSelectionState();
       }
 
-      const institutionAttachmentUploadForm = document.querySelector(".js-attachment-upload-form");
-      if (institutionAttachmentUploadForm) {
-        const institutionAttachmentFile = document.getElementById("institution-attachment-file");
-        const institutionAttachmentFileName = document.getElementById("institution-attachment-file-name");
-        if (institutionAttachmentFile) {
-          institutionAttachmentFile.addEventListener("change", markAttachmentDirty);
+      const othersAttachmentUploadForm = document.querySelector(".js-attachment-upload-form");
+      if (othersAttachmentUploadForm) {
+        const othersAttachmentFile = document.getElementById("others-attachment-file");
+        const othersAttachmentFileName = document.getElementById("others-attachment-file-name");
+        if (othersAttachmentFile) {
+          othersAttachmentFile.addEventListener("change", markAttachmentDirty);
         }
-        if (institutionAttachmentFileName) {
-          institutionAttachmentFileName.addEventListener("input", markAttachmentDirty);
+        if (othersAttachmentFileName) {
+          othersAttachmentFileName.addEventListener("input", markAttachmentDirty);
         }
-        institutionAttachmentUploadForm.addEventListener("submit", function() {
+        othersAttachmentUploadForm.addEventListener("submit", function() {
           markAttachmentDirty();
         });
       }
@@ -1038,7 +1038,7 @@
       }
 
       function refreshRowMeta() {
-        Array.from(itemsBody.querySelectorAll(".institution-item-row")).forEach(function(row, index) {
+        Array.from(itemsBody.querySelectorAll(".others-item-row")).forEach(function(row, index) {
           const label = row.querySelector(".row-serial-label");
           if (label) {
             label.textContent = String(index + 1);
@@ -1047,7 +1047,7 @@
       }
 
       function markDuplicateItems() {
-        const rows = Array.from(itemsBody.querySelectorAll(".institution-item-row"));
+        const rows = Array.from(itemsBody.querySelectorAll(".others-item-row"));
         const counts = new Map();
         const labelsById = new Map();
         rows.forEach(function(row) {
@@ -1074,7 +1074,7 @@
             const label = labelsById.get(articleId) || "Item";
             return label + " x " + count;
           });
-        const multiAidSummary = document.getElementById("institution-multi-aid-summary");
+        const multiAidSummary = document.getElementById("others-multi-aid-summary");
         if (multiAidSummary) {
           multiAidSummary.hidden = duplicateSummary.length === 0;
           multiAidSummary.textContent = duplicateSummary.length ? "Duplicates selected: " + duplicateSummary.join(", ") : "";
@@ -1109,10 +1109,10 @@
           currentSortKey = key;
           currentSortDir = "asc";
         }
-        const rowPairs = Array.from(itemsBody.querySelectorAll(".institution-item-row")).map(function(row) {
+        const rowPairs = Array.from(itemsBody.querySelectorAll(".others-item-row")).map(function(row) {
           return {
             row: row,
-            aidRow: row.nextElementSibling && row.nextElementSibling.classList.contains("institution-item-aid-row")
+            aidRow: row.nextElementSibling && row.nextElementSibling.classList.contains("others-item-aid-row")
               ? row.nextElementSibling
               : null
           };
@@ -1163,7 +1163,7 @@
         pickerDropdown.hidden = false;
       });
       document.addEventListener("click", function(event) {
-        if (event.target.closest("#institution-article-picker")) return;
+        if (event.target.closest("#others-article-picker")) return;
         pickerDropdown.hidden = true;
       });
       window.addEventListener("beforeunload", function(event) {
@@ -1208,7 +1208,7 @@
         updateSaveState();
       });
 
-      itemsBody.querySelectorAll(".institution-item-row").forEach(bindRow);
+      itemsBody.querySelectorAll(".others-item-row").forEach(bindRow);
       markDuplicateItems();
       refreshRowMeta();
       updatePickerCount();
@@ -1371,23 +1371,23 @@
     .aid-row-payment {
       grid-column: 1 / -1;
     }
-    .institution-item-row td {
+    .others-item-row td {
       background: #ffffff;
       border-bottom: 0;
     }
-    .institution-item-row.row-has-aid-open td {
+    .others-item-row.row-has-aid-open td {
       border-top: 1px solid #dbe3f0;
       border-bottom: 0;
     }
-    .institution-item-row.row-has-aid-open td:first-child {
+    .others-item-row.row-has-aid-open td:first-child {
       border-left: 1px solid #dbe3f0;
       border-top-left-radius: 14px;
     }
-    .institution-item-row.row-has-aid-open td:last-child {
+    .others-item-row.row-has-aid-open td:last-child {
       border-right: 1px solid #dbe3f0;
       border-top-right-radius: 14px;
     }
-    .institution-item-aid-row td {
+    .others-item-aid-row td {
       background: #ffffff;
       padding: 0;
       border-left: 1px solid #dbe3f0;
@@ -1397,7 +1397,7 @@
       border-bottom-right-radius: 14px;
       overflow: hidden;
     }
-    .institution-item-aid-row .cheque-input {
+    .others-item-aid-row .cheque-input {
       min-height: 44px;
     }
     .item-row-subfield {
@@ -1583,29 +1583,29 @@
         margin-right: 0;
       }
     }
-    #institution-items-table th:last-child,
-    #institution-items-table td:last-child {
+    #others-items-table th:last-child,
+    #others-items-table td:last-child {
       width: 90px;
       min-width: 90px;
       white-space: nowrap;
       text-align: center;
     }
-    #institution-items-table th {
+    #others-items-table th {
       text-align: center;
       vertical-align: middle;
     }
-    #institution-items-table th:first-child {
+    #others-items-table th:first-child {
       text-align: left;
     }
-    #institution-items-table td {
+    #others-items-table td {
       vertical-align: middle;
     }
-    #institution-items-table td:nth-child(2),
-    #institution-items-table td:nth-child(3),
-    #institution-items-table td:nth-child(4),
-    #institution-items-table td:nth-child(5),
-    #institution-items-table td:nth-child(6),
-    #institution-items-table td:nth-child(7) {
+    #others-items-table td:nth-child(2),
+    #others-items-table td:nth-child(3),
+    #others-items-table td:nth-child(4),
+    #others-items-table td:nth-child(5),
+    #others-items-table td:nth-child(6),
+    #others-items-table td:nth-child(7) {
       text-align: center;
     }
     @media (max-width: 640px) {
@@ -1615,7 +1615,7 @@
       .aid-details-card {
         grid-template-columns: 1fr;
       }
-      #institution-items-table {
+      #others-items-table {
         min-width: 900px;
       }
       .qty-input {

@@ -40,142 +40,191 @@ DJANGO_DEBUG=False
 
 2️⃣ Google Drive Setup (Attachments)
 
-Google Drive Integration via Cloud Run Service Account
+Google Drive OAuth Setup (Personal Gmail / My Drive)
 
+1. Enable Google Drive API
 
-1. Identify the Cloud Run Service Account
-
-1. Open Google Cloud Console.
-2. Navigate to Cloud Run.
-3. Select the service (e.g., mnp27).
-4. Open the Revisions tab.
-5. Click the latest revision (serving traffic).
-6. Open the Security tab for that revision.
-7. Copy the Service Account email.
-
-Example:
-
-690028296899-compute@developer.gserviceaccount.com
-
-This is the identity Cloud Run uses to access Google APIs.
+1. Go to Google Cloud Console.
+2. Select the correct project.
+3. Navigate to: APIs & Services → Library.
+4. Search for “Google Drive API”.
+5. Click Enable.
 
 ⸻
 
-2. Enable Google Drive API
+2. Configure OAuth Consent Screen
 
-1. Go to APIs & Services → Library.
-2. Search for Google Drive API.
-3. Click Enable.
+1. Go to: APIs & Services → OAuth consent screen.
+2. Select User Type: External.
+3. Complete required fields:
+    * App name
+    * Support email
+4. Add scope:
+    * https://www.googleapis.com/auth/drive
+5. Save and Continue.
+6. Click Publish App.
+7. Confirm status shows: In production.
 
-Ensure the API is enabled in the same Google Cloud project where Cloud Run is deployed.
-
-⸻
-
-3. Share Drive Folder with the Service Account
-
-1. Open Google Drive.
-2. Locate the root folder used by the application (e.g., /MNP/).
-3. Right-click the folder and select Share.
-4. Add the Cloud Run service account email.
-5. Set permission to Editor.
-6. Click Done.
-
-The service account will now have access only to the shared folder and its contents.
+Important:
+If left in Testing mode, refresh tokens expire after 7 days.
 
 ⸻
 
-4. Recommended Drive Folder Structure
+3. Create OAuth 2.0 Client ID
 
-The Drive structure should follow this format:
+1. Go to: APIs & Services → Credentials.
+2. Click Create Credentials → OAuth client ID.
+3. Select Application Type: Web application.
+4. Add Authorized Redirect URI:
+    https://developers.google.com/oauthplayground
+5. Click Create.
+6. Copy:
+    * Client ID
+    * Client Secret
 
-/MNP/
-    /District/
-    /Public/
-    /Institution/
-    /Others/
-
-If subfolders do not exist, the application may create them automatically when uploading files.
+Store them securely.
 
 ⸻
 
-5. Backend Configuration
+4. Generate Refresh Token (Permanent)
 
-Use the following implementation:
+1. Open:
+    https://developers.google.com/oauthplayground
+2. Click the gear icon (top right).
+3. Enable: Use your own OAuth credentials.
+4. Enter:
+    * Client ID
+    * Client Secret
+5. Close settings.
+6. In Step 1 panel:
+    * Select Drive API v3
+    * Select scope:
+        https://www.googleapis.com/auth/drive
+7. Click Authorize APIs.
+8. Login with your Gmail.
+9. Click Allow.
+10. Click Exchange authorization code for tokens.
 
+Copy the refresh_token value.
+
+This refresh token will remain valid unless:
+
+* You revoke app access
+* You regenerate too many tokens
+* You delete the OAuth client
+
+⸻
+
+5. Set Environment Variables
+
+Local Development (.env)
+
+GOOGLE_CLIENT_ID=your_client_id
+GOOGLE_CLIENT_SECRET=your_client_secret
+GOOGLE_REFRESH_TOKEN=your_refresh_token
+
+Cloud Run
+
+Go to:
+Cloud Run → Service → Edit & Deploy New Revision → Variables & Secrets
+
+Add the same three variables.
+
+Do not include quotes.
+Do not add extra spaces.
+
+Deploy a new revision.
+
+⸻
+
+6. Backend Implementation
+
+Use the following logic to create Drive credentials:
+
+import os
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from google.auth import default
 def get_drive_service():
-    credentials, _ = default(
-        scopes=["https://www.googleapis.com/auth/drive"]
+    credentials = Credentials(
+        None,
+        refresh_token=os.getenv("GOOGLE_REFRESH_TOKEN"),
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=os.getenv("GOOGLE_CLIENT_ID"),
+        client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
+        scopes=["https://www.googleapis.com/auth/drive"],
     )
     return build("drive", "v3", credentials=credentials)
 
-This uses Application Default Credentials provided automatically by Cloud Run.
+This allows Google to:
 
-No JSON credential file is required.
+* Automatically generate access tokens
+* Refresh tokens when expired
 
-⸻
-
-6. Environment Variables in Cloud Run
-
-Only folder IDs are required as environment variables.
-
-Example:
-
-GOOGLE_DRIVE_DISTRICT_FOLDER_ID=xxxxxxxx
-
+No manual refresh logic is required.
 
 ⸻
 
-7. Redeployment Steps
+7. Folder Configuration
 
-After updating the backend:
+Files will be uploaded to folders inside your personal My Drive.
 
-1. Build a new container image.
-2. Deploy the new revision to Cloud Run.
-3. Verify the revision is active.
-4. Test file upload functionality.
+Ensure:
 
-⸻
+* Folder IDs are correct
+* Environment variables contain valid folder IDs
+* Drive API is enabled
 
-8. Authentication Model
+Example folder ID:
 
-Cloud Run uses Application Default Credentials (ADC).
+From:
+https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOp
 
-Internally:
-
-* Google automatically injects access tokens into the runtime.
-* Tokens are rotated automatically.
-* No manual refresh mechanism is required.
-* No credential expiration handling is needed in application code.
+Folder ID:
+1AbCdEfGhIjKlMnOp
 
 ⸻
 
-9. Common Issues
+8. Common Errors
 
-403 Insufficient Permissions
+403 storageQuotaExceeded
 
-The Drive folder has not been shared correctly with the service account.
+Occurs if using Service Account with My Drive.
+Use OAuth instead.
 
-404 Folder Not Found
+DefaultCredentialsError
 
-Incorrect folder ID configured in environment variables.
+Occurs when using Application Default Credentials outside GCP.
+OAuth method does not require ADC.
 
-Drive API Not Enabled
+invalid_grant
 
-Ensure Google Drive API is enabled in the correct project.
+Refresh token revoked or expired.
+Regenerate using OAuth Playground.
+
+⸻
+
+9. Security Notes
+
+* Never commit client secret to repository.
+* Store credentials in environment variables.
+* Do not regenerate refresh tokens repeatedly.
+* Keep OAuth app in Production mode.
 
 ⸻
 
-10. Security Considerations
+10. Maintenance Guidelines
 
-* The service account only has access to folders explicitly shared with it.
-* It does not gain access to the entire Drive account.
-* No secrets are stored in the repository.
-* No OAuth verification is required.
+Refresh token remains valid unless:
 
+* User revokes app access from Google Account security
+* OAuth client is deleted
+* More than 50 tokens are generated for same user/client
+
+If refresh token becomes invalid:
+Repeat Step 4 to generate a new one.
 
 ⸻
+
 
 3️⃣ Docker
 

@@ -200,6 +200,76 @@
       gap: 8px;
       flex-wrap: wrap;
     }
+    .segregation-multi-select {
+      position: relative;
+      min-width: 0;
+      display: grid;
+      gap: 6px;
+    }
+    .segregation-multi-select summary {
+      list-style: none;
+      cursor: pointer;
+    }
+    .segregation-multi-select summary::-webkit-details-marker {
+      display: none;
+    }
+    .segregation-multi-select-trigger {
+      width: 100%;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 12px;
+      border: 1px solid #dbe3ef;
+      border-radius: 12px;
+      background: #fff;
+      color: var(--text-primary);
+      font: inherit;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+    }
+    .segregation-multi-select-trigger::after {
+      content: "▾";
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+    .segregation-multi-select[open] .segregation-multi-select-trigger {
+      border-color: var(--border-hover);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+    }
+    .segregation-multi-select-panel {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      z-index: 30;
+      min-width: 100%;
+      max-width: 360px;
+      padding: 10px;
+      border: 1px solid #dbe3ef;
+      border-radius: 14px;
+      background: #ffffff;
+      box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14);
+      display: grid;
+      gap: 6px;
+    }
+    .segregation-multi-select-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.96rem;
+      color: var(--text-primary);
+    }
+    .segregation-multi-select-option:hover {
+      background: #f8fbff;
+    }
+    .segregation-multi-select-option input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent-primary);
+    }
     @media (max-width: 860px) {
       .segregation-filter-grid {
         grid-template-columns: 1fr;
@@ -477,8 +547,18 @@
           }
           formData.set("action", action);
           if (button.classList.contains("js-segregation-pdf-preview")) {
-            formData.set("segregation_beneficiary_type", button.getAttribute("data-beneficiary-type") || "");
-            formData.set("segregation_item_type", button.getAttribute("data-item-type") || "");
+            formData.delete("segregation_beneficiary_type");
+            formData.delete("segregation_item_type");
+            const beneficiaryTypes = (button.getAttribute("data-beneficiary-types") || "")
+              .split(",")
+              .map((value) => value.trim())
+              .filter(Boolean);
+            const itemTypes = (button.getAttribute("data-item-types") || "")
+              .split(",")
+              .map((value) => value.trim())
+              .filter(Boolean);
+            beneficiaryTypes.forEach((value) => formData.append("segregation_beneficiary_type", value));
+            itemTypes.forEach((value) => formData.append("segregation_item_type", value));
           }
 
           const originalText = button.textContent;
@@ -517,17 +597,40 @@
     document.addEventListener("DOMContentLoaded", function () {
       const form = document.getElementById("segregation-filter-form");
       if (!form) return;
-      const beneficiarySelect = document.getElementById("seg-beneficiary-type");
-      const itemSelect = document.getElementById("seg-item-type");
-      const submit = () => {
-        if (typeof form.requestSubmit === "function") {
-          form.requestSubmit();
-        } else {
-          form.submit();
-        }
-      };
-      [beneficiarySelect, itemSelect].filter(Boolean).forEach((select) => {
-        select.addEventListener("change", submit);
+      const beneficiaryDropdown = document.getElementById("seg-beneficiary-type");
+      const itemDropdown = document.getElementById("seg-item-type");
+
+      function syncDropdownState(dropdown, checkboxName) {
+        if (!dropdown) return;
+        const checkboxes = Array.from(dropdown.querySelectorAll(`input[name="${checkboxName}"]`));
+        const allCheckbox = checkboxes.find((checkbox) => checkbox.value === "all");
+        const specificCheckboxes = checkboxes.filter((checkbox) => checkbox.value !== "all");
+        dropdown.addEventListener("change", function (event) {
+          const target = event.target;
+          if (!target || target.tagName !== "INPUT") return;
+          if (target.value === "all" && target.checked) {
+            specificCheckboxes.forEach((checkbox) => {
+              checkbox.checked = false;
+            });
+          } else if (target.value !== "all" && target.checked && allCheckbox) {
+            allCheckbox.checked = false;
+          }
+          if (!target.checked && specificCheckboxes.every((checkbox) => !checkbox.checked) && allCheckbox) {
+            allCheckbox.checked = true;
+          }
+        });
+      }
+
+      syncDropdownState(beneficiaryDropdown, "seg_beneficiary_type");
+      syncDropdownState(itemDropdown, "seg_item_type");
+
+      document.addEventListener("click", function (event) {
+        [beneficiaryDropdown, itemDropdown].filter(Boolean).forEach((dropdown) => {
+          if (!dropdown.open) return;
+          if (!dropdown.contains(event.target)) {
+            dropdown.open = false;
+          }
+        });
       });
     });
   </script>
@@ -571,15 +674,23 @@
                 <form method="post" style="margin: 0;">
                   {% csrf_token %}
                   <input type="hidden" name="tab" value="reports-home">
-                  <input type="hidden" name="segregation_beneficiary_type" value="{{ segregation_filter_values.beneficiary_type }}">
-                  <input type="hidden" name="segregation_item_type" value="{{ segregation_filter_values.item_type }}">
+                  {% for value in segregation_filter_values.beneficiary_types %}
+                    <input type="hidden" name="segregation_beneficiary_type" value="{{ value }}">
+                  {% endfor %}
+                  {% for value in segregation_filter_values.item_types %}
+                    <input type="hidden" name="segregation_item_type" value="{{ value }}">
+                  {% endfor %}
                   <button class="btn report-download-trigger" type="submit" name="action" value="sync_reports_segregation">Sync Data</button>
                 </form>
                 <form method="post" enctype="multipart/form-data" style="margin: 0;">
                   {% csrf_token %}
                   <input type="hidden" name="tab" value="reports-home">
-                  <input type="hidden" name="segregation_beneficiary_type" value="{{ segregation_filter_values.beneficiary_type }}">
-                  <input type="hidden" name="segregation_item_type" value="{{ segregation_filter_values.item_type }}">
+                  {% for value in segregation_filter_values.beneficiary_types %}
+                    <input type="hidden" name="segregation_beneficiary_type" value="{{ value }}">
+                  {% endfor %}
+                  {% for value in segregation_filter_values.item_types %}
+                    <input type="hidden" name="segregation_item_type" value="{{ value }}">
+                  {% endfor %}
                   <input id="reports-segregation-upload-input" type="file" name="file" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="this.form.submit();" />
                   <input type="hidden" name="action" value="upload_reports_segregation" />
                   <button class="btn report-download-trigger" type="button" onclick="document.getElementById('reports-segregation-upload-input').click();">Upload CSV / Excel</button>
@@ -587,8 +698,12 @@
                 <form method="post" style="margin: 0;">
                   {% csrf_token %}
                   <input type="hidden" name="tab" value="reports-home">
-                  <input type="hidden" name="segregation_beneficiary_type" value="{{ segregation_filter_values.beneficiary_type }}">
-                  <input type="hidden" name="segregation_item_type" value="{{ segregation_filter_values.item_type }}">
+                  {% for value in segregation_filter_values.beneficiary_types %}
+                    <input type="hidden" name="segregation_beneficiary_type" value="{{ value }}">
+                  {% endfor %}
+                  {% for value in segregation_filter_values.item_types %}
+                    <input type="hidden" name="segregation_item_type" value="{{ value }}">
+                  {% endfor %}
                   <button class="btn report-download-trigger" type="submit" name="action" value="download_reports_segregation_excel">Download Excel</button>
                 </form>
               </div>
@@ -610,25 +725,35 @@
               <input type="hidden" name="tab" value="reports-home">
               <div>
                 <label for="seg-beneficiary-type" style="display:block; margin-bottom: 6px; font-weight: 600;">Beneficiary Type</label>
-                <select id="seg-beneficiary-type" name="seg_beneficiary_type">
-                  {% for value, label in segregation_beneficiary_type_choices %}
-                    <option value="{{ value }}" {% if segregation_filter_values.beneficiary_type == value %}selected{% endif %}>{{ label }}</option>
-                  {% endfor %}
-                </select>
+                <details class="segregation-multi-select" id="seg-beneficiary-type">
+                  <summary class="segregation-multi-select-trigger">{{ segregation_beneficiary_summary }}</summary>
+                  <div class="segregation-multi-select-panel">
+                    {% for value, label in segregation_beneficiary_type_choices %}
+                      <label class="segregation-multi-select-option">
+                        <input type="checkbox" name="seg_beneficiary_type" value="{{ value }}" {% if value == "all" and not segregation_filter_values.beneficiary_types %}checked{% elif value in segregation_filter_values.beneficiary_types %}checked{% endif %}>
+                        <span>{{ label }}</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                </details>
               </div>
               <div>
                 <label for="seg-item-type" style="display:block; margin-bottom: 6px; font-weight: 600;">Item Type</label>
-                <select id="seg-item-type" name="seg_item_type">
-                  {% for value, label in segregation_item_type_choices %}
-                    <option value="{{ value }}" {% if segregation_filter_values.item_type == value %}selected{% endif %}>{{ label }}</option>
-                  {% endfor %}
-                </select>
+                <details class="segregation-multi-select" id="seg-item-type">
+                  <summary class="segregation-multi-select-trigger">{{ segregation_item_summary }}</summary>
+                  <div class="segregation-multi-select-panel">
+                    {% for value, label in segregation_item_type_choices %}
+                      <label class="segregation-multi-select-option">
+                        <input type="checkbox" name="seg_item_type" value="{{ value }}" {% if value == "all" and not segregation_filter_values.item_types %}checked{% elif value in segregation_filter_values.item_types %}checked{% endif %}>
+                        <span>{{ label }}</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                </details>
               </div>
               <div class="segregation-filter-actions">
                 <a class="btn btn-light-soft" href="{% url 'ui:reports' %}?tab=reports-home" style="text-decoration:none;">Reset</a>
-                <noscript>
-                  <button class="btn report-download-trigger" type="submit">Apply</button>
-                </noscript>
+                <button class="btn report-download-trigger" type="submit">Apply</button>
               </div>
             </form>
 
@@ -654,8 +779,8 @@
                     data-preview-action="preview_reports_segregation_file1_pdf"
                     data-preview-title="File 1 Preview"
                     data-preview-source="segregation_file_1_preview.pdf"
-                    data-beneficiary-type="{{ segregation_filter_values.beneficiary_type }}"
-                    data-item-type="{{ segregation_filter_values.item_type }}"
+                    data-beneficiary-types="{{ segregation_filter_values.beneficiary_types|join:',' }}"
+                    data-item-types="{{ segregation_filter_values.item_types|join:',' }}"
                     {% if not segregation_file1.groups %}disabled{% endif %}
                   >
                     Preview
@@ -663,8 +788,12 @@
                   <form method="post" style="margin: 0;">
                     {% csrf_token %}
                     <input type="hidden" name="tab" value="reports-home">
-                    <input type="hidden" name="segregation_beneficiary_type" value="{{ segregation_filter_values.beneficiary_type }}">
-                    <input type="hidden" name="segregation_item_type" value="{{ segregation_filter_values.item_type }}">
+                    {% for value in segregation_filter_values.beneficiary_types %}
+                      <input type="hidden" name="segregation_beneficiary_type" value="{{ value }}">
+                    {% endfor %}
+                    {% for value in segregation_filter_values.item_types %}
+                      <input type="hidden" name="segregation_item_type" value="{{ value }}">
+                    {% endfor %}
                     <button class="btn report-download-trigger" type="submit" name="action" value="download_reports_segregation_file1_pdf">Download PDF</button>
                   </form>
                 </div>
@@ -692,8 +821,8 @@
                     data-preview-action="preview_reports_segregation_file2_pdf"
                     data-preview-title="File 2 Preview"
                     data-preview-source="segregation_file_2_preview.pdf"
-                    data-beneficiary-type="{{ segregation_filter_values.beneficiary_type }}"
-                    data-item-type="{{ segregation_filter_values.item_type }}"
+                    data-beneficiary-types="{{ segregation_filter_values.beneficiary_types|join:',' }}"
+                    data-item-types="{{ segregation_filter_values.item_types|join:',' }}"
                     {% if not segregation_file2.groups %}disabled{% endif %}
                   >
                     Preview
@@ -701,8 +830,12 @@
                   <form method="post" style="margin: 0;">
                     {% csrf_token %}
                     <input type="hidden" name="tab" value="reports-home">
-                    <input type="hidden" name="segregation_beneficiary_type" value="{{ segregation_filter_values.beneficiary_type }}">
-                    <input type="hidden" name="segregation_item_type" value="{{ segregation_filter_values.item_type }}">
+                    {% for value in segregation_filter_values.beneficiary_types %}
+                      <input type="hidden" name="segregation_beneficiary_type" value="{{ value }}">
+                    {% endfor %}
+                    {% for value in segregation_filter_values.item_types %}
+                      <input type="hidden" name="segregation_item_type" value="{{ value }}">
+                    {% endfor %}
                     <button class="btn report-download-trigger" type="submit" name="action" value="download_reports_segregation_file2_pdf">Download PDF</button>
                   </form>
                 </div>
@@ -729,8 +862,8 @@
                     data-preview-action="preview_reports_segregation_file3_pdf"
                     data-preview-title="File 3 Preview"
                     data-preview-source="segregation_file_3_preview.pdf"
-                    data-beneficiary-type="{{ segregation_filter_values.beneficiary_type }}"
-                    data-item-type="{{ segregation_filter_values.item_type }}"
+                    data-beneficiary-types="{{ segregation_filter_values.beneficiary_types|join:',' }}"
+                    data-item-types="{{ segregation_filter_values.item_types|join:',' }}"
                     {% if not segregation_file3.rows %}disabled{% endif %}
                   >
                     Preview
@@ -738,8 +871,12 @@
                   <form method="post" style="margin: 0;">
                     {% csrf_token %}
                     <input type="hidden" name="tab" value="reports-home">
-                    <input type="hidden" name="segregation_beneficiary_type" value="{{ segregation_filter_values.beneficiary_type }}">
-                    <input type="hidden" name="segregation_item_type" value="{{ segregation_filter_values.item_type }}">
+                    {% for value in segregation_filter_values.beneficiary_types %}
+                      <input type="hidden" name="segregation_beneficiary_type" value="{{ value }}">
+                    {% endfor %}
+                    {% for value in segregation_filter_values.item_types %}
+                      <input type="hidden" name="segregation_item_type" value="{{ value }}">
+                    {% endfor %}
                     <button class="btn report-download-trigger" type="submit" name="action" value="download_reports_segregation_file3_pdf">Download PDF</button>
                   </form>
                 </div>
@@ -771,15 +908,23 @@
                 <form method="post" style="margin: 0;">
                   {% csrf_token %}
                   <input type="hidden" name="tab" value="reports-home">
-                  <input type="hidden" name="segregation_beneficiary_type" value="{{ segregation_filter_values.beneficiary_type }}">
-                  <input type="hidden" name="segregation_item_type" value="{{ segregation_filter_values.item_type }}">
+                  {% for value in segregation_filter_values.beneficiary_types %}
+                    <input type="hidden" name="segregation_beneficiary_type" value="{{ value }}">
+                  {% endfor %}
+                  {% for value in segregation_filter_values.item_types %}
+                    <input type="hidden" name="segregation_item_type" value="{{ value }}">
+                  {% endfor %}
                   <button class="btn report-download-trigger" type="submit" name="action" value="sync_reports_distribution">Sync Data</button>
                 </form>
                 <form method="post" enctype="multipart/form-data" style="margin: 0;">
                   {% csrf_token %}
                   <input type="hidden" name="tab" value="reports-home">
-                  <input type="hidden" name="segregation_beneficiary_type" value="{{ segregation_filter_values.beneficiary_type }}">
-                  <input type="hidden" name="segregation_item_type" value="{{ segregation_filter_values.item_type }}">
+                  {% for value in segregation_filter_values.beneficiary_types %}
+                    <input type="hidden" name="segregation_beneficiary_type" value="{{ value }}">
+                  {% endfor %}
+                  {% for value in segregation_filter_values.item_types %}
+                    <input type="hidden" name="segregation_item_type" value="{{ value }}">
+                  {% endfor %}
                   <input id="reports-distribution-upload-input" type="file" name="file" accept=".csv,.xlsx,.xlsm" style="display:none;" onchange="this.form.submit();" />
                   <input type="hidden" name="action" value="upload_reports_distribution" />
                   <button class="btn report-download-trigger" type="button" onclick="document.getElementById('reports-distribution-upload-input').click();">Upload CSV / Excel</button>

@@ -373,7 +373,6 @@ def _token_generation_filter_state(request):
         "beneficiary_type": str(request.GET.get("filter_beneficiary_type") or "").strip(),
         "requested_item": str(request.GET.get("filter_requested_item") or "").strip(),
         "item_type": str(request.GET.get("filter_item_type") or "").strip(),
-        "comments": str(request.GET.get("filter_comments") or "").strip(),
     }
 
 def _token_generation_filter_rows(rows, filters):
@@ -384,7 +383,6 @@ def _token_generation_filter_rows(rows, filters):
         beneficiary_type = str(row.get("Beneficiary Type") or "").strip()
         requested_item = str(row.get("Requested Item") or "").strip()
         item_type = str(row.get("Item Type") or "").strip()
-        comments = str(row.get("Comments") or "").strip()
 
         if filters["application_number"] and filters["application_number"].lower() not in application_number.lower():
             continue
@@ -396,8 +394,6 @@ def _token_generation_filter_rows(rows, filters):
             continue
         if filters["item_type"] and filters["item_type"].lower() != item_type.lower():
             continue
-        if filters["comments"] and filters["comments"].lower() not in comments.lower():
-            continue
 
         entries.append(
             {
@@ -407,7 +403,6 @@ def _token_generation_filter_rows(rows, filters):
                 "beneficiary_type": beneficiary_type,
                 "requested_item": requested_item,
                 "item_type": item_type,
-                "comments": comments,
             }
         )
     return entries

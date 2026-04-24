@@ -106,6 +106,7 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         edit_candidates = _token_generation_edit_candidates(rows, length_limit=name_length_limit) if token_is_prepared else []
         article_toggle_rows = _token_generation_article_toggle_rows(rows) if token_is_prepared else []
         filtered_rows = _token_generation_filter_rows(rows, filter_state) if rows else []
+        excluded_rows = list(stage_state.get("excluded_rows") or [])
         context.update(
             {
                 "page_title": "Token Generation",
@@ -133,6 +134,7 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 "token_article_toggles": article_toggle_rows,
                 "token_filter_state": filter_state,
                 "token_filtered_rows": filtered_rows,
+                "token_excluded_rows": excluded_rows,
                 "token_open_section": open_section,
                 "token_sync_required": _token_generation_sync_required(self.request, session, dataset) if session else False,
                 "can_create_edit": self.request.user.has_module_permission(self.module_key, "create_edit"),
@@ -184,6 +186,7 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 source_sync_marker=_token_generation_latest_source_marker(session),
                 empty_fill_approved=False,
                 show_empty_fill_approval=False,
+                excluded_rows=[],
             )
             request.session["token_generation_open_section"] = ""
             messages.success(
@@ -226,6 +229,7 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 source_sync_marker="",
                 empty_fill_approved=False,
                 show_empty_fill_approval=False,
+                excluded_rows=[],
             )
             request.session["token_generation_open_section"] = ""
             messages.success(
@@ -253,6 +257,7 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             }
             selected_indices = {int(value) for value in selected_indices if value is not None}
             original_rows = [dict(row) for row in saved_dataset["rows"]]
+            excluded_rows = [dict(row) for index, row in enumerate(original_rows) if index in selected_indices]
             filtered_rows = [
                 row for index, row in enumerate(original_rows)
                 if index not in selected_indices
@@ -279,11 +284,77 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 token_print_saved=False,
                 empty_fill_approved=False,
                 show_empty_fill_approval=False,
+                excluded_rows=[
+                    {
+                        "row_index": index,
+                        "application_number": str(row.get("Application Number") or "").strip(),
+                        "beneficiary_name": str(row.get("Beneficiary Name") or "").strip(),
+                        "beneficiary_type": str(row.get("Beneficiary Type") or "").strip(),
+                        "requested_item": str(row.get("Requested Item") or "").strip(),
+                        "item_type": str(row.get("Item Type") or "").strip(),
+                        "row_data": row,
+                    }
+                    for index, row in enumerate(excluded_rows)
+                ],
             )
             request.session["token_generation_open_section"] = "transformations"
             messages.success(
                 request,
                 f"Transformation rules applied. Removed {removed_count} selected row(s). Source data is unchanged.",
+            )
+            return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+
+        if action == "restore_excluded_rows":
+            excluded_pool = list(stage_state.get("excluded_rows") or [])
+            restore_indices = {
+                _phase2_parse_number(value)
+                for value in request.POST.getlist("restore_row_index")
+                if str(value).strip()
+            }
+            restore_indices = {int(value) for value in restore_indices if value is not None}
+            if not excluded_pool:
+                messages.warning(request, "No excluded rows to restore.")
+                return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+            restored_rows = []
+            remaining_excluded = []
+            for index, row in enumerate(excluded_pool):
+                if index in restore_indices:
+                    restored_row = dict(row.get("row_data") or {})
+                    if restored_row:
+                        restored_rows.append(restored_row)
+                else:
+                    remaining_excluded.append(row)
+            if not restored_rows:
+                messages.warning(request, "Select at least one excluded row to restore.")
+                return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
+            active_rows = [dict(row) for row in saved_dataset["rows"]]
+            active_rows.extend(restored_rows)
+            saved_dataset["rows"] = active_rows
+            saved_dataset["headers"] = [
+                header for header in list(saved_dataset["headers"] or [])
+                if header not in {"Start Token No", "End Token No"}
+            ]
+            for row in saved_dataset["rows"]:
+                row.pop("Start Token No", None)
+                row.pop("End Token No", None)
+            _token_generation_store_dataset(
+                session=session,
+                dataset=saved_dataset,
+                source_name=saved_dataset["source_name"] or f"Rule-filtered Token Data ({session.session_name})",
+                user=request.user,
+            )
+            _token_generation_set_stage_state(
+                request,
+                session,
+                token_print_saved=False,
+                empty_fill_approved=False,
+                show_empty_fill_approval=False,
+                excluded_rows=remaining_excluded,
+            )
+            request.session["token_generation_open_section"] = "transformations"
+            messages.success(
+                request,
+                f"Restored {len(restored_rows)} excluded row(s) back into the active token list.",
             )
             return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
 
@@ -432,16 +503,18 @@ class TokenGenerationView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 user=request.user,
             )
             request.session["token_generation_open_section"] = "step4"
-            start_no = min(
-                (_phase2_parse_number(row.get("Start Token No")) or 0)
+            start_numbers = [
+                _phase2_parse_number(row.get("Start Token No")) or 0
                 for row in saved_dataset["rows"]
                 if (_phase2_parse_number(row.get("Start Token No")) or 0) > 0
-            ) if saved_dataset["rows"] else 0
-            end_no = max(
-                (_phase2_parse_number(row.get("End Token No")) or 0)
+            ]
+            end_numbers = [
+                _phase2_parse_number(row.get("End Token No")) or 0
                 for row in saved_dataset["rows"]
                 if (_phase2_parse_number(row.get("End Token No")) or 0) > 0
-            ) if saved_dataset["rows"] else 0
+            ]
+            start_no = min(start_numbers) if start_numbers else 0
+            end_no = max(end_numbers) if end_numbers else 0
             messages.success(request, f"Token numbers generated. Starting: {start_no}, Ending: {end_no}")
             return HttpResponseRedirect(f'{reverse("ui:token-generation")}?session={session.pk}')
 

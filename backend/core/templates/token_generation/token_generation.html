@@ -181,6 +181,23 @@
       margin-top: 14px;
       flex-wrap: wrap;
     }
+    .token-filter-top-actions {
+      display: flex;
+      justify-content: flex-end;
+      align-items: end;
+      margin-top: 8px;
+      justify-self: end;
+      grid-column: 5;
+    }
+    .token-filter-top-actions .btn {
+      background: linear-gradient(180deg, #5a86f2 0%, #3e6ae6 100%);
+      border-color: #3e6ae6;
+      color: #fff;
+      box-shadow: 0 8px 18px rgba(62, 106, 230, 0.18);
+    }
+    .token-filter-top-actions .btn:hover {
+      filter: brightness(1.02);
+    }
     .token-muted {
       color: var(--text-secondary);
       font-size: 0.84rem;
@@ -355,6 +372,7 @@
                     <option value="District" {% if token_filter_state.beneficiary_type == "District" %}selected{% endif %}>District</option>
                     <option value="Public" {% if token_filter_state.beneficiary_type == "Public" %}selected{% endif %}>Public</option>
                     <option value="Institutions" {% if token_filter_state.beneficiary_type == "Institutions" %}selected{% endif %}>Institutions</option>
+                    <option value="Others" {% if token_filter_state.beneficiary_type == "Others" %}selected{% endif %}>Others</option>
                   </select>
                 </div>
                 <div>
@@ -369,13 +387,9 @@
                     <option value="Aid" {% if token_filter_state.item_type == "Aid" %}selected{% endif %}>Aid</option>
                   </select>
                 </div>
-                <div>
-                  <label class="token-muted" for="filter_comments">Comments</label>
-                  <input class="input" id="filter_comments" name="filter_comments" value="{{ token_filter_state.comments }}">
+                <div class="token-filter-top-actions">
+                  <button class="btn" type="submit">Filter Rows</button>
                 </div>
-              </div>
-              <div class="token-step-actions">
-                <button class="btn btn-subtle btn-light-soft" type="submit">Filter Rows</button>
               </div>
             </form>
 
@@ -396,7 +410,6 @@
                     <div>Beneficiary</div>
                     <div>Type</div>
                     <div>Requested Item</div>
-                    <div>Comments</div>
                   </div>
                   {% for row in token_filtered_rows %}
                     <label class="token-filter-row">
@@ -405,7 +418,6 @@
                       <div>{{ row.beneficiary_name|default:"-" }}</div>
                       <div>{{ row.beneficiary_type|default:"-" }}</div>
                       <div>{{ row.requested_item|default:"-" }}</div>
-                      <div>{{ row.comments|default:"-" }}</div>
                     </label>
                   {% endfor %}
                 {% else %}
@@ -417,6 +429,40 @@
                 <button class="btn btn-subtle" type="submit" {% if not token_filtered_rows %}disabled{% endif %}>Exclude Selected</button>
               </div>
             </form>
+
+            {% if token_excluded_rows %}
+              <div style="margin-top: 18px;">
+                <h3 style="margin: 0 0 10px;">Excluded Rows</h3>
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="restore_excluded_rows">
+                  {% if selected_session %}<input type="hidden" name="session" value="{{ selected_session.pk }}">{% endif %}
+
+                  <div class="token-filter-results">
+                    <div class="token-filter-row token-filter-labels">
+                      <div>Select</div>
+                      <div>App No.</div>
+                      <div>Beneficiary</div>
+                      <div>Type</div>
+                      <div>Requested Item</div>
+                    </div>
+                    {% for row in token_excluded_rows %}
+                      <label class="token-filter-row">
+                        <div><input type="checkbox" name="restore_row_index" value="{{ forloop.counter0 }}"></div>
+                        <div>{{ row.application_number|default:"-" }}</div>
+                        <div>{{ row.beneficiary_name|default:"-" }}</div>
+                        <div>{{ row.beneficiary_type|default:"-" }}</div>
+                        <div>{{ row.requested_item|default:"-" }}</div>
+                      </label>
+                    {% endfor %}
+                  </div>
+
+                  <div class="token-step-actions">
+                    <button class="btn btn-subtle" type="submit">Restore Selected</button>
+                  </div>
+                </form>
+              </div>
+            {% endif %}
           </div>
       </div>
     </details>

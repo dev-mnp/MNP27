@@ -325,7 +325,8 @@ class OrderManagementView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                     "Quantity Excess",
                     "District",
                     "Public",
-                    "Institutions & Others",
+                    "Institutions",
+                    "Others",
                     "Beneficiary Type",
                     "Application Number",
                     "Beneficiary",
@@ -353,6 +354,7 @@ class OrderManagementView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                             row["breakdown"]["district"],
                             row["breakdown"]["public"],
                             row["breakdown"]["institutions"],
+                            row["breakdown"]["others"],
                             item.get("beneficiary_type") if item else "",
                             item.get("application_number") if item else "",
                             item.get("beneficiary_name") if item else "",
@@ -379,7 +381,8 @@ class OrderManagementView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 "Quantity Excess",
                 "District",
                 "Public",
-                "Institutions & Others",
+                "Institutions",
+                "Others",
             ]
         )
         for row in rows:
@@ -398,7 +401,7 @@ class OrderManagementView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                     row["breakdown"]["district"],
                     row["breakdown"]["public"],
                     row["breakdown"]["institutions"],
+                    row["breakdown"]["others"],
                 ]
             )
         return response
-

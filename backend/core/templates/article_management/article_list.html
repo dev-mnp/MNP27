@@ -7,11 +7,30 @@
       display: grid;
       gap: 12px;
     }
-    .article-filter-row {
-      display: grid;
-      grid-template-columns: minmax(180px, 1.05fr) minmax(180px, 1.05fr) minmax(220px, 1.3fr) minmax(130px, 0.75fr) auto auto;
-      gap: 10px;
+    .article-filter-topline {
+      display: flex;
       align-items: end;
+      gap: 10px;
+      flex-wrap: nowrap;
+    }
+    .article-filter-search {
+      flex: 0 1 240px;
+      min-width: 180px;
+    }
+    .article-filter-select {
+      flex: 1 1 155px;
+      min-width: 130px;
+    }
+    .article-filter-action {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+    .article-filter-row {
+      display: flex;
+      align-items: end;
+      gap: 10px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
     }
     .article-table {
       table-layout: fixed;
@@ -22,6 +41,17 @@
       vertical-align: middle;
       padding: 8px 8px;
       font-size: 13px;
+    }
+    .article-table th {
+      font-weight: 500;
+    }
+    .article-table th a,
+    .article-table th a:visited,
+    .article-table th a:hover,
+    .article-table th a:active {
+      color: #111827 !important;
+      text-decoration: none !important;
+      font-weight: 500;
     }
     .article-table .col-article-name,
     .article-table .col-token-name {
@@ -35,26 +65,47 @@
     .article-actions-cell {
       white-space: nowrap;
       text-align: center;
+      width: 96px;
+      padding-left: 0;
+      padding-right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .article-actions-inline {
       display: inline-flex;
       align-items: center;
-      justify-content: flex-start;
-      gap: 8px;
+      justify-content: center;
+      gap: 3px;
       flex-wrap: nowrap;
+      width: auto;
+      margin: 0 auto;
     }
     .article-table th:last-child,
     .article-table td:last-child {
-      width: 72px;
+      width: 96px;
     }
     @media (max-width: 1080px) {
+      .article-filter-topline,
       .article-filter-row {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        flex-wrap: wrap;
+      }
+      .article-filter-search {
+        flex: 1 1 220px;
+      }
+      .article-filter-select {
+        flex: 1 1 180px;
       }
     }
     @media (max-width: 720px) {
       .article-filter-row {
-        grid-template-columns: 1fr;
+        overflow-x: visible;
+      }
+      .article-filter-search,
+      .article-filter-select,
+      .article-filter-action {
+        flex: 1 1 100%;
+        min-width: 0;
       }
     }
   </style>
@@ -67,14 +118,12 @@
     </div>
 
     <form method="get" class="form-section-card article-filter-stack" id="article-filter-form" style="margin: 18px 0 16px;">
-      <div class="toolbar" style="justify-content: space-between; align-items: end; margin-top: 0;">
-        <div style="flex: 1.5; max-width: 520px;">
+      <div class="article-filter-topline" style="margin-top: 0;">
+        <div class="article-filter-search">
           <label>Search</label>
           <input class="input" type="text" name="q" value="{{ filters.q }}" placeholder="Search article, token name, category, or type" />
         </div>
-      </div>
-      <div class="article-filter-row">
-        <div>
+        <div class="article-filter-select">
           <label>Item Type</label>
           <select class="input" name="item_type">
             <option value="">All Types</option>
@@ -83,7 +132,7 @@
             {% endfor %}
           </select>
         </div>
-        <div>
+        <div class="article-filter-select">
           <label>Category</label>
           <select class="input" name="category">
             <option value="">All Categories</option>
@@ -92,7 +141,7 @@
             {% endfor %}
           </select>
         </div>
-        <div>
+        <div class="article-filter-select">
           <label>Super Category</label>
           <select class="input" name="master_category">
             <option value="">All Super Categories</option>
@@ -101,7 +150,7 @@
             {% endfor %}
           </select>
         </div>
-        <div>
+        <div class="article-filter-select">
           <label>Combo / Separate</label>
           <select class="input" name="combo">
             <option value="">All</option>
@@ -110,9 +159,9 @@
             {% endfor %}
           </select>
         </div>
-        <a class="btn btn-subtle btn-light-soft" href="{% url 'ui:article-list' %}">Clear All</a>
+        <a class="btn btn-subtle btn-light-soft article-filter-action" href="{% url 'ui:article-list' %}">Clear All</a>
         {% if request.user.role == "admin" or request.user.role == "editor" %}
-          <a class="btn" href="{% url 'ui:article-create' %}">Create</a>
+          <a class="btn article-filter-action" href="{% url 'ui:article-create' %}">Create</a>
         {% endif %}
       </div>
     </form>
@@ -120,14 +169,13 @@
     <div class="table-responsive">
     <table class="article-table">
       <colgroup>
-        <col style="width: 26%;">
-        <col style="width: 10%;">
-        <col style="width: 10%;">
-        <col style="width: 13%;">
-        <col style="width: 14%;">
-        <col style="width: 10%;">
+        <col style="width: 18%;">
+        <col style="width: 8%;">
+        <col style="width: 9%;">
         <col style="width: 11%;">
-        <col style="width: 6%;">
+        <col style="width: 12%;">
+        <col style="width: 15%;">
+        <col style="width: 7%;">
       </colgroup>
       <thead>
         <tr>
@@ -136,7 +184,6 @@
           <th><a href="?{{ query_string_without_page }}{% if query_string_without_page %}&{% endif %}sort=item_type&dir={% if current_sort == 'item_type' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Item Type{% if current_sort == 'item_type' %} {% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
           <th><a href="?{{ query_string_without_page }}{% if query_string_without_page %}&{% endif %}sort=category&dir={% if current_sort == 'category' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Category{% if current_sort == 'category' %} {% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
           <th><a href="?{{ query_string_without_page }}{% if query_string_without_page %}&{% endif %}sort=master_category&dir={% if current_sort == 'master_category' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Super Category{% if current_sort == 'master_category' %} {% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
-          <th><a href="?{{ query_string_without_page }}{% if query_string_without_page %}&{% endif %}sort=created_at&dir={% if current_sort == 'created_at' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Created At{% if current_sort == 'created_at' %} {% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
           <th><a href="?{{ query_string_without_page }}{% if query_string_without_page %}&{% endif %}sort=article_name_tk&dir={% if current_sort == 'article_name_tk' and current_dir == 'asc' %}desc{% else %}asc{% endif %}">Token Name{% if current_sort == 'article_name_tk' %} {% if current_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
           <th>Actions</th>
         </tr>
@@ -149,7 +196,6 @@
             <td>{{ article.get_item_type_display }}</td>
             <td>{{ article.category|default:"-" }}</td>
             <td>{{ article.master_category|default:"-" }}</td>
-            <td class="col-created">{{ article.created_at|date:"d/m/Y" }}</td>
             <td class="col-token-name">{{ article.article_name_tk|default:"-" }}</td>
             <td class="article-actions-cell">
               <div class="article-actions-inline">
@@ -168,7 +214,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="8">No articles found.</td>
+            <td colspan="7">No articles found.</td>
           </tr>
         {% endfor %}
       </tbody>

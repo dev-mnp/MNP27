@@ -169,6 +169,56 @@ urlpatterns = [
         name="institution-attachment-delete",
     ),
     path(
+        "master-entry/others/new/",
+        views.OthersMasterEntryCreateView.as_view(),
+        name="master-entry-others-create",
+    ),
+    path(
+        "master-entry/others/<str:application_number>/summary/",
+        views.OthersMasterEntryInlineSummaryView.as_view(),
+        name="master-entry-others-summary",
+    ),
+    path(
+        "master-entry/others/<str:application_number>/edit/",
+        views.OthersMasterEntryUpdateView.as_view(),
+        name="master-entry-others-edit",
+    ),
+    path(
+        "master-entry/others/<str:application_number>/delete/",
+        views.OthersMasterEntryDeleteView.as_view(),
+        name="master-entry-others-delete",
+    ),
+    path(
+        "master-entry/others/<str:application_number>/reopen/",
+        views.OthersMasterEntryReopenView.as_view(),
+        name="master-entry-others-reopen",
+    ),
+    path(
+        "master-entry/others/<str:application_number>/attachments/upload/",
+        views.OthersApplicationAttachmentUploadView.as_view(),
+        name="others-attachment-upload",
+    ),
+    path(
+        "master-entry/others/attachments/temp/upload/",
+        views.OthersApplicationAttachmentTempUploadView.as_view(),
+        name="others-attachment-temp-upload",
+    ),
+    path(
+        "master-entry/others/attachments/temp/<int:attachment_id>/delete/",
+        views.OthersApplicationAttachmentTempDeleteView.as_view(),
+        name="others-attachment-temp-delete",
+    ),
+    path(
+        "master-entry/others/attachments/temp/clear/",
+        views.OthersApplicationAttachmentTempClearView.as_view(),
+        name="others-attachment-temp-clear",
+    ),
+    path(
+        "master-entry/others/<str:application_number>/attachments/<int:attachment_id>/delete/",
+        views.OthersApplicationAttachmentDeleteView.as_view(),
+        name="others-attachment-delete",
+    ),
+    path(
         "applications/attachments/<int:attachment_id>/download/",
         views.ApplicationAttachmentDownloadView.as_view(),
         name="application-attachment-download",
