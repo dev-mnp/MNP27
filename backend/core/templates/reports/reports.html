@@ -700,7 +700,7 @@
 
     {% if active_report_tab == "reports-home" %}
       <div class="segregation-shell">
-        <details class="reports-collapsible" id="reports-segregation-panel" {% if reports_home_open_panel == "segregation" or not reports_home_open_panel %}open{% endif %}>
+        <details class="reports-collapsible" id="reports-segregation-panel" {% if reports_home_open_panel == "segregation" %}open{% endif %}>
           <summary>
             <div class="reports-collapsible-title">Segregation</div>
             <div class="reports-collapsible-meta">

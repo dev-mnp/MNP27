@@ -1214,9 +1214,9 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         stage_distribution_file1_title = _stage_distribution_file1_title(stage_distribution_premise)
         stage_distribution_file5_title = _stage_distribution_file5_title(stage_distribution_beneficiary_types)
         stage_distribution_file6_title = _stage_distribution_file6_title(stage_distribution_premise)
-        reports_home_open_panel = str(self.request.GET.get("reports_panel") or "segregation").strip().lower() or "segregation"
+        reports_home_open_panel = str(self.request.GET.get("reports_panel") or "").strip().lower()
         if reports_home_open_panel not in {"segregation", "stage-distribution"}:
-            reports_home_open_panel = "segregation"
+            reports_home_open_panel = ""
         context.update(
             {
                 "page_title": "Reports",
