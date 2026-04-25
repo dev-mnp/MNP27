@@ -9,6 +9,7 @@ from django.core.cache import cache
 from django.db import connection
 from django.db.models import (
     Case,
+    CharField,
     Count,
     DecimalField,
     ExpressionWrapper,
@@ -19,7 +20,8 @@ from django.db.models import (
     Value,
     When,
 )
-from django.db.models.functions import Coalesce
+from django.db.models.fields.json import KeyTextTransform
+from django.db.models.functions import Cast, Coalesce
 
 from core import models
 
@@ -364,3 +366,196 @@ def build_dashboard_metrics() -> dict:
 
     cache.set(DASHBOARD_METRICS_CACHE_KEY, payload, DASHBOARD_METRICS_CACHE_SECONDS)
     return payload
+
+
+def build_seat_allocation_quantity_tree(session) -> dict | None:
+    """Build dashboard page-2 tree summary from seat allocation using DB-side aggregations."""
+    if session is None:
+        return None
+
+    beneficiary_order = ["District", "Public", "Institution", "Others"]
+    item_order = ["Article", "Aid"]
+
+    base_qs = models.SeatAllocationRow.objects.filter(session=session).annotate(
+        beneficiary_group=Case(
+            When(beneficiary_type__istartswith="district", then=Value("District")),
+            When(beneficiary_type__istartswith="public", then=Value("Public")),
+            When(beneficiary_type__istartswith="institution", then=Value("Institution")),
+            When(beneficiary_type__istartswith="other", then=Value("Others")),
+            default=Value(None),
+            output_field=CharField(),
+        ),
+        item_group=Case(
+            When(item_type__iexact="article", then=Value("Article")),
+            When(item_type__iexact="aid", then=Value("Aid")),
+            default=Value(None),
+            output_field=CharField(),
+        ),
+        row_total_qty=ExpressionWrapper(
+            F("waiting_hall_quantity") + F("token_quantity"),
+            output_field=IntegerField(),
+        ),
+        total_value_text=Coalesce(
+            KeyTextTransform("Total Value", "master_row"),
+            Value("0"),
+            output_field=CharField(),
+        ),
+    ).exclude(beneficiary_group__isnull=True).exclude(item_group__isnull=True)
+
+    if not base_qs.exists():
+        return None
+
+    value_field = DecimalField(max_digits=20, decimal_places=4)
+    row_total_value_expr = Case(
+        When(total_value_text="", then=Value(DECIMAL_ZERO)),
+        default=Cast(F("total_value_text"), output_field=value_field),
+        output_field=value_field,
+    )
+    waiting_value_expr = Case(
+        When(
+            row_total_qty__gt=0,
+            then=ExpressionWrapper(
+                row_total_value_expr
+                * Cast(F("waiting_hall_quantity"), output_field=value_field)
+                / Cast(F("row_total_qty"), output_field=value_field),
+                output_field=value_field,
+            ),
+        ),
+        default=Value(DECIMAL_ZERO),
+        output_field=value_field,
+    )
+    token_value_expr = Case(
+        When(
+            row_total_qty__gt=0,
+            then=ExpressionWrapper(
+                row_total_value_expr
+                * Cast(F("token_quantity"), output_field=value_field)
+                / Cast(F("row_total_qty"), output_field=value_field),
+                output_field=value_field,
+            ),
+        ),
+        default=Value(DECIMAL_ZERO),
+        output_field=value_field,
+    )
+
+    grouped_rows = list(
+        base_qs.values("beneficiary_group", "item_group").annotate(
+            waiting_qty=Coalesce(Sum("waiting_hall_quantity"), Value(0), output_field=IntegerField()),
+            token_qty=Coalesce(Sum("token_quantity"), Value(0), output_field=IntegerField()),
+            waiting_value=Coalesce(Sum(waiting_value_expr), Value(DECIMAL_ZERO), output_field=value_field),
+            token_value=Coalesce(Sum(token_value_expr), Value(DECIMAL_ZERO), output_field=value_field),
+        )
+    )
+
+    overall_totals = base_qs.aggregate(
+        waiting_qty=Coalesce(Sum("waiting_hall_quantity"), Value(0), output_field=IntegerField()),
+        token_qty=Coalesce(Sum("token_quantity"), Value(0), output_field=IntegerField()),
+        waiting_value=Coalesce(Sum(waiting_value_expr), Value(DECIMAL_ZERO), output_field=value_field),
+        token_value=Coalesce(Sum(token_value_expr), Value(DECIMAL_ZERO), output_field=value_field),
+        row_count=Count("id"),
+    )
+
+    grouped_map = {
+        (row["beneficiary_group"], row["item_group"]): row
+        for row in grouped_rows
+    }
+
+    beneficiaries = []
+    for beneficiary in beneficiary_order:
+        item_nodes = []
+        beneficiary_total_qty = 0
+        beneficiary_total_value = Decimal("0")
+        for item_type in item_order:
+            grouped = grouped_map.get((beneficiary, item_type), {})
+            waiting_qty = int(grouped.get("waiting_qty") or 0)
+            token_qty = int(grouped.get("token_qty") or 0)
+            waiting_value = Decimal(str(grouped.get("waiting_value") or 0))
+            token_value = Decimal(str(grouped.get("token_value") or 0))
+            total_qty = waiting_qty + token_qty
+            total_value = waiting_value + token_value
+            item_nodes.append(
+                {
+                    "name": item_type,
+                    "waiting_qty": waiting_qty,
+                    "token_qty": token_qty,
+                    "total_qty": total_qty,
+                    "waiting_value": waiting_value,
+                    "token_value": token_value,
+                    "total_value": total_value,
+                }
+            )
+            beneficiary_total_qty += total_qty
+            beneficiary_total_value += total_value
+        beneficiaries.append(
+            {
+                "name": beneficiary,
+                "total_qty": beneficiary_total_qty,
+                "total_value": beneficiary_total_value,
+                "items": item_nodes,
+            }
+        )
+
+    grand_total_qty = int(overall_totals["waiting_qty"] or 0) + int(overall_totals["token_qty"] or 0)
+    grand_total_value = Decimal(str(overall_totals["waiting_value"] or 0)) + Decimal(
+        str(overall_totals["token_value"] or 0)
+    )
+
+    has_others = any(node["name"] == "Others" and node["total_qty"] > 0 for node in beneficiaries)
+
+    quantity_tree_json = {
+        "name": "TOTAL QUANTITY",
+        "metric": "quantity",
+        "total": grand_total_qty,
+        "children": [
+            {
+                "name": beneficiary["name"],
+                "total": beneficiary["total_qty"],
+                "children": [
+                    {
+                        "name": f"{item['name']} Qty",
+                        "total": item["total_qty"],
+                        "children": [
+                            {"name": "Waiting Qty", "total": item["waiting_qty"]},
+                            {"name": "Token Qty", "total": item["token_qty"]},
+                        ],
+                    }
+                    for item in beneficiary["items"]
+                ],
+            }
+            for beneficiary in beneficiaries
+        ],
+    }
+    value_tree_json = {
+        "name": "TOTAL VALUE",
+        "metric": "value",
+        "total": grand_total_value,
+        "children": [
+            {
+                "name": beneficiary["name"],
+                "total": beneficiary["total_value"],
+                "children": [
+                    {
+                        "name": f"{item['name']} Value",
+                        "total": item["total_value"],
+                        "children": [
+                            {"name": "Waiting Value", "total": item["waiting_value"]},
+                            {"name": "Token Value", "total": item["token_value"]},
+                        ],
+                    }
+                    for item in beneficiary["items"]
+                ],
+            }
+            for beneficiary in beneficiaries
+        ],
+    }
+
+    return {
+        "total_qty": grand_total_qty,
+        "total_value": grand_total_value,
+        "beneficiaries": beneficiaries,
+        "has_others": has_others,
+        "source_name": f"Seat Allocation • {session.session_name}",
+        "row_count": int(overall_totals.get("row_count") or 0),
+        "quantity_tree_json": quantity_tree_json,
+        "value_tree_json": value_tree_json,
+    }

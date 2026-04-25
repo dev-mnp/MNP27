@@ -20,7 +20,7 @@ from core.vendors.forms import VendorForm
 
 
 class VendorListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
-    module_key = models.ModuleKeyChoices.ARTICLE_MANAGEMENT
+    module_key = models.ModuleKeyChoices.VENDORS
     permission_action = "view"
     model = models.Vendor
     template_name = "vendors/vendor_list.html"
@@ -102,7 +102,7 @@ class VendorListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
 
 
 class VendorCreateView(LoginRequiredMixin, WriteRoleMixin, CreateView):
-    module_key = models.ModuleKeyChoices.ARTICLE_MANAGEMENT
+    module_key = models.ModuleKeyChoices.VENDORS
     permission_action = "create_edit"
     model = models.Vendor
     form_class = VendorForm
@@ -156,7 +156,7 @@ class VendorCreateView(LoginRequiredMixin, WriteRoleMixin, CreateView):
 
 
 class VendorUpdateView(LoginRequiredMixin, WriteRoleMixin, UpdateView):
-    module_key = models.ModuleKeyChoices.ARTICLE_MANAGEMENT
+    module_key = models.ModuleKeyChoices.VENDORS
     permission_action = "create_edit"
     model = models.Vendor
     form_class = VendorForm
@@ -174,7 +174,7 @@ class VendorUpdateView(LoginRequiredMixin, WriteRoleMixin, UpdateView):
 
 
 class VendorDeleteView(LoginRequiredMixin, AdminRequiredMixin, DeleteView):
-    module_key = models.ModuleKeyChoices.ARTICLE_MANAGEMENT
+    module_key = models.ModuleKeyChoices.VENDORS
     permission_action = "delete"
     model = models.Vendor
     template_name = "vendors/vendor_confirm_delete.html"
@@ -187,7 +187,7 @@ class VendorDeleteView(LoginRequiredMixin, AdminRequiredMixin, DeleteView):
 
 
 class VendorInlineCreateView(LoginRequiredMixin, WriteRoleMixin, View):
-    module_key = models.ModuleKeyChoices.ARTICLE_MANAGEMENT
+    module_key = models.ModuleKeyChoices.VENDORS
     permission_action = "create_edit"
 
     def post(self, request, *args, **kwargs):

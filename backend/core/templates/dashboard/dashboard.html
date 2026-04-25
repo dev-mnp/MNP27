@@ -274,6 +274,217 @@
   .total-strip .stat-value { color: #fff; }
   .loading-card, .error-card { background: #ffffff; border-radius: 16px; padding: 20px; border: 1px solid rgba(0, 0, 0, 0.06); }
   .error-card { border-color: rgba(220, 38, 38, 0.4); color: #b91c1c; }
+  .page-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+  }
+  .page-nav-spacer {
+    width: 38px;
+    height: 38px;
+  }
+  .page-nav-arrow {
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    border: 1px solid rgba(26, 102, 255, 0.25);
+    background: #ffffff;
+    color: #1a2f63;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .page-nav-arrow:hover {
+    background: rgba(26, 102, 255, 0.08);
+  }
+  .tree-block {
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 16px;
+    padding: 16px 18px;
+  }
+  .tree-source {
+    margin-top: 4px;
+    margin-bottom: 14px;
+    color: #64748b;
+    font-size: 0.9rem;
+  }
+  .tree-root {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 12px;
+  }
+  .tree-beneficiary {
+    position: relative;
+    margin-left: 8px;
+    padding-left: 22px;
+    margin-bottom: 12px;
+  }
+  .tree-beneficiary::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.85rem;
+    width: 14px;
+    border-top: 1px solid rgba(26, 102, 255, 0.5);
+  }
+  .tree-beneficiary::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: -4px;
+    bottom: -8px;
+    border-left: 1px solid rgba(26, 102, 255, 0.35);
+  }
+  .tree-beneficiary:last-child::after {
+    bottom: auto;
+    height: 1.25rem;
+  }
+  .tree-beneficiary-title {
+    font-weight: 700;
+    color: #1e3a8a;
+    margin-bottom: 8px;
+  }
+  .tree-item {
+    position: relative;
+    margin-left: 14px;
+    padding-left: 18px;
+    margin-bottom: 8px;
+  }
+  .tree-item::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.8rem;
+    width: 12px;
+    border-top: 1px solid rgba(124, 58, 237, 0.55);
+  }
+  .tree-item::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: -4px;
+    bottom: -8px;
+    border-left: 1px solid rgba(124, 58, 237, 0.35);
+  }
+  .tree-item:last-child::after {
+    bottom: auto;
+    height: 1.15rem;
+  }
+  .tree-item-title {
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 4px;
+  }
+  .tree-split {
+    position: relative;
+    margin-left: 12px;
+    padding-left: 16px;
+    font-size: 0.95rem;
+    color: #475569;
+    line-height: 1.45;
+  }
+  .tree-split::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.7rem;
+    width: 10px;
+    border-top: 1px solid rgba(100, 116, 139, 0.5);
+  }
+  .flow-root {
+    display: grid;
+    justify-items: center;
+    gap: 14px;
+  }
+  .flow-box {
+    border: 1px solid rgba(15, 23, 42, 0.14);
+    border-radius: 12px;
+    background: #fff;
+    padding: 10px 14px;
+    font-weight: 700;
+    color: #0f172a;
+    text-align: center;
+    min-width: 250px;
+  }
+  .flow-box.main {
+    background: rgba(26, 102, 255, 0.08);
+    border-color: rgba(26, 102, 255, 0.35);
+    font-size: 1.02rem;
+  }
+  .flow-arrow-down {
+    width: 2px;
+    height: 18px;
+    background: rgba(71, 85, 105, 0.45);
+    position: relative;
+  }
+  .flow-arrow-down::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: -6px;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid rgba(71, 85, 105, 0.6);
+  }
+  .flow-beneficiaries {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+  .flow-branch {
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 12px;
+    background: #f8fafc;
+    padding: 10px 12px 12px;
+  }
+  .flow-branch > .flow-box {
+    min-width: 0;
+    width: 100%;
+    background: rgba(30, 64, 175, 0.08);
+    border-color: rgba(30, 64, 175, 0.28);
+    color: #1e3a8a;
+  }
+  .flow-items {
+    margin-top: 10px;
+    display: grid;
+    gap: 10px;
+  }
+  .flow-item {
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: #fff;
+  }
+  .flow-item-title {
+    font-weight: 700;
+    color: #312e81;
+    margin-bottom: 6px;
+    text-align: center;
+  }
+  .flow-splits {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .flow-split-box {
+    border: 1px dashed rgba(71, 85, 105, 0.35);
+    border-radius: 8px;
+    padding: 6px 8px;
+    text-align: center;
+    font-size: 0.93rem;
+    color: #334155;
+    background: #f8fafc;
+  }
   @media (max-width: 768px) {
     .hero { padding: 22px; }
     .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -290,6 +501,7 @@
 
 <div class="dashboard-root">
   <div class="dashboard-shell">
+    {% if dashboard_page == "1" %}
     <div class="hero">
       <div class="hero-stats">
         <div class="hero-card" style="background: #ffe3bf; color: #4a2c14;">
@@ -504,6 +716,86 @@
       <div class="stat-card"><div class="stat-label">Total Articles</div><div class="stat-value">{{ metrics.overall.unique_articles }}</div></div>
       <div class="stat-card"><div class="stat-label">Total Article Quantity</div><div class="stat-value">{{ metrics.overall.total_articles_qty }}</div></div>
     </div>
+    {% endif %}
+
+    {% if dashboard_page == "2" and quantity_tree %}
+      <div class="section">
+        <h2 class="section-title"><span></span> Quantity Split Tree</h2>
+        <div class="tree-block">
+          <div class="tree-source">{{ quantity_tree.source_name }} • Rows: {{ quantity_tree.row_count }}</div>
+          <div class="flow-root">
+            <div class="flow-box main">TOTAL QUANTITY: {{ quantity_tree.total_qty }}</div>
+            <div class="flow-arrow-down" aria-hidden="true"></div>
+            <div class="flow-beneficiaries">
+              {% for beneficiary in quantity_tree.beneficiaries %}
+                {% if beneficiary.name != "Others" or beneficiary.total_qty > 0 %}
+                  <div class="flow-branch">
+                    <div class="flow-box">{{ beneficiary.name }} (Total Qty: {{ beneficiary.total_qty }})</div>
+                    <div class="flow-items">
+                      {% for item in beneficiary.items %}
+                        <div class="flow-item">
+                          <div class="flow-item-title">{{ item.name }} Qty: {{ item.total_qty }}</div>
+                          <div class="flow-splits">
+                            <div class="flow-split-box">Waiting Qty: {{ item.waiting_qty }}</div>
+                            <div class="flow-split-box">Token Qty: {{ item.token_qty }}</div>
+                          </div>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <h2 class="section-title"><span></span> Value Split Tree</h2>
+        <div class="tree-block">
+          <div class="tree-source">{{ quantity_tree.source_name }} • Rows: {{ quantity_tree.row_count }}</div>
+          <div class="flow-root">
+            <div class="flow-box main">TOTAL VALUE: Rs.{{ quantity_tree.total_value|rupees_round }}</div>
+            <div class="flow-arrow-down" aria-hidden="true"></div>
+            <div class="flow-beneficiaries">
+              {% for beneficiary in quantity_tree.beneficiaries %}
+                {% if beneficiary.name != "Others" or beneficiary.total_qty > 0 %}
+                  <div class="flow-branch">
+                    <div class="flow-box">{{ beneficiary.name }} (Total Value: Rs.{{ beneficiary.total_value|rupees_round }})</div>
+                    <div class="flow-items">
+                      {% for item in beneficiary.items %}
+                        <div class="flow-item">
+                          <div class="flow-item-title">{{ item.name }} Value: Rs.{{ item.total_value|rupees_round }}</div>
+                          <div class="flow-splits">
+                            <div class="flow-split-box">Waiting Value: Rs.{{ item.waiting_value|rupees_round }}</div>
+                            <div class="flow-split-box">Token Value: Rs.{{ item.token_value|rupees_round }}</div>
+                          </div>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if show_dashboard_page_2 %}
+      <div class="page-nav" aria-label="Dashboard page navigation">
+        {% if dashboard_page == "2" %}
+          <a href="?page=1" class="page-nav-arrow" aria-label="Previous page" title="Previous page">←</a>
+        {% else %}
+          <span class="page-nav-spacer" aria-hidden="true"></span>
+        {% endif %}
+
+        {% if dashboard_page == "1" %}
+          <a href="?page=2" class="page-nav-arrow" aria-label="Next page" title="Next page">→</a>
+        {% else %}
+          <span class="page-nav-spacer" aria-hidden="true"></span>
+        {% endif %}
+      </div>
+    {% endif %}
   </div>
 </div>
 <script>

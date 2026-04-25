@@ -12,14 +12,17 @@ from django.views.generic import TemplateView
 
 from core import models
 from core.shared.permissions import RoleRequiredMixin
+from core.shared.phase2 import _phase2_selected_session
 
-from .services import build_dashboard_metrics
+from .services import build_dashboard_metrics, build_seat_allocation_quantity_tree
 
 
 class DashboardView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
     """Render and update dashboard-level metrics and event budget."""
 
     allowed_roles = {"admin", "editor", "viewer"}
+    module_key = models.ModuleKeyChoices.DASHBOARD
+    permission_action = "view"
     template_name = "dashboard/dashboard.html"
 
     def post(self, request, *args, **kwargs):
@@ -49,12 +52,25 @@ class DashboardView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         metrics = build_dashboard_metrics()
         setting = models.DashboardSetting.objects.order_by("pk").first()
         overall_event_budget = setting.event_budget if setting else metrics["district"]["total_allotted_fund"]
+        selected_session = _phase2_selected_session(self.request)
+        can_view_dashboard_page_2 = self.request.user.has_module_permission(
+            models.ModuleKeyChoices.DASHBOARD, "view_page_2"
+        )
+        quantity_tree = build_seat_allocation_quantity_tree(selected_session) if can_view_dashboard_page_2 else None
+        show_page_2 = bool(can_view_dashboard_page_2 and quantity_tree)
+        requested_page = (self.request.GET.get("page") or "1").strip()
+        dashboard_page = "2" if show_page_2 and requested_page == "2" else "1"
         context.update(
             {
                 "metrics": metrics,
                 "overall_event_budget": overall_event_budget,
                 "balance_to_allot": overall_event_budget - metrics["overall"]["total_value_accrued"],
                 "can_edit_event_budget": self.request.user.role in {"admin", "editor"},
+                "can_view_dashboard_page_2": can_view_dashboard_page_2,
+                "dashboard_page": dashboard_page,
+                "show_dashboard_page_2": show_page_2,
+                "quantity_tree": quantity_tree,
+                "selected_session": selected_session,
             }
         )
         return context

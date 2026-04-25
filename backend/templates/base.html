@@ -178,6 +178,57 @@
       font-size: 13px; color: #475467; background: #f8fbff; border: 1px solid var(--border-color);
       border-radius: 999px; padding: 8px 12px; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
+    .user-menu {
+      position: relative;
+    }
+    .user-pill-button {
+      border: 1px solid var(--border-color);
+      background: #f8fbff;
+      color: #475467;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      max-width: 300px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .user-menu-popover {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 8px);
+      min-width: 160px;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 8px;
+      box-shadow: 0 10px 24px rgba(2, 6, 23, 0.12);
+      z-index: 20;
+      display: none;
+    }
+    .user-menu-popover.is-open {
+      display: block;
+    }
+    .user-logout-btn {
+      width: 100%;
+      border: 1px solid #fecaca;
+      background: #ef4444;
+      color: #ffffff;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .user-logout-btn:hover {
+      background: #dc2626;
+      color: #ffffff;
+      text-decoration: none;
+    }
     .btn-subtle {
       border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 999px; padding: 8px 14px; text-decoration: none; color: #1d4ed8;
     }
@@ -989,9 +1040,11 @@
       <nav class="menu">
         {% if request.user.is_authenticated %}
           {% with module_perms=request.user.get_module_permission_map %}
-          <a href="{% url 'ui:dashboard' %}" class="menu-item {% if request.path == '/ui/' or '/ui/dashboard/' in request.path %}active{% endif %}">
-            <span class="menu-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="4.5" rx="1.5"/><rect x="14" y="11.5" width="7" height="8.5" rx="1.5"/><rect x="3" y="14" width="7" height="6" rx="1.5"/></svg></span><span class="menu-label">Dashboard</span>
-          </a>
+          {% if module_perms.dashboard.can_view %}
+            <a href="{% url 'ui:dashboard' %}" class="menu-item {% if request.path == '/ui/' or '/ui/dashboard/' in request.path %}active{% endif %}">
+              <span class="menu-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="4.5" rx="1.5"/><rect x="14" y="11.5" width="7" height="8.5" rx="1.5"/><rect x="3" y="14" width="7" height="6" rx="1.5"/></svg></span><span class="menu-label">Dashboard</span>
+            </a>
+          {% endif %}
           {% if module_perms.application_entry.can_view %}
             <a href="{% url 'ui:master-entry' %}" class="menu-item {% if 'master-entry' in request.path %}active{% endif %}">
               <span class="menu-icon"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3h6v3H9z"/><path d="M8 11h8"/><path d="M8 15h8"/><path d="M8 19h5"/></svg></span><span class="menu-label">Application Entry</span>
@@ -1059,13 +1112,8 @@
               </div>
             {% endif %}
           {% endif %}
-          {% if module_perms.user_management.can_view or module_perms.base_files.can_view or module_perms.purchase_order.can_view or module_perms.article_management.can_view or module_perms.audit_logs.can_view %}
+          {% if module_perms.user_management.can_view or module_perms.base_files.can_view or module_perms.purchase_order.can_view or module_perms.vendors.can_view or module_perms.audit_logs.can_view or module_perms.user_guide.can_view %}
             <div class="menu-divider"></div>
-            {% if module_perms.user_management.can_view %}
-              <a href="{% url 'ui:user-list' %}" class="menu-item {% if '/ui/users/' in request.path %}active{% endif %}">
-                <span class="menu-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.5"/><path d="M4 19c0-2.8 2.8-5 5-5s5 2.2 5 5"/><path d="M14 19c.3-1.9 1.8-3.4 3.8-4"/></svg></span><span class="menu-label">User Management</span>
-              </a>
-            {% endif %}
             {% if module_perms.base_files.can_view %}
               <a href="{% url 'ui:master-data-districts' %}" class="menu-item {% if 'master-data' in request.path %}active{% endif %}">
                 <span class="menu-icon"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="6" ry="2.5"/><path d="M6 6v6c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V6"/><path d="M6 12v6c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-6"/></svg></span><span class="menu-label">Base Files</span>
@@ -1076,7 +1124,7 @@
                 <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M7 4h10l3 3v13H7z"/><path d="M17 4v4h4"/><path d="M9 12h8"/><path d="M9 16h6"/></svg></span><span class="menu-label">Purchase Order</span>
               </a>
             {% endif %}
-            {% if module_perms.article_management.can_view %}
+            {% if module_perms.vendors.can_view %}
               <a href="{% url 'ui:vendor-list' %}" class="menu-item {% if '/ui/vendors/' in request.path %}active{% endif %}">
                 <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"/><path d="M7 11h10"/><path d="M8 15h3"/></svg></span><span class="menu-label">Vendors</span>
               </a>
@@ -1086,9 +1134,16 @@
                 <span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M12 8v5l3 2"/><path d="M20 12a8 8 0 1 1-2.34-5.66"/></svg></span><span class="menu-label">Audit Logs</span>
               </a>
             {% endif %}
-            <a href="{% url 'ui:user-guide' %}" class="menu-item {% if '/ui/user-guide/' in request.path %}active{% endif %}">
-              <span class="menu-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/></svg></span><span class="menu-label">User Guide</span>
-            </a>
+            {% if module_perms.user_management.can_view %}
+              <a href="{% url 'ui:user-list' %}" class="menu-item {% if '/ui/users/' in request.path %}active{% endif %}">
+                <span class="menu-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.5"/><path d="M4 19c0-2.8 2.8-5 5-5s5 2.2 5 5"/><path d="M14 19c.3-1.9 1.8-3.4 3.8-4"/></svg></span><span class="menu-label">User Management</span>
+              </a>
+            {% endif %}
+            {% if module_perms.user_guide.can_view %}
+              <a href="{% url 'ui:user-guide' %}" class="menu-item {% if '/ui/user-guide/' in request.path %}active{% endif %}">
+                <span class="menu-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/></svg></span><span class="menu-label">User Guide</span>
+              </a>
+            {% endif %}
           {% endif %}
           {% endwith %}
         {% else %}
@@ -1096,13 +1151,7 @@
         {% endif %}
       </nav>
 
-      <div class="sidebar-footer">
-        {% if request.user.is_authenticated %}
-          <a class="btn btn-subtle" href="{% url 'ui-logout' %}"><span class="menu-label">Logout</span></a>
-        {% else %}
-          <a class="btn btn-subtle" href="{% url 'ui-login' %}"><span class="menu-label">Sign in</span></a>
-        {% endif %}
-      </div>
+      <div class="sidebar-footer"></div>
     </aside>
 
     <div class="app-main">
@@ -1116,13 +1165,18 @@
           <div class="topbar-title">Makkal Nalapani {% now "Y" %}</div>
         </div>
         <div class="topbar-actions">
-          <div class="user-pill">
-            {% if request.user.is_authenticated %}
-              {{ request.user.get_full_name|default:request.user.email }}
-            {% else %}
-              Not signed in
-            {% endif %}
-          </div>
+          {% if request.user.is_authenticated %}
+            <div class="user-menu" id="user-menu">
+              <button type="button" class="user-pill-button" id="user-menu-toggle" aria-expanded="false" aria-controls="user-menu-popover">
+                {{ request.user.get_full_name|default:request.user.email }}
+              </button>
+              <div class="user-menu-popover" id="user-menu-popover">
+                <a href="{% url 'ui-logout' %}" class="user-logout-btn">Logout</a>
+              </div>
+            </div>
+          {% else %}
+            <div class="user-pill">Not signed in</div>
+          {% endif %}
         </div>
       </header>
 
@@ -1242,6 +1296,9 @@
     var menuToggle = document.getElementById("menu-toggle");
     var sidebarCloseToggle = document.getElementById("sidebar-close-toggle");
     var sidebarBackdrop = document.getElementById("sidebar-backdrop");
+    var userMenu = document.getElementById("user-menu");
+    var userMenuToggle = document.getElementById("user-menu-toggle");
+    var userMenuPopover = document.getElementById("user-menu-popover");
     var COLLAPSE_KEY = "mnp.sidebar.collapsed";
 
     function isMobileSidebar() {
@@ -1289,6 +1346,27 @@
         trigger.setAttribute("aria-expanded", group.classList.contains("open") ? "true" : "false");
       });
     });
+
+    if (userMenu && userMenuToggle && userMenuPopover) {
+      userMenuToggle.addEventListener("click", function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        var open = userMenuPopover.classList.toggle("is-open");
+        userMenuToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+      document.addEventListener("click", function(event) {
+        if (!userMenu.contains(event.target)) {
+          userMenuPopover.classList.remove("is-open");
+          userMenuToggle.setAttribute("aria-expanded", "false");
+        }
+      });
+      document.addEventListener("keydown", function(event) {
+        if (event.key === "Escape") {
+          userMenuPopover.classList.remove("is-open");
+          userMenuToggle.setAttribute("aria-expanded", "false");
+        }
+      });
+    }
 
     var previewModal = document.getElementById("attachment-preview-modal");
     var previewFrame = document.getElementById("attachment-preview-frame");

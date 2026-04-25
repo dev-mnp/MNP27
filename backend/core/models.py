@@ -57,6 +57,7 @@ class StatusChoices(models.TextChoices):
 
 
 class ModuleKeyChoices(models.TextChoices):
+    DASHBOARD = "dashboard", "Dashboard"
     APPLICATION_ENTRY = "application_entry", "Application Entry"
     ARTICLE_MANAGEMENT = "article_management", "Article Management"
     BASE_FILES = "base_files", "Base Files"
@@ -68,12 +69,15 @@ class ModuleKeyChoices(models.TextChoices):
     REPORTS = "reports", "Reports"
     ORDER_FUND_REQUEST = "order_fund_request", "Order & Fund Request"
     PURCHASE_ORDER = "purchase_order", "Purchase Order"
+    VENDORS = "vendors", "Vendors"
     AUDIT_LOGS = "audit_logs", "Audit Logs"
     USER_MANAGEMENT = "user_management", "User Management"
+    USER_GUIDE = "user_guide", "User Guide"
 
 
 MODULE_PERMISSION_ACTION_LABELS = {
     "view": "View",
+    "view_page_2": "View Page 2",
     "create_edit": "Create / Edit",
     "delete": "Delete",
     "submit": "Submit",
@@ -86,6 +90,11 @@ MODULE_PERMISSION_ACTION_LABELS = {
 ALL_MODULE_PERMISSION_ACTIONS = tuple(MODULE_PERMISSION_ACTION_LABELS.keys())
 
 MODULE_PERMISSION_DEFINITIONS = [
+    {
+        "key": ModuleKeyChoices.DASHBOARD,
+        "label": "Dashboard",
+        "actions": ("view", "view_page_2"),
+    },
     {
         "key": ModuleKeyChoices.APPLICATION_ENTRY,
         "label": "Application Entry",
@@ -142,6 +151,11 @@ MODULE_PERMISSION_DEFINITIONS = [
         "actions": ("view", "create_edit", "delete", "submit", "reopen"),
     },
     {
+        "key": ModuleKeyChoices.VENDORS,
+        "label": "Vendors",
+        "actions": ("view", "create_edit", "delete", "export"),
+    },
+    {
         "key": ModuleKeyChoices.AUDIT_LOGS,
         "label": "Audit Logs",
         "actions": ("view",),
@@ -151,6 +165,11 @@ MODULE_PERMISSION_DEFINITIONS = [
         "label": "User Management",
         "actions": ("view", "create_edit", "delete", "reset_password"),
     },
+    {
+        "key": ModuleKeyChoices.USER_GUIDE,
+        "label": "User Guide",
+        "actions": ("view",),
+    },
 ]
 
 ROLE_MODULE_PERMISSION_DEFAULTS = {
@@ -159,6 +178,7 @@ ROLE_MODULE_PERMISSION_DEFAULTS = {
         for definition in MODULE_PERMISSION_DEFINITIONS
     },
     RoleChoices.EDITOR: {
+        ModuleKeyChoices.DASHBOARD: {"view", "view_page_2"},
         ModuleKeyChoices.APPLICATION_ENTRY: {"view", "create_edit", "submit", "reopen"},
         ModuleKeyChoices.ARTICLE_MANAGEMENT: {"view", "create_edit"},
         ModuleKeyChoices.BASE_FILES: {"view", "upload_replace"},
@@ -170,10 +190,13 @@ ROLE_MODULE_PERMISSION_DEFAULTS = {
         ModuleKeyChoices.REPORTS: {"view", "create_edit", "export", "upload_replace"},
         ModuleKeyChoices.ORDER_FUND_REQUEST: {"view", "create_edit", "submit", "reopen"},
         ModuleKeyChoices.PURCHASE_ORDER: {"view", "create_edit", "submit", "reopen"},
+        ModuleKeyChoices.VENDORS: {"view", "create_edit", "export"},
         ModuleKeyChoices.AUDIT_LOGS: set(),
         ModuleKeyChoices.USER_MANAGEMENT: set(),
+        ModuleKeyChoices.USER_GUIDE: {"view"},
     },
     RoleChoices.VIEWER: {
+        ModuleKeyChoices.DASHBOARD: {"view", "view_page_2"},
         ModuleKeyChoices.APPLICATION_ENTRY: {"view"},
         ModuleKeyChoices.ARTICLE_MANAGEMENT: {"view"},
         ModuleKeyChoices.BASE_FILES: {"view"},
@@ -185,8 +208,10 @@ ROLE_MODULE_PERMISSION_DEFAULTS = {
         ModuleKeyChoices.REPORTS: {"view"},
         ModuleKeyChoices.ORDER_FUND_REQUEST: {"view"},
         ModuleKeyChoices.PURCHASE_ORDER: {"view"},
+        ModuleKeyChoices.VENDORS: {"view"},
         ModuleKeyChoices.AUDIT_LOGS: set(),
         ModuleKeyChoices.USER_MANAGEMENT: set(),
+        ModuleKeyChoices.USER_GUIDE: {"view"},
     },
 }
 
@@ -471,6 +496,7 @@ class UserModulePermission(BaseTimestampedModel):
     user = models.ForeignKey(AppUser, on_delete=models.CASCADE, related_name="module_permissions")
     module_key = models.CharField(max_length=64, choices=ModuleKeyChoices.choices)
     can_view = models.BooleanField(default=False)
+    can_view_page_2 = models.BooleanField(default=False)
     can_create_edit = models.BooleanField(default=False)
     can_delete = models.BooleanField(default=False)
     can_submit = models.BooleanField(default=False)

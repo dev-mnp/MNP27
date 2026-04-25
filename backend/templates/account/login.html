@@ -187,6 +187,12 @@
       text-underline-offset: 2px;
     }
 
+    .login-help-message {
+      margin-top: 10px;
+      color: #6b7280;
+      font-size: 14px;
+    }
+
     .login-error {
       margin: 0 0 16px;
       padding: 12px 14px;
@@ -290,7 +296,10 @@
           </form>
 
           <div class="login-footnote">
-            <a href="#">Forgot password?</a>
+            <a href="#" id="forgot-password-link">Forgot password?</a>
+            <div id="forgot-password-message" class="login-help-message" hidden>
+              Contact admin at maruvoorhelp@gmail.com
+            </div>
           </div>
         </div>
       </div>
@@ -306,6 +315,14 @@
       }
       if (passwordInput) {
         passwordInput.setAttribute("placeholder", "Enter your password");
+      }
+      const forgotPasswordLink = document.getElementById("forgot-password-link");
+      const forgotPasswordMessage = document.getElementById("forgot-password-message");
+      if (forgotPasswordLink && forgotPasswordMessage) {
+        forgotPasswordLink.addEventListener("click", function(event) {
+          event.preventDefault();
+          forgotPasswordMessage.hidden = false;
+        });
       }
     })();
   </script>
