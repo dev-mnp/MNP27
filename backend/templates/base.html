@@ -1636,12 +1636,14 @@
       }
       if (previewDownloadLink) {
         previewDownloadLink.setAttribute("href", downloadUrl || "#");
+        previewDownloadLink.setAttribute("download", sourceName || "preview.pdf");
       }
       if (previewOpenLink) {
         previewOpenLink.setAttribute("href", url || "#");
       }
       if (previewDownloadLinkInline) {
         previewDownloadLinkInline.setAttribute("href", downloadUrl || "#");
+        previewDownloadLinkInline.setAttribute("download", sourceName || "preview.pdf");
       }
       currentPreviewUrl = url || "";
       currentDownloadUrl = downloadUrl || "";

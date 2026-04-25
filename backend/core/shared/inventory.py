@@ -138,7 +138,7 @@ def build_order_management_rows():
             row["statuses"].add(entry.status)
             row["beneficiaries"].append(
                 {
-                    "beneficiary_type": "Others" if getattr(entry, "institution_type", "") == models.InstitutionTypeChoices.OTHERS else "Institutions",
+                    "beneficiary_type": "Institutions",
                     "application_number": entry.application_number or "",
                     "beneficiary_name": entry.institution_name,
                     "quantity": entry.quantity,
@@ -150,10 +150,38 @@ def build_order_management_rows():
                     "created_at": entry.created_at,
                 }
             )
-            if getattr(entry, "institution_type", "") == models.InstitutionTypeChoices.OTHERS:
-                row["breakdown"]["others"] += entry.quantity
-            else:
-                row["breakdown"]["institutions"] += entry.quantity
+
+    others_entries = (
+        models.OthersBeneficiaryEntry.objects.select_related("article")
+        .order_by("application_number", "institution_name", "created_at")
+    )
+    for entry in others_entries:
+        parts, combo_related = _split_order_article_names(entry.article)
+        if not parts:
+            continue
+        split_count = Decimal(len(parts))
+        value_share = (entry.total_amount or Decimal("0")) / split_count if split_count else Decimal("0")
+        for part in parts:
+            row = _ensure_order_summary_row(rows_map, part, entry.article, combo_related)
+            row["total_quantity"] += entry.quantity
+            row["total_value"] += value_share
+            row["breakdown"]["others"] += entry.quantity
+            row["source_items"].add(entry.article.article_name)
+            row["statuses"].add(entry.status)
+            row["beneficiaries"].append(
+                {
+                    "beneficiary_type": "Others",
+                    "application_number": entry.application_number or "",
+                    "beneficiary_name": entry.institution_name,
+                    "quantity": entry.quantity,
+                    "source_item": entry.article.article_name,
+                    "notes": entry.notes or "",
+                    "status": entry.status,
+                    "item_type": entry.article.item_type,
+                    "linked_fund_request_status": getattr(entry.fund_request, "status", "") if entry.fund_request_id else "",
+                    "created_at": entry.created_at,
+                }
+            )
 
     order_entries = (
         models.OrderEntry.objects.select_related("article")

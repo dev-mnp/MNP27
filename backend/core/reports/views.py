@@ -59,11 +59,15 @@ from core.reports.services import _reports_waiting_hall_session_state
 from core.reports.services import _stage_distribution_build_file1
 from core.reports.services import _stage_distribution_build_beneficiary_article_file
 from core.reports.services import _stage_distribution_build_article_beneficiary_file
+from core.reports.services import _stage_distribution_build_file6
 from core.reports.services import _stage_distribution_file1_sheet_rows
+from core.reports.services import _stage_distribution_file6_sheet_rows
 from core.reports.services import _stage_distribution_master_sheet_rows
+from core.reports.services import _stage_distribution_file6_quantity_label
 from core.reports.services import _stage_distribution_filter_rows
 from core.reports.services import _stage_distribution_normalize_dataset
 from core.reports.services import generate_stage_distribution_file1_pdf
+from core.reports.services import generate_stage_distribution_file6_pdf
 from core.reports.services import generate_stage_distribution_grouped_pdf
 from core.reports.services import generate_stage_distribution_xlsx
 from core.reports.services import _segregation_build_file1
@@ -127,17 +131,46 @@ def _reports_selection_summary(selected_values: list[str], choices: list[tuple[s
 
 
 def _stage_distribution_file5_title(selected_beneficiary_types: list[str]) -> str:
-    if len(selected_beneficiary_types) == 1:
-        value = str(selected_beneficiary_types[0] or "").strip().lower()
-        if value == models.RecipientTypeChoices.PUBLIC:
-            return "Article wise Public list"
-        if value == models.RecipientTypeChoices.DISTRICT:
-            return "Article wise District list"
-        if value == models.RecipientTypeChoices.INSTITUTIONS:
-            return "Article wise Institution list"
-        if value == models.RecipientTypeChoices.OTHERS:
-            return "Article wise Others list"
-    return "Article wise beneficiaries"
+    label_map = {
+        models.RecipientTypeChoices.DISTRICT: "District",
+        models.RecipientTypeChoices.PUBLIC: "Public",
+        models.RecipientTypeChoices.INSTITUTIONS: "Institutions",
+        models.RecipientTypeChoices.OTHERS: "Others",
+    }
+    cleaned = [str(value or "").strip() for value in list(selected_beneficiary_types or []) if str(value or "").strip()]
+    if not cleaned:
+        return "Article wise List - All beneficiaries"
+
+    labels = []
+    seen = set()
+    for value in cleaned:
+        label = label_map.get(value)
+        if not label or label in seen:
+            continue
+        seen.add(label)
+        labels.append(label)
+
+    if not labels or len(labels) >= len(label_map):
+        return "Article wise List - All beneficiaries"
+    return f"Article wise List - {', '.join(labels)}"
+
+
+def _stage_distribution_file1_title(selected_premise: str) -> str:
+    premise = str(selected_premise or "").strip().lower() or "all"
+    if premise == "waiting_hall":
+        return "Beneficiary List - Waiting Hall"
+    if premise == "masm_hall":
+        return "Beneficiary List - MASM Hall"
+    return "All Beneficiary List"
+
+
+def _stage_distribution_file6_title(selected_premise: str) -> str:
+    premise = str(selected_premise or "").strip().lower() or "all"
+    if premise == "waiting_hall":
+        return "Article List - Waiting Hall"
+    if premise == "masm_hall":
+        return "Article List - MASM Hall"
+    return "Article List - All"
 
 
 class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
@@ -391,9 +424,12 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 "preview_reports_stage_distribution_file4_pdf",
                 "download_reports_stage_distribution_file5_pdf",
                 "preview_reports_stage_distribution_file5_pdf",
+                "download_reports_stage_distribution_file6_pdf",
+                "preview_reports_stage_distribution_file6_pdf",
             }:
                 normalized_dataset = _stage_distribution_normalize_dataset(distribution_state)
                 file5_title = _stage_distribution_file5_title(stage_distribution_beneficiary_types)
+                file6_title = _stage_distribution_file6_title(stage_distribution_premise)
                 rows_with_three_filters = _stage_distribution_filter_rows(
                     normalized_dataset.get("rows") or [],
                     beneficiary_types=stage_distribution_beneficiary_types,
@@ -420,7 +456,7 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                         shared_logo.get("logo_content_type") or "image/png",
                     )
                 if action == "download_reports_stage_distribution_excel":
-                    file1_data = _stage_distribution_build_file1(rows_for_file1)
+                    file1_data = _stage_distribution_build_file1(rows_for_file1, premise=stage_distribution_premise)
                     file2_data = _stage_distribution_build_beneficiary_article_file(
                         rows_for_file2_4,
                         beneficiary_types={models.RecipientTypeChoices.DISTRICT},
@@ -440,6 +476,10 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                         rows_with_three_filters,
                         premise=stage_distribution_premise,
                     )
+                    file6_data = _stage_distribution_build_file6(
+                        rows_with_three_filters,
+                        premise=stage_distribution_premise,
+                    )
                     workbook_stream = generate_stage_distribution_xlsx(
                         master_rows=_stage_distribution_master_sheet_rows(normalized_dataset.get("rows") or []),
                         file1_rows=_stage_distribution_file1_sheet_rows(file1_data["rows"]),
@@ -447,6 +487,11 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                         file3_groups=file3_data["groups"],
                         file4_groups=file4_data["groups"],
                         file5_groups=file5_data["groups"],
+                        file6_rows=_stage_distribution_file6_sheet_rows(
+                            file6_data["rows"],
+                            quantity_label=_stage_distribution_file6_quantity_label(stage_distribution_premise),
+                            include_token_columns=bool(file6_data.get("include_token_columns")),
+                        ),
                         file5_title=file5_title,
                     )
                     return FileResponse(
@@ -456,11 +501,13 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     )
                 if action in {"download_reports_stage_distribution_file1_pdf", "preview_reports_stage_distribution_file1_pdf"}:
-                    file1_data = _stage_distribution_build_file1(rows_for_file1)
+                    file1_data = _stage_distribution_build_file1(rows_for_file1, premise=stage_distribution_premise)
+                    file1_title = _stage_distribution_file1_title(stage_distribution_premise)
                     pdf_stream = generate_stage_distribution_file1_pdf(
                         file1_data["rows"],
                         seq_start=int(stage_distribution_seq_start or 0) or None,
                         seq_end=int(stage_distribution_seq_end or 0) or None,
+                        header_title_text=file1_title,
                         custom_logo=logo_bytes,
                     )
                     file_name_base = "stage_distribution_file_1"
@@ -476,6 +523,7 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                         item_value_key="article_name",
                         name_column_label="District Name",
                         header_title_text="District-wise Article List",
+                        include_token_columns=True,
                         custom_logo=logo_bytes,
                     )
                     file_name_base = "stage_distribution_file_2"
@@ -491,6 +539,7 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                         item_value_key="article_name",
                         name_column_label="Public Name",
                         header_title_text="Public-wise Article List",
+                        include_token_columns=True,
                         custom_logo=logo_bytes,
                     )
                     file_name_base = "stage_distribution_file_3"
@@ -506,23 +555,39 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                         item_value_key="article_name",
                         name_column_label="Institution Name",
                         header_title_text="Institution-wise Article List",
+                        include_token_columns=True,
                         custom_logo=logo_bytes,
                     )
                     file_name_base = "stage_distribution_file_4"
                 else:
-                    file5_data = _stage_distribution_build_article_beneficiary_file(
-                        rows_with_three_filters,
-                        premise=stage_distribution_premise,
-                    )
-                    pdf_stream = generate_stage_distribution_grouped_pdf(
-                        file5_data["groups"],
-                        section_title=file5_title,
-                        item_value_key="beneficiary_name",
-                        name_column_label="Article Name",
-                        header_title_text=file5_title,
-                        custom_logo=logo_bytes,
-                    )
-                    file_name_base = "stage_distribution_file_5"
+                    if action in {"download_reports_stage_distribution_file5_pdf", "preview_reports_stage_distribution_file5_pdf"}:
+                        file5_data = _stage_distribution_build_article_beneficiary_file(
+                            rows_with_three_filters,
+                            premise=stage_distribution_premise,
+                        )
+                        pdf_stream = generate_stage_distribution_grouped_pdf(
+                            file5_data["groups"],
+                            section_title=file5_title,
+                            item_value_key="beneficiary_name",
+                            name_column_label="Article Name",
+                            header_title_text=file5_title,
+                            include_token_columns=True,
+                            custom_logo=logo_bytes,
+                        )
+                        file_name_base = "stage_distribution_file_5"
+                    else:
+                        file6_data = _stage_distribution_build_file6(
+                            rows_with_three_filters,
+                            premise=stage_distribution_premise,
+                        )
+                        pdf_stream = generate_stage_distribution_file6_pdf(
+                            file6_data["rows"],
+                            quantity_label=_stage_distribution_file6_quantity_label(stage_distribution_premise),
+                            include_token_columns=bool(file6_data.get("include_token_columns")),
+                            header_title_text=file6_title,
+                            custom_logo=logo_bytes,
+                        )
+                        file_name_base = "stage_distribution_file_6"
                 return FileResponse(
                     pdf_stream,
                     as_attachment=action.startswith("download_reports_stage_distribution"),
@@ -1119,7 +1184,10 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             item_types=stage_distribution_item_types,
             premise=stage_distribution_premise,
         )
-        stage_distribution_file1 = _stage_distribution_build_file1(stage_distribution_filtered_rows)
+        stage_distribution_file1 = _stage_distribution_build_file1(
+            stage_distribution_filtered_rows,
+            premise=stage_distribution_premise,
+        )
         stage_distribution_file2 = _stage_distribution_build_beneficiary_article_file(
             stage_distribution_file2_4_rows,
             beneficiary_types={models.RecipientTypeChoices.DISTRICT},
@@ -1139,7 +1207,13 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
             stage_distribution_filtered_rows,
             premise=stage_distribution_premise,
         )
+        stage_distribution_file6 = _stage_distribution_build_file6(
+            stage_distribution_filtered_rows,
+            premise=stage_distribution_premise,
+        )
+        stage_distribution_file1_title = _stage_distribution_file1_title(stage_distribution_premise)
         stage_distribution_file5_title = _stage_distribution_file5_title(stage_distribution_beneficiary_types)
+        stage_distribution_file6_title = _stage_distribution_file6_title(stage_distribution_premise)
         reports_home_open_panel = str(self.request.GET.get("reports_panel") or "segregation").strip().lower() or "segregation"
         if reports_home_open_panel not in {"segregation", "stage-distribution"}:
             reports_home_open_panel = "segregation"
@@ -1214,11 +1288,14 @@ class ReportsView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                     STAGE_DISTRIBUTION_PREMISE_FILTER_CHOICES,
                 ),
                 "stage_distribution_file1": stage_distribution_file1,
+                "stage_distribution_file1_title": stage_distribution_file1_title,
                 "stage_distribution_file2": stage_distribution_file2,
                 "stage_distribution_file3": stage_distribution_file3,
                 "stage_distribution_file4": stage_distribution_file4,
                 "stage_distribution_file5": stage_distribution_file5,
                 "stage_distribution_file5_title": stage_distribution_file5_title,
+                "stage_distribution_file6": stage_distribution_file6,
+                "stage_distribution_file6_title": stage_distribution_file6_title,
                 "reports_home_open_panel": reports_home_open_panel,
                 "public_ack_field_rows": [
                     {

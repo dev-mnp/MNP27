@@ -1183,6 +1183,53 @@ class InstitutionsBeneficiaryEntry(BaseTimestampedModel):
         return f"{self.institution_name} - {self.application_number or 'pending'}"
 
 
+class OthersBeneficiaryEntry(BaseTimestampedModel):
+    institution_name = models.CharField(max_length=255)
+    application_number = models.CharField(max_length=120, blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
+    mobile = models.CharField(max_length=50, blank=True, null=True)
+    article = models.ForeignKey(Article, on_delete=models.RESTRICT, related_name="others_entries")
+    article_cost_per_unit = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    quantity = models.PositiveIntegerField(default=1)
+    total_amount = models.DecimalField(max_digits=16, decimal_places=2, default=0)
+    item_comes_here = models.BooleanField(blank=True, null=True)
+    name_of_beneficiary = models.CharField(max_length=255, blank=True, null=True)
+    name_of_institution = models.CharField(max_length=255, blank=True, null=True)
+    aadhar_number = models.CharField(max_length=20, blank=True, null=True)
+    cheque_rtgs_in_favour = models.CharField(max_length=255, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    internal_notes = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=10, choices=BeneficiaryStatusChoices.choices, default=BeneficiaryStatusChoices.PENDING)
+    created_by = models.ForeignKey(
+        AppUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_others_entries",
+    )
+    fund_request = models.ForeignKey(
+        FundRequest,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="linked_others_beneficiaries",
+    )
+
+    class Meta:
+        db_table = "others_beneficiary_entries"
+        verbose_name = "Others Beneficiary Entry"
+        verbose_name_plural = "Others Beneficiary Entries"
+        indexes = [
+            models.Index(fields=["application_number"]),
+            models.Index(fields=["status"]),
+            models.Index(fields=["fund_request"]),
+            models.Index(fields=["article"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.institution_name} - {self.application_number or 'pending'}"
+
+
 class ApplicationAttachmentTypeChoices(models.TextChoices):
     DISTRICT = "district", "District"
     PUBLIC = "public", "Public"

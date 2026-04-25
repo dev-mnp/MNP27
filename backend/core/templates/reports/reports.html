@@ -1038,7 +1038,7 @@
             <section class="card" style="margin: 0 0 10px;">
               <div class="toolbar" style="justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 8px;">
                 <div>
-                  <h4 style="margin: 0;">Beneficiary List</h4>
+                  <h4 style="margin: 0;">{{ stage_distribution_file1_title }}</h4>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 0.88rem; white-space: nowrap;">
                   <span style="font-weight: 600;">Sequence From</span>
@@ -1276,6 +1276,51 @@
               </div>
               <div class="segregation-summary-row">
                 <div style="color: var(--text-secondary); font-size: 0.94rem;">{% if not stage_distribution_file5.groups %}No rows available with the current filters.{% endif %}</div>
+              </div>
+            </section>
+
+            <section class="card" style="margin: 0 0 10px;">
+              <div class="toolbar" style="justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                <div>
+                  <h4 style="margin: 0 0 6px;">{{ stage_distribution_file6_title }}</h4>
+                </div>
+                <div class="segregation-summary-actions">
+                  <form method="post" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="tab" value="reports-home">
+                    <input type="hidden" name="reports_panel" value="stage-distribution">
+                    <input type="hidden" name="action" value="preview_reports_stage_distribution_file6_pdf">
+                    {% for value in stage_distribution_filter_values.beneficiary_types %}
+                      <input type="hidden" name="stage_beneficiary_type" value="{{ value }}">
+                    {% endfor %}
+                    {% for value in stage_distribution_filter_values.item_types %}
+                      <input type="hidden" name="stage_item_type" value="{{ value }}">
+                    {% endfor %}
+                    <input type="hidden" name="stage_premise" value="{{ stage_distribution_filter_values.premise }}">
+                    <button class="btn report-preview-btn report-download-trigger js-report-pdf-preview" type="button" data-preview-action="preview_reports_stage_distribution_file6_pdf" data-preview-title="Stage Distribution File 6 Preview" data-preview-source="stage_distribution_file_6_preview.pdf" {% if not stage_distribution_file6.rows %}disabled{% endif %}>Preview</button>
+                  </form>
+                  <form method="post" style="margin: 0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="tab" value="reports-home">
+                    <input type="hidden" name="reports_panel" value="stage-distribution">
+                    <input type="hidden" name="action" value="download_reports_stage_distribution_file6_pdf">
+                    {% for value in stage_distribution_filter_values.beneficiary_types %}
+                      <input type="hidden" name="stage_beneficiary_type" value="{{ value }}">
+                    {% endfor %}
+                    {% for value in stage_distribution_filter_values.item_types %}
+                      <input type="hidden" name="stage_item_type" value="{{ value }}">
+                    {% endfor %}
+                    <input type="hidden" name="stage_premise" value="{{ stage_distribution_filter_values.premise }}">
+                    <button class="btn report-download-trigger" type="submit" {% if not stage_distribution_file6.rows %}disabled{% endif %}>Download PDF</button>
+                  </form>
+                </div>
+              </div>
+              <div style="margin-bottom: 10px; color: var(--text-secondary); font-size: 0.92rem;">
+                Rows: <strong style="color: var(--text-primary);">{{ stage_distribution_file6.row_count }}</strong>
+                <span style="margin-left: 10px;">Grand Total: <strong style="color: var(--text-primary);">{{ stage_distribution_file6.grand_total }}</strong></span>
+              </div>
+              <div class="segregation-summary-row">
+                <div style="color: var(--text-secondary); font-size: 0.94rem;">{% if not stage_distribution_file6.rows %}No rows available with the current filters.{% endif %}</div>
               </div>
             </section>
           </div>

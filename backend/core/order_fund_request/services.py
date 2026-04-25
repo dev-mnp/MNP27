@@ -68,8 +68,10 @@ def _resolve_fund_request_recipient_source(recipient: models.FundRequestRecipien
         return models.DistrictBeneficiaryEntry.objects.select_related("article").filter(pk=source_id).first()
     if recipient.beneficiary_type == models.RecipientTypeChoices.PUBLIC:
         return models.PublicBeneficiaryEntry.objects.active().select_related("article").filter(pk=source_id).first()
-    if recipient.beneficiary_type in {models.RecipientTypeChoices.INSTITUTIONS, models.RecipientTypeChoices.OTHERS}:
+    if recipient.beneficiary_type == models.RecipientTypeChoices.INSTITUTIONS:
         return models.InstitutionsBeneficiaryEntry.objects.select_related("article").filter(pk=source_id).first()
+    if recipient.beneficiary_type == models.RecipientTypeChoices.OTHERS:
+        return models.OthersBeneficiaryEntry.objects.select_related("article").filter(pk=source_id).first()
     return None
 
 
@@ -109,6 +111,8 @@ def _article_pdf_beneficiary_label(item: models.FundRequestArticle) -> str:
         labels.append("Public")
     if article.institution_entries.exists():
         labels.append("Institution")
+    if article.others_entries.exists():
+        labels.append("Others")
 
     if labels:
         return " & ".join(labels)

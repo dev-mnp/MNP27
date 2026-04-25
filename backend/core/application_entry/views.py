@@ -156,16 +156,12 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
         district_count = models.DistrictBeneficiaryEntry.objects.values("district_id").distinct().count()
         public_count = _public_active_queryset().count()
         public_archived_count = models.PublicBeneficiaryEntry.objects.archived().count()
-        institution_count = models.InstitutionsBeneficiaryEntry.objects.filter(
-            institution_type=models.InstitutionTypeChoices.INSTITUTIONS
-        ).values("application_number").distinct().count()
-        others_count = models.InstitutionsBeneficiaryEntry.objects.filter(institution_type=models.InstitutionTypeChoices.OTHERS).values("application_number").distinct().count()
+        institution_count = models.InstitutionsBeneficiaryEntry.objects.values("application_number").distinct().count()
+        others_count = models.OthersBeneficiaryEntry.objects.values("application_number").distinct().count()
         district_row_count = models.DistrictBeneficiaryEntry.objects.count()
         public_row_count = _public_active_queryset().count()
-        institution_row_count = models.InstitutionsBeneficiaryEntry.objects.filter(
-            institution_type=models.InstitutionTypeChoices.INSTITUTIONS
-        ).count()
-        others_row_count = models.InstitutionsBeneficiaryEntry.objects.filter(institution_type=models.InstitutionTypeChoices.OTHERS).count()
+        institution_row_count = models.InstitutionsBeneficiaryEntry.objects.count()
+        others_row_count = models.OthersBeneficiaryEntry.objects.count()
         counts = {
             "district_count": district_count,
             "public_count": public_count,
@@ -228,7 +224,7 @@ class MasterEntryView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 )
         elif beneficiary_type == "institutions":
             institution_groups = _filter_sort_institution_summaries(
-                _build_institution_entry_summaries(institution_type_filter=models.InstitutionTypeChoices.INSTITUTIONS),
+                _build_institution_entry_summaries(),
                 search_query=search_query,
                 date_from=date_from,
                 date_to=date_to,
@@ -298,12 +294,13 @@ class InstitutionsMasterEntryInlineSummaryView(LoginRequiredMixin, RoleRequiredM
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "view"
     template_name = "application_entry/partials/master_entry_institution_summary.html"
+    entry_model = models.InstitutionsBeneficiaryEntry
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         application_number = self.kwargs["application_number"]
         entries = list(
-            models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number)
+            self.entry_model.objects.filter(application_number=application_number)
             .select_related("article")
             .only(
                 "id",
@@ -1070,9 +1067,9 @@ def _public_audit_snapshot(entry):
     }
 
 
-def _institution_audit_snapshot(application_number):
+def _institution_audit_snapshot(application_number, *, entry_model=models.InstitutionsBeneficiaryEntry, institution_type=models.InstitutionTypeChoices.INSTITUTIONS):
     entries = list(
-        models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).select_related("article").order_by("id")
+        entry_model.objects.filter(application_number=application_number).select_related("article").order_by("id")
     )
     if not entries:
         return {"application_number": application_number, "item_count": 0, "items": []}
@@ -1081,7 +1078,7 @@ def _institution_audit_snapshot(application_number):
     return {
         "application_number": application_number,
         "institution_name": first.institution_name or "",
-        "institution_type": first.institution_type or "",
+        "institution_type": getattr(first, "institution_type", "") or institution_type,
         "status": first.status or "",
         "address": first.address or "",
         "mobile": first.mobile or "",
@@ -1195,11 +1192,16 @@ def _public_export_rows(filtered_entries):
     return rows
 
 
-def _institution_export_rows(filtered_summaries, *, beneficiary_type_label="Institutions"):
+def _institution_export_rows(
+    filtered_summaries,
+    *,
+    beneficiary_type_label="Institutions",
+    entry_model=models.InstitutionsBeneficiaryEntry,
+):
     application_numbers = [row["application_number"] for row in filtered_summaries]
     if not application_numbers:
         return []
-    entries = models.InstitutionsBeneficiaryEntry.objects.select_related("article").filter(application_number__in=application_numbers).order_by("application_number", "created_at", "id")
+    entries = entry_model.objects.select_related("article").filter(application_number__in=application_numbers).order_by("application_number", "created_at", "id")
     rows = []
     for entry in entries:
         rows.append({
@@ -1263,7 +1265,7 @@ def _export_master_entry_csv(request, *, export_scope):
 
     if export_scope in {"all", "institutions"}:
         filtered_institution_summaries = _filter_sort_institution_summaries(
-            _build_institution_entry_summaries(institution_type_filter=models.InstitutionTypeChoices.INSTITUTIONS),
+            _build_institution_entry_summaries(),
             search_query=filters["search_query"],
             date_from=filters["date_from"],
             date_to=filters["date_to"],
@@ -1283,7 +1285,11 @@ def _export_master_entry_csv(request, *, export_scope):
             sort_by=filters["sort_by"],
             sort_dir=filters["sort_dir"],
         )
-        others_rows = _institution_export_rows(filtered_others_summaries, beneficiary_type_label="Others")
+        others_rows = _institution_export_rows(
+            filtered_others_summaries,
+            beneficiary_type_label="Others",
+            entry_model=models.OthersBeneficiaryEntry,
+        )
 
     rows = district_rows + public_rows + institution_rows + others_rows
     response = HttpResponse(content_type="text/csv")
@@ -1293,6 +1299,7 @@ def _export_master_entry_csv(request, *, export_scope):
             models.DistrictBeneficiaryEntry.objects.exclude(status=models.BeneficiaryStatusChoices.SUBMITTED).exists()
             or _public_active_queryset().exclude(status=models.BeneficiaryStatusChoices.SUBMITTED).exists()
             or models.InstitutionsBeneficiaryEntry.objects.exclude(status=models.BeneficiaryStatusChoices.SUBMITTED).exists()
+            or models.OthersBeneficiaryEntry.objects.exclude(status=models.BeneficiaryStatusChoices.SUBMITTED).exists()
         )
         status_label = "Draft" if has_non_submitted else "Submitted"
         filename = f"1_Master_Data_{status_label}_{timestamp}.csv"
@@ -1305,6 +1312,8 @@ def _export_master_entry_csv(request, *, export_scope):
             scope_rows = _public_active_queryset()
         elif export_scope == "institutions":
             scope_rows = models.InstitutionsBeneficiaryEntry.objects.all()
+        elif export_scope == "others":
+            scope_rows = models.OthersBeneficiaryEntry.objects.all()
         if scope_rows:
             has_non_submitted = scope_rows.exclude(status=models.BeneficiaryStatusChoices.SUBMITTED).exists()
         status_label = "Draft" if has_non_submitted else "Submitted"
@@ -1640,11 +1649,11 @@ def _public_conflict_token(entry):
     return _timestamp_conflict_token(entry.updated_at)
 
 
-def _institution_conflict_token(application_number):
+def _institution_conflict_token(application_number, *, entry_model=models.InstitutionsBeneficiaryEntry):
     if not application_number:
         return ""
     latest = (
-        models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number)
+        entry_model.objects.filter(application_number=application_number)
         .order_by("-updated_at")
         .values_list("updated_at", flat=True)
         .first()
@@ -2090,6 +2099,12 @@ def _resolve_public_aadhaar_status(form_data):
     return models.AadhaarVerificationStatusChoices.PENDING_VERIFICATION
 
 
+def _institution_entry_model_for_type(institution_type_filter):
+    if institution_type_filter == models.InstitutionTypeChoices.OTHERS:
+        return models.OthersBeneficiaryEntry
+    return models.InstitutionsBeneficiaryEntry
+
+
 def _build_institution_entry_summaries(*, institution_type_filter=None, sort_by="", sort_dir="desc", attachment_type=models.ApplicationAttachmentTypeChoices.INSTITUTION):
     """
     Return per-application summaries for Institutions/Others in master-entry list view.
@@ -2097,13 +2112,14 @@ def _build_institution_entry_summaries(*, institution_type_filter=None, sort_by=
     Uses Postgres aggregation instead of grouping every row in Python.
     """
 
+    entry_model = _institution_entry_model_for_type(institution_type_filter)
     latest_entry_qs = (
-        models.InstitutionsBeneficiaryEntry.objects.filter(application_number=OuterRef("application_number"))
+        entry_model.objects.filter(application_number=OuterRef("application_number"))
         .order_by("-created_at", "-id")
     )
 
-    queryset = models.InstitutionsBeneficiaryEntry.objects.exclude(application_number__isnull=True).exclude(application_number__exact="")
-    if institution_type_filter is not None:
+    queryset = entry_model.objects.exclude(application_number__isnull=True).exclude(application_number__exact="")
+    if institution_type_filter not in {None, models.InstitutionTypeChoices.OTHERS} and hasattr(entry_model, "institution_type"):
         queryset = queryset.filter(institution_type=institution_type_filter)
 
     rows = list(
@@ -2111,11 +2127,6 @@ def _build_institution_entry_summaries(*, institution_type_filter=None, sort_by=
         .annotate(
             institution_name=Coalesce(
                 Subquery(latest_entry_qs.values("institution_name")[:1]),
-                Value("", output_field=TextField()),
-                output_field=TextField(),
-            ),
-            institution_type=Coalesce(
-                Subquery(latest_entry_qs.values("institution_type")[:1]),
                 Value("", output_field=TextField()),
                 output_field=TextField(),
             ),
@@ -2148,7 +2159,7 @@ def _build_institution_entry_summaries(*, institution_type_filter=None, sort_by=
 
     application_numbers = [row["application_number"] for row in rows if row.get("application_number")]
     detail_entries = (
-        models.InstitutionsBeneficiaryEntry.objects.select_related("article")
+        entry_model.objects.select_related("article")
         .filter(application_number__in=application_numbers)
         .order_by("application_number", "created_at", "id")
     )
@@ -2187,7 +2198,11 @@ def _build_institution_entry_summaries(*, institution_type_filter=None, sort_by=
     for row in rows:
         application_number = row.get("application_number") or "-"
         attachment = attachment_latest.get(application_number)
-        institution_type_value = row.get("institution_type") or ""
+        institution_type_value = (
+            models.InstitutionTypeChoices.OTHERS
+            if institution_type_filter == models.InstitutionTypeChoices.OTHERS
+            else (row.get("institution_type") or models.InstitutionTypeChoices.INSTITUTIONS)
+        )
         institution_type_label = institution_type_value
         if institution_type_value:
             try:
@@ -2504,7 +2519,16 @@ def _sync_district_entries(existing_entries, built_rows, user):
             entry.delete()
 
 
-def _sync_institution_entries(existing_entries, built_rows, user, *, application_number, form_data):
+def _sync_institution_entries(
+    existing_entries,
+    built_rows,
+    user,
+    *,
+    application_number,
+    form_data,
+    entry_model=models.InstitutionsBeneficiaryEntry,
+    institution_type=models.InstitutionTypeChoices.INSTITUTIONS,
+):
     by_id = {entry.id: entry for entry in existing_entries}
     by_article = {}
     for entry in existing_entries:
@@ -2523,15 +2547,17 @@ def _sync_institution_entries(existing_entries, built_rows, user, *, application
             match = next((entry for entry in candidates if entry.id not in used_ids), None)
         if match is None:
             create_kwargs = {key: value for key, value in built.items() if key != "entry_id"}
-            models.InstitutionsBeneficiaryEntry.objects.create(
-                created_by=user,
-                application_number=application_number,
-                institution_name=form_data["institution_name"],
-                institution_type=form_data["institution_type"],
-                address=form_data["address"] or None,
-                mobile=form_data["mobile"] or None,
+            create_fields = {
+                "created_by": user,
+                "application_number": application_number,
+                "institution_name": form_data["institution_name"],
+                "address": form_data["address"] or None,
+                "mobile": form_data["mobile"] or None,
                 **create_kwargs,
-            )
+            }
+            if hasattr(entry_model, "institution_type"):
+                create_fields["institution_type"] = form_data.get("institution_type") or institution_type
+            entry_model.objects.create(**create_fields)
             continue
 
         changed = False
@@ -2541,8 +2567,8 @@ def _sync_institution_entries(existing_entries, built_rows, user, *, application
         if match.institution_name != form_data["institution_name"]:
             match.institution_name = form_data["institution_name"]
             changed = True
-        if match.institution_type != form_data["institution_type"]:
-            match.institution_type = form_data["institution_type"]
+        if hasattr(match, "institution_type") and match.institution_type != (form_data.get("institution_type") or institution_type):
+            match.institution_type = form_data.get("institution_type") or institution_type
             changed = True
         address = form_data["address"] or None
         if match.address != address:
@@ -2985,6 +3011,7 @@ class PublicMasterEntryReopenView(LoginRequiredMixin, AdminRequiredMixin, View):
 class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, TemplateView):
     module_key = models.ModuleKeyChoices.APPLICATION_ENTRY
     permission_action = "create_edit"
+    entry_model = models.InstitutionsBeneficiaryEntry
     template_name = "application_entry/master_entry_institution_form.html"
     beneficiary_label = "Institutions"
     beneficiary_name_label = "Institution"
@@ -3016,7 +3043,7 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
             )
         )
         context.update(_institution_attachment_context_with_request(self.request, application_number))
-        context["conflict_token"] = _institution_conflict_token(application_number)
+        context["conflict_token"] = _institution_conflict_token(application_number, entry_model=self.entry_model)
         return self.render_to_response(context)
 
     def _save_group(self, *, application_number=None, form_data=None, raw_rows=None, replace=False):
@@ -3090,7 +3117,7 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                     lookup_application_number = source_application_number or application_number
                     before_snapshot = _institution_audit_snapshot(lookup_application_number)
                     existing_entries = list(
-                        models.InstitutionsBeneficiaryEntry.objects.filter(application_number=lookup_application_number).select_related("article").order_by("id")
+                        self.entry_model.objects.filter(application_number=lookup_application_number).select_related("article").order_by("id")
                     )
                     previous_status = existing_entries[0].status if existing_entries else None
                     _sync_institution_entries(
@@ -3099,6 +3126,8 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                         self.request.user,
                         application_number=application_number,
                         form_data=form_data,
+                        entry_model=self.entry_model,
+                        institution_type=self.beneficiary_type_value,
                     )
                     if lookup_application_number != application_number:
                         models.ApplicationAttachment.objects.filter(
@@ -3117,7 +3146,14 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                         action_type=models.ActionTypeChoices.UPDATE,
                         entity_type=self.application_entity_type,
                         entity_id=application_number,
-                        details={"before": before_snapshot, "after": _institution_audit_snapshot(application_number)},
+                        details={
+                            "before": before_snapshot,
+                            "after": _institution_audit_snapshot(
+                                application_number,
+                                entry_model=self.entry_model,
+                                institution_type=self.beneficiary_type_value,
+                            ),
+                        },
                         **get_request_audit_meta(self.request),
                     )
                     if previous_status != target_status:
@@ -3132,21 +3168,29 @@ class InstitutionsMasterEntryBaseView(LoginRequiredMixin, WriteRoleMixin, Templa
                 else:
                     for built in built_rows:
                         create_kwargs = {key: value for key, value in built.items() if key != "entry_id"}
-                        models.InstitutionsBeneficiaryEntry.objects.create(
-                            created_by=self.request.user,
-                            application_number=application_number,
-                            institution_name=form_data["institution_name"],
-                            institution_type=self.beneficiary_type_value,
-                            address=form_data["address"] or None,
-                            mobile=form_data["mobile"] or None,
+                        create_fields = {
+                            "created_by": self.request.user,
+                            "application_number": application_number,
+                            "institution_name": form_data["institution_name"],
+                            "address": form_data["address"] or None,
+                            "mobile": form_data["mobile"] or None,
                             **create_kwargs,
-                        )
+                        }
+                        if hasattr(self.entry_model, "institution_type"):
+                            create_fields["institution_type"] = self.beneficiary_type_value
+                        self.entry_model.objects.create(**create_fields)
                     log_audit(
                         user=self.request.user,
                         action_type=models.ActionTypeChoices.CREATE,
                         entity_type=self.application_entity_type,
                         entity_id=application_number,
-                        details={"after": _institution_audit_snapshot(application_number)},
+                        details={
+                            "after": _institution_audit_snapshot(
+                                application_number,
+                                entry_model=self.entry_model,
+                                institution_type=self.beneficiary_type_value,
+                            )
+                        },
                         **get_request_audit_meta(self.request),
                     )
                     log_audit(
@@ -3200,7 +3244,7 @@ class InstitutionsMasterEntryCreateView(InstitutionsMasterEntryBaseView):
             )
             if not attachments_ok:
                 return attachment_response
-            popup_entry = models.InstitutionsBeneficiaryEntry.objects.filter(application_number=saved_application_number).order_by("-updated_at").first()
+            popup_entry = self.entry_model.objects.filter(application_number=saved_application_number).order_by("-updated_at").first()
             if popup_entry:
                 request.session["institution_submit_popup"] = {
                     "application_number": popup_entry.application_number,
@@ -3217,7 +3261,7 @@ class InstitutionsMasterEntryUpdateView(InstitutionsMasterEntryBaseView):
     def get(self, request, *args, **kwargs):
         application_number = kwargs["application_number"]
         entries = list(
-            models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).select_related("article").order_by("id")
+            self.entry_model.objects.filter(application_number=application_number).select_related("article").order_by("id")
         )
         if entries and entries[0].status == models.BeneficiaryStatusChoices.SUBMITTED:
             messages.error(request, f"This {self.beneficiary_label.lower()} application is submitted and locked. Reopen it first.")
@@ -3243,7 +3287,7 @@ class InstitutionsMasterEntryUpdateView(InstitutionsMasterEntryBaseView):
         ]
         form_data = {
             "institution_name": first.institution_name,
-            "institution_type": first.institution_type or self.beneficiary_type_value,
+            "institution_type": getattr(first, "institution_type", None) or self.beneficiary_type_value,
             "address": first.address or "",
             "mobile": first.mobile or "",
             "internal_notes": first.internal_notes or "",
@@ -3252,12 +3296,12 @@ class InstitutionsMasterEntryUpdateView(InstitutionsMasterEntryBaseView):
 
     def post(self, request, *args, **kwargs):
         application_number = kwargs["application_number"]
-        existing_entries = list(models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).order_by("id"))
+        existing_entries = list(self.entry_model.objects.filter(application_number=application_number).order_by("id"))
         if existing_entries and existing_entries[0].status == models.BeneficiaryStatusChoices.SUBMITTED:
             messages.error(request, f"This {self.beneficiary_label.lower()} application is submitted and locked. Reopen it first.")
             return HttpResponseRedirect(reverse("ui:master-entry") + f"?type={self.list_type_query}")
         submitted_conflict_token = request.POST.get("_conflict_token", "")
-        current_conflict_token = _institution_conflict_token(application_number)
+        current_conflict_token = _institution_conflict_token(application_number, entry_model=self.entry_model)
         if submitted_conflict_token and current_conflict_token and submitted_conflict_token != current_conflict_token:
             messages.error(request, _conflict_message(f"{self.beneficiary_label.lower()} application"), extra_tags="persistent")
             return HttpResponseRedirect(reverse(self.edit_route_name, kwargs={"application_number": application_number}))
@@ -3269,7 +3313,7 @@ class InstitutionsMasterEntryUpdateView(InstitutionsMasterEntryBaseView):
             return response
         saved_application_number = getattr(self, "_saved_institution_application_number", application_number)
         if action == "submit":
-            popup_entry = models.InstitutionsBeneficiaryEntry.objects.filter(application_number=saved_application_number).order_by("-updated_at").first()
+            popup_entry = self.entry_model.objects.filter(application_number=saved_application_number).order_by("-updated_at").first()
             if popup_entry:
                 request.session["institution_submit_popup"] = {
                     "application_number": popup_entry.application_number,
@@ -3292,10 +3336,11 @@ class InstitutionsMasterEntryDeleteView(LoginRequiredMixin, AdminRequiredMixin, 
     application_entity_type = "institution_application"
     deleted_message = "Institution entry deleted."
     deleted_label = "Institution"
+    entry_model = models.InstitutionsBeneficiaryEntry
 
     def post(self, request, *args, **kwargs):
         application_number = kwargs["application_number"]
-        snapshot = _institution_audit_snapshot(application_number)
+        snapshot = _institution_audit_snapshot(application_number, entry_model=self.entry_model)
         cleanup_ok, cleaned_count, failure_count = _cleanup_application_attachments(
             application_type=self.attachment_type_choice,
             institution_application_number=application_number,
@@ -3306,7 +3351,7 @@ class InstitutionsMasterEntryDeleteView(LoginRequiredMixin, AdminRequiredMixin, 
                 f"Could not delete {failure_count} attachment file(s). Institution application was not deleted.",
             )
             return HttpResponseRedirect(reverse("ui:master-entry") + f"?type={self.list_type_query}")
-        models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).delete()
+        self.entry_model.objects.filter(application_number=application_number).delete()
         log_audit(
             user=request.user,
             action_type=models.ActionTypeChoices.DELETE,
@@ -3326,10 +3371,11 @@ class InstitutionsMasterEntryReopenView(LoginRequiredMixin, AdminRequiredMixin, 
     application_entity_type = "institution_application"
     reopened_message = "Institution application reopened as draft."
     reopened_label = "Institution"
+    entry_model = models.InstitutionsBeneficiaryEntry
 
     def post(self, request, *args, **kwargs):
         application_number = kwargs["application_number"]
-        models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).update(
+        self.entry_model.objects.filter(application_number=application_number).update(
             status=models.BeneficiaryStatusChoices.DRAFT
         )
         log_audit(
@@ -3762,12 +3808,13 @@ class InstitutionApplicationAttachmentUploadView(LoginRequiredMixin, WriteRoleMi
     create_route_name = "ui:master-entry-institution-create"
     edit_route_name = "ui:master-entry-institution-edit"
     list_type_query = "institutions"
+    entry_model = models.InstitutionsBeneficiaryEntry
 
     def post(self, request, *args, **kwargs):
         is_ajax = _is_ajax_request(request)
         application_number = kwargs["application_number"]
         target_url = reverse(self.edit_route_name, kwargs={"application_number": application_number})
-        if not models.InstitutionsBeneficiaryEntry.objects.filter(application_number=application_number).exists():
+        if not self.entry_model.objects.filter(application_number=application_number).exists():
             raise Http404("Institution application not found.")
         form = ApplicationAttachmentUploadForm(request.POST, request.FILES)
         if not form.is_valid():
@@ -3916,6 +3963,7 @@ class InstitutionApplicationAttachmentTempClearView(LoginRequiredMixin, WriteRol
 
 
 class OthersMasterEntryBaseView(InstitutionsMasterEntryBaseView):
+    entry_model = models.OthersBeneficiaryEntry
     beneficiary_label = "Others"
     beneficiary_name_label = "Others"
     beneficiary_type_value = models.InstitutionTypeChoices.OTHERS
@@ -3946,7 +3994,7 @@ class OthersMasterEntryBaseView(InstitutionsMasterEntryBaseView):
         )
         attachment_context = _others_attachment_context_with_request(self.request, application_number)
         context.update(attachment_context)
-        context["conflict_token"] = _institution_conflict_token(application_number)
+        context["conflict_token"] = _institution_conflict_token(application_number, entry_model=self.entry_model)
         return self.render_to_response(context)
 
 
@@ -3972,9 +4020,12 @@ class OthersMasterEntryUpdateView(OthersMasterEntryBaseView, InstitutionsMasterE
 
 class OthersMasterEntryInlineSummaryView(InstitutionsMasterEntryInlineSummaryView):
     template_name = "application_entry/partials/master_entry_others_summary.html"
+    entry_model = models.OthersBeneficiaryEntry
 
 
 class OthersMasterEntryDeleteView(InstitutionsMasterEntryDeleteView):
+    entry_model = models.OthersBeneficiaryEntry
+    attachment_type_choice = models.ApplicationAttachmentTypeChoices.OTHERS
     list_type_query = "others"
     application_entity_type = "others_application"
     deleted_message = "Others entry deleted."
@@ -3982,6 +4033,7 @@ class OthersMasterEntryDeleteView(InstitutionsMasterEntryDeleteView):
 
 
 class OthersMasterEntryReopenView(InstitutionsMasterEntryReopenView):
+    entry_model = models.OthersBeneficiaryEntry
     list_type_query = "others"
     application_entity_type = "others_application"
     reopened_message = "Others application reopened as draft."
@@ -3993,6 +4045,7 @@ class OthersApplicationAttachmentUploadView(InstitutionApplicationAttachmentUplo
     create_route_name = "ui:master-entry-others-create"
     edit_route_name = "ui:master-entry-others-edit"
     list_type_query = "others"
+    entry_model = models.OthersBeneficiaryEntry
 
 
 class OthersApplicationAttachmentTempUploadView(InstitutionApplicationAttachmentTempUploadView):

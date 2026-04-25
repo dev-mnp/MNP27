@@ -201,10 +201,7 @@ def build_dashboard_metrics() -> dict:
     }
 
     # 6) Institution / Others rollups in one query each.
-    institution_rollup = models.InstitutionsBeneficiaryEntry.objects.filter(
-        active_filter,
-        institution_type=models.InstitutionTypeChoices.INSTITUTIONS,
-    ).aggregate(
+    institution_rollup = models.InstitutionsBeneficiaryEntry.objects.filter(active_filter).aggregate(
         total_beneficiaries=Count("id"),
         application_count=Count(
             "application_number",
@@ -215,10 +212,7 @@ def build_dashboard_metrics() -> dict:
         unique_articles=Count("article", distinct=True),
         total_value_accrued=_decimal_sum("total_amount"),
     )
-    others_rollup = models.InstitutionsBeneficiaryEntry.objects.filter(
-        active_filter,
-        institution_type=models.InstitutionTypeChoices.OTHERS,
-    ).aggregate(
+    others_rollup = models.OthersBeneficiaryEntry.objects.filter(active_filter).aggregate(
         total_beneficiaries=Count("id"),
         application_count=Count(
             "application_number",
@@ -235,6 +229,7 @@ def build_dashboard_metrics() -> dict:
         (Q(district_entries__isnull=False) & _active_beneficiary_filter("district_entries__"))
         | (Q(public_entries__isnull=False) & _active_beneficiary_filter("public_entries__"))
         | (Q(institution_entries__isnull=False) & _active_beneficiary_filter("institution_entries__"))
+        | (Q(others_entries__isnull=False) & _active_beneficiary_filter("others_entries__"))
     ).distinct().count()
 
     # 8) Fund request summary in one query.
@@ -246,7 +241,8 @@ def build_dashboard_metrics() -> dict:
     district_total = Decimal(str(district_rollup["total_value_accrued"] or 0))
     public_total = Decimal(str(public_rollup["total_value_accrued"] or 0))
     institution_total = Decimal(str(institution_rollup["total_value_accrued"] or 0))
-    total_accrued = district_total + public_total + institution_total
+    others_total = Decimal(str(others_rollup["total_value_accrued"] or 0))
+    total_accrued = district_total + public_total + institution_total + others_total
     district_underutilized = Decimal(str(district_summary["underutilized_total"] or 0))
     district_overutilized = Decimal(str(district_summary["overutilized_total"] or 0))
     district_net_variance = district_overutilized - district_underutilized
