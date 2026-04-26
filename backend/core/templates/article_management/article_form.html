@@ -118,9 +118,6 @@
         <a class="btn" href="{% url 'ui:article-list' %}">Back</a>
       {% endif %}
     </div>
-    {% if popup_mode %}
-      <div class="field-hint" style="margin-bottom: 16px;">After save, this window will close and the new article will be available in the application form.</div>
-    {% endif %}
     <form method="post" {% if object %}data-confirm-message="Save changes to this article?" data-price-impact-form data-preview-url="{{ price_impact_preview_url }}" data-initial-cost="{{ object.cost_per_unit|floatformat:'-2' }}"{% endif %}>
       {% csrf_token %}
       {% if form.non_field_errors %}
@@ -171,7 +168,6 @@
               {% endfor %}
             </div>
           </div>
-          <div class="field-hint">Choose an existing category or type a new one.</div>
         </div>
         <div>
           <label>Master category <span class="required-star">*</span></label>
@@ -183,7 +179,6 @@
               {% endfor %}
             </div>
           </div>
-          <div class="field-hint">Choose an existing super category or type a new one.</div>
         </div>
       </div>
       <div class="toolbar" style="margin-top: 12px; justify-content: flex-start;">
