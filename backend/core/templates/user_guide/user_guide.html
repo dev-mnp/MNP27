@@ -51,11 +51,9 @@
       font-size: 1rem;
       line-height: 1.75;
     }
-    .guide-hero-note {
+    .guide-hero-note,
+    .guide-note {
       margin-top: 16px;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
       padding: 10px 14px;
       border-radius: 14px;
       border: 1px solid #dbe3f0;
@@ -64,16 +62,15 @@
       font-size: 0.9rem;
       line-height: 1.5;
     }
-    .guide-hero-side {
-      display: grid;
-      gap: 14px;
-    }
     .guide-panel {
       border: 1px solid #dbe3f0;
       border-radius: 18px;
       background: rgba(255, 255, 255, 0.88);
       padding: 16px 18px;
       backdrop-filter: blur(10px);
+    }
+    .guide-panel + .guide-panel {
+      margin-top: 14px;
     }
     .guide-panel h2,
     .guide-panel h3 {
@@ -125,17 +122,12 @@
       background: #ffffff;
       text-decoration: none;
     }
-    .guide-nav-link:hover {
-      border-color: #dbe3f0;
-      background: #f8fbff;
-      text-decoration: none;
-      color: #1d4ed8;
-    }
+    .guide-nav-link:hover,
     .guide-nav-link.is-active {
       border-color: #bfdbfe;
       background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
       color: #1d4ed8;
-      box-shadow: inset 0 0 0 1px rgba(191, 219, 254, 0.55);
+      text-decoration: none;
     }
     .guide-nav-number {
       width: 24px;
@@ -202,25 +194,92 @@
     .guide-card-body {
       padding: 18px 22px 22px;
     }
-    .guide-section-grid {
+    .guide-doc-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
     }
-    .guide-subcard {
+    .guide-doc {
       border: 1px solid #e5e7eb;
       border-radius: 16px;
       background: #fcfdff;
       padding: 16px;
     }
-    .guide-subcard h3 {
-      margin: 0 0 8px;
-      font-size: 0.95rem;
+    .guide-doc.developer {
+      background: #fffdf7;
     }
-    .guide-subcard p {
-      margin: 0;
+    .guide-details {
+      padding: 0;
+      overflow: hidden;
+    }
+    .guide-details-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+    }
+    .guide-details-summary::-webkit-details-marker {
+      display: none;
+    }
+    .guide-details-summary::after {
+      content: "Open";
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #fff7ed;
+      color: #c2410c;
+      font-size: 0.74rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .guide-details[open] .guide-details-summary {
+      border-bottom: 1px solid #fde7d3;
+    }
+    .guide-details[open] .guide-details-summary::after {
+      content: "Close";
+    }
+    .guide-doc-content {
+      padding: 16px;
+    }
+    .guide-doc-label {
+      display: inline-flex;
+      margin-bottom: 10px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .guide-doc.developer .guide-doc-label,
+    .guide-details-summary .guide-doc-label {
+      background: #fff7ed;
+      color: #c2410c;
+      margin-bottom: 0;
+    }
+    .guide-doc h2 {
+      margin: 0 0 10px;
+      font-size: 1.18rem;
+    }
+    .guide-doc h3 {
+      margin: 16px 0 8px;
+      font-size: 0.98rem;
+    }
+    .guide-doc h4 {
+      margin: 14px 0 6px;
+      font-size: 0.92rem;
+    }
+    .guide-doc p {
+      margin: 8px 0 0;
       color: #667085;
-      line-height: 1.6;
+      line-height: 1.65;
     }
     .guide-list {
       margin: 10px 0 0;
@@ -231,108 +290,18 @@
     .guide-list li + li {
       margin-top: 6px;
     }
-    .guide-note {
-      margin-top: 14px;
-      padding: 12px 14px;
-      border-radius: 14px;
-      border: 1px solid #dbe3f0;
-      background: linear-gradient(180deg, #f8fbff 0%, #f1f7ff 100%);
-      color: #475467;
-      font-size: 0.9rem;
-      line-height: 1.6;
-    }
-    .guide-note strong {
-      color: #1d4ed8;
-    }
-    .guide-mini-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 12px;
-      margin-top: 14px;
-    }
-    .guide-mini-metric {
-      border: 1px solid #e5e7eb;
-      border-radius: 16px;
-      background: #ffffff;
-      padding: 14px;
-    }
-    .guide-mini-metric span {
-      display: block;
-      font-size: 0.8rem;
-      font-weight: 700;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-      color: #94a3b8;
-      margin-bottom: 8px;
-    }
-    .guide-mini-metric strong {
-      display: block;
-      color: #111827;
-      font-size: 0.95rem;
-      line-height: 1.55;
-    }
-    .guide-process {
-      display: grid;
-      gap: 10px;
-      margin-top: 14px;
-    }
-    .guide-process-row {
-      display: grid;
-      grid-template-columns: 34px minmax(0, 1fr);
-      gap: 12px;
-      align-items: start;
-      padding: 12px 14px;
-      border-radius: 16px;
-      background: #fcfdff;
-      border: 1px solid #edf2f7;
-    }
-    .guide-process-step {
-      width: 34px;
-      height: 34px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 10px;
-      background: #eff6ff;
-      color: #2563eb;
-      font-weight: 800;
-      font-size: 0.86rem;
-    }
-    .guide-process-row strong {
-      display: block;
-      margin-bottom: 4px;
-      color: #111827;
-    }
-    .guide-process-row p {
-      margin: 0;
-      color: #667085;
-      line-height: 1.58;
-    }
-    .guide-accordion {
-      border: 0;
-      border-radius: 0;
-      background: transparent;
-    }
-    .guide-accordion summary {
-      cursor: pointer;
-      list-style: none;
-      padding: 0;
-    }
-    .guide-accordion summary::-webkit-details-marker {
-      display: none;
-    }
-    .guide-card-caret {
-      color: #94a3b8;
-      font-size: 1rem;
-      font-weight: 700;
-      flex: 0 0 auto;
-      padding-top: 2px;
+    .guide-doc code,
+    .guide-note code {
+      padding: 1px 5px;
+      border-radius: 6px;
+      background: #eef2f7;
+      color: #334155;
+      font-size: 0.86em;
     }
     @media (max-width: 1120px) {
       .guide-hero-grid,
       .guide-layout,
-      .guide-section-grid,
-      .guide-mini-grid {
+      .guide-doc-grid {
         grid-template-columns: 1fr;
       }
       .guide-nav {
@@ -342,554 +311,51 @@
   </style>
 
   <div class="guide-shell">
-    <section class="guide-hero">
-      <div class="guide-hero-grid">
-        <div>
-          <div class="guide-eyebrow">Operations Manual</div>
-          <h1>User Guide</h1>
-          <p class="guide-lead">
-            This guide explains what each module does, why it exists, and how to move through the full event workflow safely.
-            It is designed for both first-time users and experienced users, so you can use it as a quick reference or as a complete handover guide.
-          </p>
-          <div class="guide-hero-note">
-            Work stage by stage. If something looks wrong in a later module, first verify the earlier module instead of forcing a correction downstream.
-          </div>
-        </div>
-        <div class="guide-hero-side">
-          <div class="guide-panel">
-            <h2>Best Way To Use This App</h2>
-            <p>Enter source data carefully, sync each later stage from the previous one, reconcile before moving forward, and export only when the current stage looks clean.</p>
-          </div>
-          <div class="guide-panel">
-            <h3>Common Button Meanings</h3>
-            <ul class="guide-list">
-              <li><strong>Sync Data:</strong> pull data from the previous stage.</li>
-              <li><strong>Upload CSV:</strong> intentionally replace the working copy from an external file.</li>
-              <li><strong>Save as Draft:</strong> keep work incomplete and editable.</li>
-              <li><strong>Submit:</strong> move that stage forward for downstream use.</li>
-              <li><strong>Export:</strong> download the current stage output.</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
+    <div>
+      <h1 style="margin: 0; font-size: clamp(1.8rem, 3vw, 2.6rem); letter-spacing: -0.03em;">User Manual</h1>
+    </div>
 
     <div class="guide-layout">
       <aside class="guide-nav">
         <div class="guide-nav-title">Guide Sections</div>
         <div class="guide-nav-list">
-          <a class="guide-nav-link" href="#guide-start" data-guide-target="guide-start"><span class="guide-nav-number">1</span><span>Before You Start</span></a>
-          <a class="guide-nav-link" href="#guide-base-files" data-guide-target="guide-base-files"><span class="guide-nav-number">2</span><span>Base Files</span></a>
-          <a class="guide-nav-link" href="#guide-dashboard" data-guide-target="guide-dashboard"><span class="guide-nav-number">3</span><span>Dashboard</span></a>
-          <a class="guide-nav-link" href="#guide-application-entry" data-guide-target="guide-application-entry"><span class="guide-nav-number">4</span><span>Application Entry</span></a>
-          <a class="guide-nav-link" href="#guide-article-management" data-guide-target="guide-article-management"><span class="guide-nav-number">5</span><span>Article Management</span></a>
-          <a class="guide-nav-link" href="#guide-inventory-planning" data-guide-target="guide-inventory-planning"><span class="guide-nav-number">6</span><span>Inventory Planning</span></a>
-          <a class="guide-nav-link" href="#guide-fund-request" data-guide-target="guide-fund-request"><span class="guide-nav-number">7</span><span>Order & Fund Request</span></a>
-          <a class="guide-nav-link" href="#guide-seat-allocation" data-guide-target="guide-seat-allocation"><span class="guide-nav-number">8</span><span>Seat Allocation</span></a>
-          <a class="guide-nav-link" href="#guide-sequence-list" data-guide-target="guide-sequence-list"><span class="guide-nav-number">9</span><span>Sequence List</span></a>
-          <a class="guide-nav-link" href="#guide-token-generation" data-guide-target="guide-token-generation"><span class="guide-nav-number">10</span><span>Token Generation</span></a>
-          <a class="guide-nav-link" href="#guide-labels" data-guide-target="guide-labels"><span class="guide-nav-number">11</span><span>Labels</span></a>
-          <a class="guide-nav-link" href="#guide-purchase-order" data-guide-target="guide-purchase-order"><span class="guide-nav-number">12</span><span>Purchase Order</span></a>
-          <a class="guide-nav-link" href="#guide-admin" data-guide-target="guide-admin"><span class="guide-nav-number">13</span><span>Audit Logs & User Management</span></a>
+          {% for section in guide_sections %}
+            <a class="guide-nav-link" href="#guide-{{ section.slug }}" data-guide-target="guide-{{ section.slug }}">
+              <span class="guide-nav-number">{{ section.number }}</span>
+              <span>{{ section.title }}</span>
+            </a>
+          {% endfor %}
         </div>
       </aside>
 
       <main class="guide-main">
-        <section class="guide-card guide-topic" id="guide-start" data-guide-section="guide-start">
-          <div class="guide-card-head">
-            <div>
-              <h2 class="guide-card-title"><span class="guide-card-title-number">1</span>Before You Start</h2>
-              <p class="guide-card-copy">The app works in stages. Later modules depend on earlier modules, so correct data should always be fixed at the source stage first.</p>
-            </div>
-          </div>
-          <div class="guide-card-body">
-            <div class="guide-mini-grid">
-              <div class="guide-mini-metric">
-                <span>Draft</span>
-                <strong>Use when the information is incomplete and still under review.</strong>
-              </div>
-              <div class="guide-mini-metric">
-                <span>Submit</span>
-                <strong>Use only when that stage is ready to influence later modules.</strong>
-              </div>
-              <div class="guide-mini-metric">
-                <span>Sync</span>
-                <strong>Use to pull the latest approved data from the previous stage.</strong>
+        {% for section in guide_sections %}
+          <section class="guide-card guide-topic" id="guide-{{ section.slug }}" data-guide-section="guide-{{ section.slug }}" {% if not forloop.first %}hidden{% endif %}>
+            <div class="guide-card-head">
+              <div>
+                <h2 class="guide-card-title"><span class="guide-card-title-number">{{ section.number }}</span>{{ section.title }}</h2>
+                <p class="guide-card-copy">End-user instructions and developer notes are loaded from Markdown files for this module.</p>
               </div>
             </div>
-            <div class="guide-process">
-              <div class="guide-process-row">
-                <div class="guide-process-step">1</div>
-                <div>
-                  <strong>Enter clean source data</strong>
-                  <p>Application Entry is the source truth. If data is wrong there, later modules will simply carry the mistake forward.</p>
-                </div>
-              </div>
-              <div class="guide-process-row">
-                <div class="guide-process-step">2</div>
-                <div>
-                  <strong>Sync the next stage</strong>
-                  <p>Use `Sync Data` to refresh the current working stage from the previous stage instead of manually recreating rows.</p>
-                </div>
-              </div>
-              <div class="guide-process-row">
-                <div class="guide-process-step">3</div>
-                <div>
-                  <strong>Reconcile before moving forward</strong>
-                  <p>When a stage has reconciliation, health, or sync checks, review them before continuing to the next module.</p>
-                </div>
+            <div class="guide-card-body">
+              <div class="guide-doc-grid">
+                <article class="guide-doc">
+                  <div class="guide-doc-label">End User</div>
+                  {{ section.enduser_html }}
+                </article>
+                <details class="guide-doc developer guide-details">
+                  <summary class="guide-details-summary">
+                    <span class="guide-doc-label">Developer Notes</span>
+                    <span style="color:#9a3412; font-size:0.86rem; font-weight:700;">Technical guide for setup, fields, tables, and debugging</span>
+                  </summary>
+                  <div class="guide-doc-content">
+                    {{ section.developer_html }}
+                  </div>
+                </details>
               </div>
             </div>
-          </div>
-        </section>
-
-        <section class="guide-card guide-topic" id="guide-base-files" data-guide-section="guide-base-files" hidden>
-          <div class="guide-card-head">
-            <div>
-              <h2 class="guide-card-title"><span class="guide-card-title-number">2</span>Base Files</h2>
-              <p class="guide-card-copy">Base Files are the backbone of the yearly workflow. Upload these first, because the rest of the app depends on this reference data.</p>
-            </div>
-          </div>
-          <div class="guide-card-body">
-            <div class="guide-section-grid">
-              <div class="guide-subcard">
-                <h3>What Lives Here</h3>
-                <ul class="guide-list">
-                  <li><strong>District Master:</strong> the yearly district reference with application number, district name, president name, mobile number, and allotted budget.</li>
-                  <li><strong>Article Price List:</strong> the article master used for article name, cost, item type, category, super category, and token name.</li>
-                  <li><strong>Past History:</strong> previous-year beneficiary history used for operational reference and verification during current entry.</li>
-                </ul>
-              </div>
-              <div class="guide-subcard">
-                <h3>Why It Comes First</h3>
-                <ul class="guide-list">
-                  <li>Base Files are the curated starting point for the year.</li>
-                  <li>District master is used to create district applications with the correct district-side details already available.</li>
-                  <li>Article price list gives the default article information used across Application Entry and later stages.</li>
-                  <li>Past history helps users verify whether a beneficiary has already appeared in previous years.</li>
-                </ul>
-              </div>
-            </div>
-            <div class="guide-note"><strong>Working order:</strong> Base Files first, then Application Entry, then the later operational stages. If Base Files are outdated, the rest of the process becomes harder to trust.</div>
-          </div>
-        </section>
-
-        <section class="guide-card guide-topic" id="guide-dashboard" data-guide-section="guide-dashboard" hidden>
-          <div class="guide-card-head">
-            <div>
-              <h2 class="guide-card-title"><span class="guide-card-title-number">3</span>Dashboard</h2>
-              <p class="guide-card-copy">The Dashboard is the first operational summary of the app. It does not create records, but it helps the team judge whether the current numbers look believable before investigating a module.</p>
-            </div>
-          </div>
-          <div class="guide-card-body">
-            <div class="guide-section-grid">
-              <div class="guide-subcard">
-                <h3>What It Summarizes</h3>
-                <ul class="guide-list">
-                  <li>Application counts across District, Public, and Institutions.</li>
-                  <li>Beneficiary split information such as handicapped and gender-based views.</li>
-                  <li>Fund request and operational totals coming from later modules.</li>
-                  <li>Pending district indicators so the team can see which districts still need work.</li>
-                </ul>
-              </div>
-              <div class="guide-subcard">
-                <h3>How To Use It</h3>
-                <ul class="guide-list">
-                  <li>Check totals before and after major changes or imports.</li>
-                  <li>If a number feels wrong, trace it back to the source module instead of correcting the dashboard.</li>
-                  <li>Use it as a health indicator and overview, not as a data-entry screen.</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <details class="guide-accordion guide-topic" id="guide-application-entry" data-guide-section="guide-application-entry" hidden open>
-          <summary>
-            <section class="guide-card">
-              <div class="guide-card-head">
-                <div>
-                  <h2 class="guide-card-title"><span class="guide-card-title-number">4</span>Application Entry</h2>
-                  <p class="guide-card-copy">This is the source truth for beneficiaries, requested items, quantities, costs, and aid-specific details.</p>
-                </div>
-                <span class="guide-card-caret">▾</span>
-              </div>
-            </section>
-          </summary>
-          <div class="guide-card-body" style="padding-top: 0;">
-            <div class="guide-section-grid">
-              <div class="guide-subcard">
-                <h3>What You Do Here</h3>
-                <ul class="guide-list">
-                  <li>Create and maintain District, Public, and Institution applications as the source truth for the rest of the app.</li>
-                  <li>District applications can carry multiple requested items. Public applications carry one article or aid in a single application. Institution applications carry institution-level entries and item details.</li>
-                  <li>The expanded overview is a quick operational summary. The eye view is the full detail screen for reviewing every saved field and item row.</li>
-                </ul>
-              </div>
-              <div class="guide-subcard">
-                <h3>Important Working Logic</h3>
-                <ul class="guide-list">
-                  <li><strong>Aadhaar verification:</strong> for public entry, the verify action checks past history and current public records for the same Aadhaar so users can identify returning beneficiaries or current duplicates before proceeding.</li>
-                  <li><strong>Current duplicate protection:</strong> if the same Aadhaar already exists in current public records, the public form locks and points the user to modify the existing record instead of creating a duplicate one.</li>
-                  <li><strong>Handicapped and gender category:</strong> these are collected for beneficiary classification, reporting, and operational categorization used later in distribution and analysis.</li>
-                  <li><strong>Internal notes and comments:</strong> district and institution forms keep office-side internal notes; public form comments help record communication or special context about that beneficiary.</li>
-                </ul>
-              </div>
-            </div>
-            <div class="guide-section-grid" style="margin-top: 14px;">
-              <div class="guide-subcard">
-                <h3>Article, Cost, and Total Logic</h3>
-                <ul class="guide-list">
-                  <li>Cost per unit is usually auto-filled from the Article Price List.</li>
-                  <li>If the stored article cost is zero or not yet finalized, the user can continue entry without stopping the whole process.</li>
-                  <li>Total value is derived from quantity and cost per unit.</li>
-                  <li>This keeps data entry moving, but the cost and total value must be reviewed before later operational stages depend on them.</li>
-                </ul>
-              </div>
-              <div class="guide-subcard">
-                <h3>Duplicates and Multiple Rows</h3>
-                <ul class="guide-list">
-                  <li>Multiple aid rows can exist when they represent genuinely different aid entries for the same beneficiary.</li>
-                  <li>For non-aid article rows, the app warns against repeated same-item rows because they can create duplicate operational records later.</li>
-                  <li>If a required article is missing, users can add a new article during entry itself instead of always leaving the screen to go to Article Management.</li>
-                </ul>
-              </div>
-            </div>
-            <div class="guide-section-grid" style="margin-top: 14px;">
-              <div class="guide-subcard">
-                <h3>Public Form Specifics</h3>
-                <ul class="guide-list">
-                  <li>Public entry is intentionally single-entry: one beneficiary can have one article or one aid in a single public application.</li>
-                  <li>Disability category becomes relevant only when handicapped is marked.</li>
-                  <li>Gender category is selected separately to help later classification and reporting.</li>
-                </ul>
-              </div>
-              <div class="guide-subcard">
-                <h3>District and Institution Specifics</h3>
-                <ul class="guide-list">
-                  <li>District entry starts from District Master and shows district code, president, mobile, allotted budget, and remaining fund.</li>
-                  <li>Institution application number is generated on submit rather than entered first.</li>
-                  <li>Both district and institution forms support multiple item rows and reveal the extra aid fields only when the selected item type is Aid.</li>
-                </ul>
-              </div>
-            </div>
-            <div class="guide-note"><strong>Important:</strong> If an application is saved under the wrong district, wrong beneficiary, or wrong item, later modules will inherit that mistake. Fix it here first. Save as draft when unsure, and submit only when the source record is ready for downstream use.</div>
-          </div>
-        </details>
-
-        <details class="guide-accordion guide-topic" id="guide-article-management" data-guide-section="guide-article-management" hidden>
-          <summary>
-            <section class="guide-card">
-              <div class="guide-card-head">
-                <div>
-                  <h2 class="guide-card-title"><span class="guide-card-title-number">5</span>Article Management</h2>
-                  <p class="guide-card-copy">Maintain the master list of articles that can be used across the app.</p>
-                </div>
-                <span class="guide-card-caret">▾</span>
-              </div>
-            </section>
-          </summary>
-          <div class="guide-card-body" style="padding-top: 0;">
-            <div class="guide-section-grid">
-              <div class="guide-subcard">
-                <h3>What This Module Maintains</h3>
-                <ul class="guide-list">
-                  <li>Article name</li>
-                  <li>Token Name</li>
-                  <li>Cost per unit</li>
-                  <li>Item type</li>
-                  <li><strong>Category</strong> helps you group articles for reporting.</li>
-                  <li><strong>Super Category</strong> helps higher-level reporting and summary views.</li>
-                  <li>These fields make later exports, dashboards, planning views, and audits easier to read and summarize.</li>
-                </ul>
-              </div>
-              <div class="guide-subcard">
-                <h3>What Token Name Does</h3>
-                <ul class="guide-list">
-                  <li><strong>Token Name</strong> is the shortened article name intended for tokens and labels.</li>
-                  <li>It is prepared here early so users do not need to shorten labels at the last minute during token and label generation.</li>
-                  <li>Use a readable short version that still clearly identifies the item.</li>
-                  <li>The list page supports search, export, and filtering by item type, category, super category, and combo / separate state.</li>
-                </ul>
-              </div>
-            </div>
-            <div class="guide-note"><strong>Tip:</strong> Create or clean articles here when you want a stable reusable master record. For urgent cases, an article can still be introduced from Application Entry and then normalized later if needed.</div>
-          </div>
-        </details>
-
-        <details class="guide-accordion guide-topic" id="guide-inventory-planning" data-guide-section="guide-inventory-planning" hidden>
-          <summary>
-            <section class="guide-card">
-              <div class="guide-card-head">
-                <div>
-                  <h2 class="guide-card-title"><span class="guide-card-title-number">6</span>Inventory Planning</h2>
-                  <p class="guide-card-copy">See the item-level requirement and planning state before distribution and ordering actions.</p>
-                </div>
-                <span class="guide-card-caret">▾</span>
-              </div>
-            </section>
-          </summary>
-          <div class="guide-card-body" style="padding-top: 0;">
-            <div class="guide-section-grid">
-              <div class="guide-subcard">
-                <h3>How The Main Numbers Work</h3>
-                <ul class="guide-list">
-                  <li><strong>Needed</strong> is the required quantity coming from application-side demand.</li>
-                  <li><strong>Ordered</strong> is what later ordering actions have already moved forward.</li>
-                  <li><strong>Pending</strong> is the remaining quantity still to be handled.</li>
-                  <li><strong>Excess</strong> appears when ordered quantity goes beyond the needed quantity.</li>
-                </ul>
-              </div>
-              <div class="guide-subcard">
-                <h3>Filters and Breakdown</h3>
-                <ul class="guide-list">
-                  <li>The top metric cards summarize Article, Aid, and Project separately.</li>
-                  <li>Filters include item type, application status, combo, order status, balance, and search.</li>
-                  <li>Expanding a row shows the beneficiary-level breakdown behind that order item, including application status and order status.</li>
-                </ul>
-              </div>
-            </div>
-            <div class="guide-note"><strong>Operational meaning:</strong> this module is not placing orders itself. It is the planning and monitoring layer that shows what is still needed and how far ordering activity has already covered the demand.</div>
-          </div>
-        </details>
-
-        <details class="guide-accordion guide-topic" id="guide-fund-request" data-guide-section="guide-fund-request" hidden>
-          <summary>
-            <section class="guide-card">
-              <div class="guide-card-head">
-                <div>
-                  <h2 class="guide-card-title"><span class="guide-card-title-number">7</span>Order & Fund Request</h2>
-                  <p class="guide-card-copy">Used for both Aid requests and Article requests, with different data-entry behavior for each type.</p>
-                </div>
-                <span class="guide-card-caret">▾</span>
-              </div>
-            </section>
-          </summary>
-          <div class="guide-card-body" style="padding-top: 0;">
-            <div class="guide-section-grid">
-              <div class="guide-subcard">
-                <h3>Aid Request</h3>
-                <ul class="guide-list">
-                  <li>Select the aid type first.</li>
-                  <li>Choose the beneficiaries and confirm the request details.</li>
-                  <li>Use draft when the beneficiary or amount details are still being checked.</li>
-                  <li>The beneficiary list is pulled from the relevant application data for the selected aid type, and the request copies those details into the fund request working form.</li>
-                  <li>The detail page clearly shows whether the request is still draft or has already moved quantities into the ordered state.</li>
-                </ul>
-              </div>
-              <div class="guide-subcard">
-                <h3>Article Request</h3>
-                <ul class="guide-list">
-                  <li>Group items under vendors.</li>
-                  <li>Assign the required items vendor-wise.</li>
-                  <li>The vendor grouping is meant to avoid repeating the same vendor details for every article row.</li>
-                  <li>Submit only after the request is ready to update the inventory-side ordered values and move the operational status forward.</li>
-                  <li>The list page separates drafts from submitted records, and only submitted requests move mapped quantities into the ordered state shown in Inventory Planning.</li>
-                </ul>
-              </div>
-            </div>
-            <div class="guide-note"><strong>Important:</strong> Aid requests and Article requests are not the same workflow. Aid requests copy beneficiary-side details from application data, while article requests group vendor and item ordering details. Confirm the request type before adding rows, because the draft or submitted state has an inventory effect.</div>
-          </div>
-        </details>
-
-        <details class="guide-accordion guide-topic" id="guide-seat-allocation" data-guide-section="guide-seat-allocation" hidden>
-          <summary>
-            <section class="guide-card">
-              <div class="guide-card-head">
-                <div>
-                  <h2 class="guide-card-title"><span class="guide-card-title-number">8</span>Seat Allocation</h2>
-                  <p class="guide-card-copy">Split each row into Waiting Hall and Token quantities while keeping the total quantity correct.</p>
-                </div>
-                <span class="guide-card-caret">▾</span>
-              </div>
-            </section>
-          </summary>
-          <div class="guide-card-body" style="padding-top: 0;">
-            <div class="guide-process">
-              <div class="guide-process-row">
-                <div class="guide-process-step">A</div>
-                <div>
-                  <strong>What Sync Data does</strong>
-                  <p>`Sync Data` pulls the latest Master Data into the Seat Allocation working copy. It refreshes the stage copy only; it does not edit Application Entry directly.</p>
-                </div>
-              </div>
-              <div class="guide-process-row">
-                <div class="guide-process-step">B</div>
-                <div>
-                  <strong>What Upload CSV does</strong>
-                  <p>`Upload CSV` lets you intentionally replace the Seat Allocation working copy with an external file.</p>
-                </div>
-              </div>
-              <div class="guide-process-row">
-                <div class="guide-process-step">C</div>
-                <div>
-                  <strong>How to work here</strong>
-                  <p>Check the source summary and reconciliation first, use filters to focus on the right rows, then decide how many beneficiaries collect in Waiting Hall and how many on stage through Token quantity.</p>
-                </div>
-              </div>
-              <div class="guide-process-row">
-                <div class="guide-process-step">D</div>
-                <div>
-                  <strong>Bulk action and save</strong>
-                  <p>Bulk action is kept to speed up repeated splits across many similar rows. After editing, use save and review the reconciliation so you know Waiting Hall plus Token still matches the original total quantity from the source copy.</p>
-                </div>
-              </div>
-            </div>
-            <div class="guide-note"><strong>Meaning of the split:</strong> Waiting Hall and Token are not two different source rows. They are the operational split of one source requirement. The stage works only if the split total still equals the original quantity.</div>
-          </div>
-        </details>
-
-        <details class="guide-accordion guide-topic" id="guide-sequence-list" data-guide-section="guide-sequence-list" hidden>
-          <summary>
-            <section class="guide-card">
-              <div class="guide-card-head">
-                <div>
-                  <h2 class="guide-card-title"><span class="guide-card-title-number">9</span>Sequence List</h2>
-                  <p class="guide-card-copy">Assign one sequence number to each item so distribution, tokens, and labels follow a fixed order.</p>
-                </div>
-                <span class="guide-card-caret">▾</span>
-              </div>
-            </section>
-          </summary>
-          <div class="guide-card-body" style="padding-top: 0;">
-            <ul class="guide-list">
-              <li>`Sync Data` pulls the current item list from the earlier stage into the Sequence working copy.</li>
-              <li>Move items from left to right and arrange them in the required order.</li>
-              <li>`Save and Reconcile` saves the sequence list and checks that the final sequence output still matches the earlier master and seat stages before it is treated as trustworthy.</li>
-              <li>The logic here is item-level: one item should map to one sequence number, and one sequence number should map to one item order.</li>
-              <li>Use export when the final sequence output is ready.</li>
-            </ul>
-            <div class="guide-note"><strong>Important:</strong> If Sequence reconciliation shows a mismatch, do not use Sequence List to hide the issue. Fix the upstream stage first. Sequence is the trust layer before token generation, so its reconciliation is meant to protect the final operational file.</div>
-          </div>
-        </details>
-
-        <details class="guide-accordion guide-topic" id="guide-token-generation" data-guide-section="guide-token-generation" hidden>
-          <summary>
-            <section class="guide-card">
-              <div class="guide-card-head">
-                <div>
-                  <h2 class="guide-card-title"><span class="guide-card-title-number">10</span>Token Generation</h2>
-                  <p class="guide-card-copy">Prepare the final working file for token-based distribution, labels, and downstream reporting.</p>
-                </div>
-                <span class="guide-card-caret">▾</span>
-              </div>
-            </section>
-          </summary>
-          <div class="guide-card-body" style="padding-top: 0;">
-            <div class="guide-process">
-              <div class="guide-process-row">
-                <div class="guide-process-step">1</div>
-                <div>
-                  <strong>Sync or Upload</strong>
-                  <p>Load the current sequence-stage file into Token Generation. Sync pulls from the previous app stage; upload intentionally replaces the token working copy from an external file.</p>
-                </div>
-              </div>
-              <div class="guide-process-row">
-                <div class="guide-process-step">2</div>
-                <div>
-                  <strong>Data Prep</strong>
-                  <p>Create the working `Names` field, complete missing values where needed, sort the data into the required order, and run quality checks before token generation continues.</p>
-                </div>
-              </div>
-              <div class="guide-process-row">
-                <div class="guide-process-step">3</div>
-                <div>
-                  <strong>Adjust Names</strong>
-                  <p>Shorten long `Names` and `Token Name` values so they fit correctly in labels and reports. The page shows only the unique long values so the user can review them efficiently.</p>
-                </div>
-              </div>
-              <div class="guide-process-row">
-                <div class="guide-process-step">4</div>
-                <div>
-                  <strong>Token Print Review</strong>
-                  <p>Decide which article rows should skip article-label sticking, because not every token-bearing row needs a physical article sticker.</p>
-                </div>
-              </div>
-              <div class="guide-process-row">
-                <div class="guide-process-step">5</div>
-                <div>
-                  <strong>Generate Token</strong>
-                  <p>Create `Start Token No` and `End Token No` ranges from the prepared token quantity, then export the final token file.</p>
-                </div>
-              </div>
-            </div>
-            <div class="guide-note"><strong>Why this stage exists:</strong> Token Generation turns the reconciled sequence output into the final working file used for token-based reporting, badge creation, and label generation.</div>
-          </div>
-        </details>
-
-        <details class="guide-accordion guide-topic" id="guide-labels" data-guide-section="guide-labels" hidden>
-          <summary>
-            <section class="guide-card">
-              <div class="guide-card-head">
-                <div>
-                  <h2 class="guide-card-title"><span class="guide-card-title-number">11</span>Labels</h2>
-                  <p class="guide-card-copy">Generate printable PDF labels from the final token-generated data.</p>
-                </div>
-                <span class="guide-card-caret">▾</span>
-              </div>
-            </section>
-          </summary>
-          <div class="guide-card-body" style="padding-top: 0;">
-            <ul class="guide-list">
-              <li>`Sync Data` pulls the current token-generated file into the Labels stage.</li>
-              <li>`Upload` lets you load a prepared label file manually.</li>
-              <li>Article labels are used to stick on physical items.</li>
-              <li>District, Institution, and Public labels act as badges or token labels for the relevant beneficiaries.</li>
-              <li>Article labels support multiple layouts like 12L and 2L, while other label groups provide the relevant continuous or separate badge sheets.</li>
-              <li>Chair labels and custom labels are available for special operating needs.</li>
-            </ul>
-            <div class="guide-note"><strong>Working rule:</strong> Labels should be generated from token-generated data, not from earlier stages. That is what keeps token number ranges, names, and token names aligned with the final distribution file.</div>
-          </div>
-        </details>
-
-        <details class="guide-accordion guide-topic" id="guide-purchase-order" data-guide-section="guide-purchase-order" hidden>
-          <summary>
-            <section class="guide-card">
-              <div class="guide-card-head">
-                <div>
-                  <h2 class="guide-card-title"><span class="guide-card-title-number">12</span>Purchase Order</h2>
-                  <p class="guide-card-copy">A separate workflow from Fund Request, used for vendor-facing purchase documents.</p>
-                </div>
-                <span class="guide-card-caret">▾</span>
-              </div>
-            </section>
-          </summary>
-          <div class="guide-card-body" style="padding-top: 0;">
-            <ul class="guide-list">
-              <li>Purchase Order is independent from Fund Request and works directly with vendor and ordered-item details.</li>
-              <li>Add vendor details, GST number, and ordered items.</li>
-              <li>Each item row carries article, quantity, unit price, line total, supplier article name, and description.</li>
-              <li>Use drafts while preparing the document.</li>
-              <li>Submit only when the purchase order is finalized, then generate the printable PDF.</li>
-            </ul>
-          </div>
-        </details>
-
-        <details class="guide-accordion guide-topic" id="guide-admin" data-guide-section="guide-admin" hidden>
-          <summary>
-            <section class="guide-card">
-              <div class="guide-card-head">
-                <div>
-                  <h2 class="guide-card-title"><span class="guide-card-title-number">13</span>Audit Logs & User Management</h2>
-                  <p class="guide-card-copy">Supporting modules that help you track changes, manage access, and support the team operationally.</p>
-                </div>
-                <span class="guide-card-caret">▾</span>
-              </div>
-            </section>
-          </summary>
-          <div class="guide-card-body" style="padding-top: 0;">
-            <div class="guide-section-grid">
-              <div class="guide-subcard">
-                <h3>Audit Logs & User Management</h3>
-                <ul class="guide-list">
-                  <li><strong>Audit Logs:</strong> see who changed what and when across the application, especially when a value looks different from what the team expected.</li>
-                  <li><strong>User Management:</strong> create users, manage roles, and reset passwords so the correct people can work in the correct modules.</li>
-                </ul>
-              </div>
-            </div>
-            <div class="guide-note"><strong>Support tip:</strong> If something feels wrong, first check this User Guide and then Audit Logs to understand what changed.</div>
-          </div>
-        </details>
+          </section>
+        {% endfor %}
       </main>
     </div>
   </div>
@@ -901,11 +367,7 @@
 
       function activateSection(targetId) {
         sections.forEach((section) => {
-          const isActive = section.dataset.guideSection === targetId;
-          section.hidden = !isActive;
-          if (section.tagName === "DETAILS") {
-            section.open = isActive;
-          }
+          section.hidden = section.dataset.guideSection !== targetId;
         });
 
         links.forEach((link) => {
@@ -926,8 +388,8 @@
         });
       });
 
-      const initialTarget = window.location.hash ? window.location.hash.slice(1) : "guide-start";
-      const validTarget = sections.some((section) => section.dataset.guideSection === initialTarget) ? initialTarget : "guide-start";
+      const initialTarget = window.location.hash ? window.location.hash.slice(1) : "guide-base_files";
+      const validTarget = sections.some((section) => section.dataset.guideSection === initialTarget) ? initialTarget : "guide-base_files";
       activateSection(validTarget);
     })();
   </script>

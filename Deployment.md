@@ -141,7 +141,7 @@ Deploy a new revision.
 
 Use the following logic to create Drive credentials:
 
-import os
+`import os
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 def get_drive_service():
@@ -153,7 +153,7 @@ def get_drive_service():
         client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
         scopes=["https://www.googleapis.com/auth/drive"],
     )
-    return build("drive", "v3", credentials=credentials)
+    return build("drive", "v3", credentials=credentials)`
 
 This allows Google to:
 

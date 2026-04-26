@@ -502,54 +502,6 @@
 <div class="dashboard-root">
   <div class="dashboard-shell">
     {% if dashboard_page == "1" %}
-    <div class="hero">
-      <div class="hero-stats">
-        <div class="hero-card" style="background: #ffe3bf; color: #4a2c14;">
-          <div class="hero-card-head">
-            <div class="hero-card-title">Event Budget</div>
-            {% if can_edit_event_budget %}
-              <button type="button" class="hero-card-edit-btn" data-budget-edit-toggle aria-label="Edit event budget" title="Edit event budget">
-                <svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>
-              </button>
-            {% endif %}
-          </div>
-          <div class="hero-card-value">Rs.{{ overall_event_budget|rupees_round }}</div>
-          {% if can_edit_event_budget %}
-            <form method="post" class="hero-card-editor" data-budget-editor hidden>
-              {% csrf_token %}
-              <input type="text" name="event_budget" value="{{ overall_event_budget|rupees_round }}" inputmode="decimal" aria-label="Event budget" />
-              <button type="submit" class="btn" style="min-height: 34px; padding: 6px 12px; font-size: 0.9rem;">Save</button>
-            </form>
-          {% endif %}
-        </div>
-        <div class="hero-card" style="background: #d6f5df; color: #1f3d2a;">
-          <div class="hero-card-title">Total Accrued</div>
-          <div class="hero-card-value">Rs.{{ metrics.overall.actual_total_value_accrued|rupees_round }}</div>
-          <div class="stat-muted" style="margin-top: 6px;">
-            <strong>Incl. Rs.{{ metrics.overall.overutilized_signed.amount|rupees_round }}</strong> District Contribution
-          </div>
-        </div>
-        <div class="hero-card" style="background: #e9d5ff; color: #3b1f5e;">
-          <div class="hero-card-title">Planning Total</div>
-          <div class="hero-card-value">Rs.{{ metrics.overall.total_value_accrued|rupees_round }}</div>
-          <div class="stat-muted" style="margin-top: 6px;">
-            <strong>Excl. Rs.{{ metrics.overall.district_contribution_signed.amount|rupees_round }}</strong> District Contribution &
-          </div>
-          <div class="stat-muted" style="margin-top: 2px;">
-            <strong>Incl. Rs.{{ metrics.overall.underutilized_signed.amount|rupees_round }}</strong> Underutilised from District
-          </div>
-        </div>
-        <div class="hero-card" style="background: #d8ecff; color: #163250;">
-          <div class="hero-card-title">Balance (can Spend)</div>
-          <div class="hero-card-value">Rs.{{ balance_to_allot|rupees_round }}</div>
-        </div>
-        <div class="hero-card" style="background: #fecdd3; color: #4a1f29;">
-          <div class="hero-card-title">Fund Raised</div>
-          <div class="hero-card-value">Rs.{{ metrics.fund_requests.total_value|rupees_round }}</div>
-        </div>
-      </div>
-    </div>
-
     <div class="section">
       <h2 class="section-title"><span></span> District</h2>
       <div class="stat-grid" style="grid-template-columns: repeat(4, minmax(220px, 1fr));">
