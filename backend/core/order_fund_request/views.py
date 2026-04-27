@@ -369,6 +369,9 @@ class FundRequestListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
             for fr in all_fund_requests
             if fr.fund_request_type == models.FundRequestTypeChoices.AID
         )
+        context["aadhaar_not_verified_count"] = models.PublicBeneficiaryEntry.objects.active().filter(
+            aadhaar_status=models.AadhaarVerificationStatusChoices.NOT_AVAILABLE
+        ).count()
         context["article_request_count"] = sum(
             fr.articles.count()
             for fr in all_fund_requests
