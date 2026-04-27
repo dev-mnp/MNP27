@@ -84,6 +84,8 @@
     .sidebar-footer {
       margin-top: auto;
       padding-top: 18px;
+      display: flex;
+      justify-content: flex-start;
     }
     .sidebar-footer .btn-subtle {
       width: auto;
@@ -130,6 +132,44 @@
     body.sidebar-collapsed .sidebar-brand-logo { width: 42px; height: 42px; }
     body.sidebar-collapsed .sidebar-footer .btn-subtle { width: 40px; min-width: 40px; padding: 0; justify-content: center; }
     body.sidebar-collapsed .sidebar-footer .btn-subtle .menu-label { display: none; }
+    .sidebar-guide-link {
+      position: relative;
+      width: 42px;
+      min-width: 42px;
+      height: 42px;
+      padding: 0;
+      justify-content: center;
+    }
+    .sidebar-guide-link .menu-label {
+      display: none;
+    }
+    .sidebar-guide-link::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      left: calc(100% + 10px);
+      top: 50%;
+      transform: translateY(-50%);
+      padding: 7px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: #111827;
+      color: #ffffff;
+      font-size: 0.84rem;
+      font-weight: 600;
+      line-height: 1;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.16s ease, transform 0.16s ease;
+      z-index: 20;
+    }
+    .sidebar-guide-link:hover::after,
+    .sidebar-guide-link:focus-visible::after {
+      opacity: 1;
+      transform: translateY(-50%) translateX(2px);
+    }
+    body.sidebar-collapsed .sidebar-footer { justify-content: center; }
+    body.sidebar-collapsed .sidebar-guide-link::after { display: none; }
     .topbar {
       height: 56px; padding: 8px 12px; border-bottom: 1px solid var(--border-color);
       display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.96);
@@ -1112,7 +1152,7 @@
               </div>
             {% endif %}
           {% endif %}
-          {% if module_perms.user_management.can_view or module_perms.purchase_order.can_view or module_perms.vendors.can_view or module_perms.audit_logs.can_view or module_perms.user_guide.can_view %}
+          {% if module_perms.user_management.can_view or module_perms.purchase_order.can_view or module_perms.vendors.can_view or module_perms.base_files.can_view or module_perms.audit_logs.can_view %}
             <div class="menu-divider"></div>
             {% if module_perms.purchase_order.can_view %}
               <a href="{% url 'ui:purchase-order-list' %}" class="menu-item {% if '/ui/purchase-orders/' in request.path %}active{% endif %}">
@@ -1139,11 +1179,6 @@
                 <span class="menu-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.5"/><path d="M4 19c0-2.8 2.8-5 5-5s5 2.2 5 5"/><path d="M14 19c.3-1.9 1.8-3.4 3.8-4"/></svg></span><span class="menu-label">User Management</span>
               </a>
             {% endif %}
-            {% if module_perms.user_guide.can_view %}
-              <a href="{% url 'ui:user-guide' %}" class="menu-item {% if '/ui/user-guide/' in request.path %}active{% endif %}">
-                <span class="menu-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/></svg></span><span class="menu-label">User Guide</span>
-              </a>
-            {% endif %}
           {% endif %}
           {% endwith %}
         {% else %}
@@ -1151,7 +1186,17 @@
         {% endif %}
       </nav>
 
-      <div class="sidebar-footer"></div>
+      <div class="sidebar-footer">
+        {% if request.user.is_authenticated %}
+          {% with module_perms=request.user.get_module_permission_map %}
+            {% if module_perms.user_guide.can_view %}
+              <a href="{% url 'ui:user-guide' %}" class="menu-item sidebar-guide-link {% if '/ui/user-guide/' in request.path %}active{% endif %}" title="User Guide" aria-label="User Guide" data-tooltip="User Guide">
+                <span class="menu-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/></svg></span><span class="menu-label">User Guide</span>
+              </a>
+            {% endif %}
+          {% endwith %}
+        {% endif %}
+      </div>
     </aside>
 
     <div class="app-main">

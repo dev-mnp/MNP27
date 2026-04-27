@@ -27,7 +27,7 @@ from core.shared.permissions import AdminRequiredMixin, RoleRequiredMixin, Write
 def _is_editable_purchase_order(user, purchase_order):
     if not user or not user.is_authenticated:
         return False
-    if user.role not in {"admin", "editor"}:
+    if not user.has_module_permission(models.ModuleKeyChoices.PURCHASE_ORDER, "create_edit"):
         return False
     return purchase_order.status == models.FundRequestStatusChoices.DRAFT
 
@@ -350,7 +350,7 @@ class PurchaseOrderSubmitView(LoginRequiredMixin, WriteRoleMixin, View):
 
     def post(self, request, pk):
         purchase_order = get_object_or_404(models.PurchaseOrder, pk=pk)
-        if not _is_editable_purchase_order(request.user, purchase_order) or request.user.role == "viewer":
+        if not request.user.has_module_permission(self.module_key, "submit"):
             return HttpResponse("Forbidden", status=403)
         if purchase_order.status != models.FundRequestStatusChoices.DRAFT:
             messages.error(request, "Only draft purchase orders can be submitted.")

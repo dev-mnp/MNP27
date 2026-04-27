@@ -9,6 +9,7 @@
 **/.venv313/
 # Local env files
 **/.env
+**/.env.*
 
 # Local DB artifacts
 **/db.sqlite3*

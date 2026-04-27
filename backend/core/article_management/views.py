@@ -101,6 +101,8 @@ class ArticleListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
                 "current_sort": (self.request.GET.get("sort") or "article_name").strip(),
                 "current_dir": (self.request.GET.get("dir") or "asc").strip().lower(),
                 "query_string_without_page": self._query_string_without_page(),
+                "can_create_edit": self.request.user.has_module_permission(self.module_key, "create_edit"),
+                "can_delete": self.request.user.has_module_permission(self.module_key, "delete"),
             }
         )
         return context

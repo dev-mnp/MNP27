@@ -321,7 +321,7 @@
                     </button>
                   </form>
                 {% endif %}
-                {% if can_reopen and request.user.role == 'admin' and purchase_order.status == 'submitted' %}
+                {% if can_reopen and purchase_order.status == 'submitted' %}
                   <form method="post" action="{% url 'ui:purchase-order-reopen' purchase_order.id %}">
                     {% csrf_token %}
                     <button class="btn icon-btn po-reopen-btn" type="submit" title="Reopen" aria-label="Reopen">
@@ -329,7 +329,7 @@
                     </button>
                   </form>
                 {% endif %}
-                {% if can_delete and request.user.role == 'admin' %}
+                {% if can_delete %}
                   <a class="btn icon-btn po-delete-btn" href="{% url 'ui:purchase-order-delete' purchase_order.id %}" title="Delete" aria-label="Delete">
                     <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
                   </a>

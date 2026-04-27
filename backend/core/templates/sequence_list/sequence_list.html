@@ -497,38 +497,28 @@
     <div class="sequence-sync-status is-neutral" id="sequence-sync-status">
       Sync data to check Seat Allocation reconciliation.
     </div>
-    {% if submit_result %}
-      <details class="sequence-reconcile-block {% if submit_result.all_matched %}is-ok{% else %}is-warn{% endif %}" open>
+    {% if submit_result and not submit_result.all_matched %}
+      <details class="sequence-reconcile-block is-warn" open>
         <summary class="sequence-reconcile-summary-line">
-          <span class="sequence-reconcile-status {% if submit_result.all_matched %}is-ok{% else %}is-warn{% endif %}">
-            {% if submit_result.all_matched %}Sequence Reconciliation Matched{% else %}Sequence Reconciliation Needs Attention{% endif %}
-          </span>
+          <span class="sequence-reconcile-status is-warn">Sequence Reconciliation Needs Attention</span>
           <span class="sequence-reconcile-meta">Checked at: {{ submit_result.checked_at_display }}</span>
         </summary>
         <ul class="sequence-reconcile-list">
           {% for check in submit_result.checks %}
-            <li class="sequence-reconcile-item {% if check.matched %}is-ok{% else %}is-warn{% endif %}">
+            {% if not check.matched %}
+            <li class="sequence-reconcile-item is-warn">
               <span class="sequence-reconcile-icon" aria-hidden="true">
-                {% if check.matched %}
-                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="m4.5 10 3.2 3.2 7.8-7.8"></path>
-                  </svg>
-                {% else %}
-                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-                    <path d="M10 5.5v5"></path>
-                    <path d="M10 14.2h.01"></path>
-                    <circle cx="10" cy="10" r="8"></circle>
-                  </svg>
-                {% endif %}
+                <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                  <path d="M10 5.5v5"></path>
+                  <path d="M10 14.2h.01"></path>
+                  <circle cx="10" cy="10" r="8"></circle>
+                </svg>
               </span>
               <span class="sequence-reconcile-text">
-                {% if check.matched %}
-                  {{ check.label }} matched
-                {% else %}
-                  {{ check.label }}: {{ check.details }}
-                {% endif %}
+                {{ check.label }}: {{ check.details }}
               </span>
             </li>
+            {% endif %}
           {% endfor %}
         </ul>
       </details>
@@ -737,6 +727,7 @@
         const summary = reconciliationSummary();
         const syncPrefix = lastSyncedAt ? `Synced at ${lastSyncedAt}. ` : '';
         syncStatus.className = 'sequence-sync-status';
+        syncStatus.hidden = false;
         if (!masterItems.length) {
           syncStatus.classList.add('is-neutral');
           syncStatus.textContent = `${syncPrefix}No Master Data items available yet for reconciliation.`;
@@ -749,7 +740,8 @@
         }
         if (!summary.missingInSeatAllocation.length && !summary.extraInSeatAllocation.length && !summary.newToSequence.length) {
           syncStatus.classList.add('is-ok');
-          syncStatus.textContent = dbSourceIsUploaded ? `${syncPrefix}Uploaded Seat Allocation working copy is ready for sequencing. Current Master Data also matches ${summary.masterCount} item(s).` : `${syncPrefix}Seat Allocation and Sequence List are aligned with current Master Data. ${summary.masterCount} item(s) matched.`;
+          syncStatus.textContent = '';
+          syncStatus.hidden = true;
           return;
         }
         if (!summary.missingInSeatAllocation.length && !summary.extraInSeatAllocation.length && summary.newToSequence.length) {

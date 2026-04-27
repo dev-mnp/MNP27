@@ -275,7 +275,7 @@
             </a>
           </div>
         </details>
-    {% if request.user.role == "admin" or request.user.role == "editor" %}
+    {% if request.user.get_module_permission_map.order_fund_request.can_create_edit %}
       <a class="btn" href="{% url 'ui:fund-request-create' %}">Create</a>
     {% endif %}
   </div>
@@ -346,12 +346,12 @@
               <a class="btn icon-btn view-icon-btn" title="Download PDF" aria-label="Download PDF" href="{% url 'ui:fund-request-pdf' fr.id %}" target="_blank" rel="noopener">
                 <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
               </a>
-              {% if fr.status == "draft" and request.user.role == "admin" or fr.status == "draft" and request.user.role == "editor" %}
+              {% if fr.status == "draft" and module_perms.order_fund_request.can_create_edit %}
                 <a class="btn btn-edit icon-btn" title="Modify" aria-label="Modify" href="{% url 'ui:fund-request-edit' fr.id %}">
                   <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
                 </a>
               {% endif %}
-              {% if request.user.role == "admin" and fr.status == "submitted" and module_perms.order_fund_request.can_reopen %}
+              {% if fr.status == "submitted" and module_perms.order_fund_request.can_reopen %}
                 <form method="post" action="{% url 'ui:fund-request-reopen' fr.id %}">
                   {% csrf_token %}
                   <button class="btn btn-reopen icon-btn" type="submit" title="Reopen" aria-label="Reopen">
@@ -359,7 +359,7 @@
                   </button>
                 </form>
               {% endif %}
-              {% if request.user.role == "admin" and module_perms.order_fund_request.can_delete %}
+              {% if module_perms.order_fund_request.can_delete %}
                 <a class="btn btn-danger icon-btn" title="Delete" aria-label="Delete" href="{% url 'ui:fund-request-delete' fr.id %}">
                   <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
                 </a>

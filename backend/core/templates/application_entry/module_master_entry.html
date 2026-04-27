@@ -158,11 +158,11 @@
               <td><span class="status-pill status-{{ row.status }}">{{ row.status|title }}</span></td>
               <td>
                 <div class="actions-inline">
-                {% if row.status != "submitted" %}
+                {% if row.status != "submitted" and module_perms.application_entry.can_create_edit %}
                 <a class="btn btn-edit icon-btn" title="Modify" aria-label="Modify" href="{% url 'ui:master-entry-district-edit' row.district_id %}">
                   <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
                 </a>
-                {% elif request.user.role == "admin" and module_perms.application_entry.can_reopen %}
+                {% elif module_perms.application_entry.can_reopen %}
                   <form method="post" action="{% url 'ui:master-entry-district-reopen' row.district_id %}" style="display: inline;" data-confirm-message="Reopen this district application as draft?">
                     {% csrf_token %}
                     <button class="btn btn-reopen icon-btn" type="submit" title="Reopen" aria-label="Reopen">
@@ -170,7 +170,7 @@
                     </button>
                   </form>
                 {% endif %}
-                {% if request.user.role == "admin" %}
+                {% if module_perms.application_entry.can_delete %}
                   <form method="post" action="{% url 'ui:master-entry-district-delete' row.district_id %}" style="display: inline;" data-confirm-message="Delete this district entry?">
                     {% csrf_token %}
                     <button class="btn btn-danger icon-btn" type="submit" title="Delete" aria-label="Delete">
@@ -255,11 +255,11 @@
               <td><span class="status-pill status-{{ entry.status }}">{{ entry.status|title }}</span></td>
               <td>
                 <div class="actions-inline">
-                {% if entry.status != "submitted" and entry.status != "archived" %}
+                {% if entry.status != "submitted" and entry.status != "archived" and module_perms.application_entry.can_create_edit %}
                 <a class="btn btn-edit icon-btn" title="Modify" aria-label="Modify" href="{% url 'ui:master-entry-public-edit' entry.id %}">
                   <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
                 </a>
-                {% elif entry.status != "archived" and request.user.role == "admin" and module_perms.application_entry.can_reopen %}
+                {% elif entry.status != "archived" and module_perms.application_entry.can_reopen %}
                   <form method="post" action="{% url 'ui:master-entry-public-reopen' entry.id %}" style="display: inline;" data-confirm-message="Reopen this public application as draft?">
                     {% csrf_token %}
                     <button class="btn btn-reopen icon-btn" type="submit" title="Reopen" aria-label="Reopen">
@@ -267,7 +267,7 @@
                     </button>
                   </form>
                 {% endif %}
-                {% if request.user.role == "admin" %}
+                {% if module_perms.application_entry.can_delete %}
                   {% if entry.status != "archived" %}
                     <form method="post" action="{% url 'ui:master-entry-public-archive' entry.id %}" style="display: inline;" data-confirm-message="Archive this public application?">
                       {% csrf_token %}
@@ -367,11 +367,11 @@
               <td><span class="status-pill status-{{ row.status }}">{{ row.status|title }}</span></td>
               <td>
                 <div class="actions-inline">
-                {% if row.status != "submitted" %}
+                {% if row.status != "submitted" and module_perms.application_entry.can_create_edit %}
                 <a class="btn btn-edit icon-btn" title="Modify" aria-label="Modify" href="{% url 'ui:master-entry-institution-edit' row.application_number %}">
                   <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
                 </a>
-                {% elif request.user.role == "admin" and module_perms.application_entry.can_reopen %}
+                {% elif module_perms.application_entry.can_reopen %}
                   <form method="post" action="{% url 'ui:master-entry-institution-reopen' row.application_number %}" style="display: inline;" data-confirm-message="Reopen this institution application as draft?">
                     {% csrf_token %}
                     <button class="btn btn-reopen icon-btn" type="submit" title="Reopen" aria-label="Reopen">
@@ -379,7 +379,7 @@
                     </button>
                   </form>
                 {% endif %}
-                {% if request.user.role == "admin" %}
+                {% if module_perms.application_entry.can_delete %}
                   <form method="post" action="{% url 'ui:master-entry-institution-delete' row.application_number %}" style="display: inline;" data-confirm-message="Delete this institution entry?">
                     {% csrf_token %}
                     <button class="btn btn-danger icon-btn" type="submit" title="Delete" aria-label="Delete">
@@ -464,11 +464,11 @@
               <td><span class="status-pill status-{{ row.status }}">{{ row.status|title }}</span></td>
               <td>
                 <div class="actions-inline">
-                {% if row.status != "submitted" %}
+                {% if row.status != "submitted" and module_perms.application_entry.can_create_edit %}
                 <a class="btn btn-edit icon-btn" title="Modify" aria-label="Modify" href="{% url 'ui:master-entry-others-edit' row.application_number %}">
                   <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
                 </a>
-                {% elif request.user.role == "admin" and module_perms.application_entry.can_reopen %}
+                {% elif module_perms.application_entry.can_reopen %}
                   <form method="post" action="{% url 'ui:master-entry-others-reopen' row.application_number %}" style="display: inline;" data-confirm-message="Reopen this others application as draft?">
                     {% csrf_token %}
                     <button class="btn btn-reopen icon-btn" type="submit" title="Reopen" aria-label="Reopen">
@@ -476,7 +476,7 @@
                     </button>
                   </form>
                 {% endif %}
-                {% if request.user.role == "admin" %}
+                {% if module_perms.application_entry.can_delete %}
                   <form method="post" action="{% url 'ui:master-entry-others-delete' row.application_number %}" style="display: inline;" data-confirm-message="Delete this others entry?">
                     {% csrf_token %}
                     <button class="btn btn-danger icon-btn" type="submit" title="Delete" aria-label="Delete">

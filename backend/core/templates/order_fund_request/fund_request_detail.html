@@ -105,7 +105,7 @@
       </div>
     </div>
 
-    {% if fund_request.status == "draft" and request.user.role != "viewer" %}
+    {% if fund_request.status == "draft" and request.user.get_module_permission_map.order_fund_request.can_submit %}
       <form method="post" action="{% url 'ui:fund-request-submit' fund_request.id %}" style="margin-top: 12px;">
         {% csrf_token %}
         <button class="btn" type="submit">Submit</button>

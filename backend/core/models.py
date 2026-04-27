@@ -93,7 +93,7 @@ MODULE_PERMISSION_DEFINITIONS = [
     {
         "key": ModuleKeyChoices.DASHBOARD,
         "label": "Dashboard",
-        "actions": ("view", "view_page_2"),
+        "actions": ("view", "view_page_2", "create_edit"),
     },
     {
         "key": ModuleKeyChoices.APPLICATION_ENTRY,
@@ -172,58 +172,12 @@ MODULE_PERMISSION_DEFINITIONS = [
     },
 ]
 
-ROLE_MODULE_PERMISSION_DEFAULTS = {
-    RoleChoices.ADMIN: {
-        definition["key"]: set(definition["actions"])
-        for definition in MODULE_PERMISSION_DEFINITIONS
-    },
-    RoleChoices.EDITOR: {
-        ModuleKeyChoices.DASHBOARD: {"view", "view_page_2"},
-        ModuleKeyChoices.APPLICATION_ENTRY: {"view", "create_edit", "submit", "reopen"},
-        ModuleKeyChoices.ARTICLE_MANAGEMENT: {"view", "create_edit"},
-        ModuleKeyChoices.BASE_FILES: {"view", "upload_replace"},
-        ModuleKeyChoices.INVENTORY_PLANNING: {"view", "export"},
-        ModuleKeyChoices.SEAT_ALLOCATION: {"view", "create_edit", "export", "upload_replace"},
-        ModuleKeyChoices.SEQUENCE_LIST: {"view", "create_edit", "export"},
-        ModuleKeyChoices.TOKEN_GENERATION: {"view", "create_edit", "export", "upload_replace"},
-        ModuleKeyChoices.LABELS: {"view", "create_edit", "export", "upload_replace"},
-        ModuleKeyChoices.REPORTS: {"view", "create_edit", "export", "upload_replace"},
-        ModuleKeyChoices.ORDER_FUND_REQUEST: {"view", "create_edit", "submit", "reopen"},
-        ModuleKeyChoices.PURCHASE_ORDER: {"view", "create_edit", "submit", "reopen"},
-        ModuleKeyChoices.VENDORS: {"view", "create_edit", "export"},
-        ModuleKeyChoices.AUDIT_LOGS: set(),
-        ModuleKeyChoices.USER_MANAGEMENT: set(),
-        ModuleKeyChoices.USER_GUIDE: {"view"},
-    },
-    RoleChoices.VIEWER: {
-        ModuleKeyChoices.DASHBOARD: {"view", "view_page_2"},
-        ModuleKeyChoices.APPLICATION_ENTRY: {"view"},
-        ModuleKeyChoices.ARTICLE_MANAGEMENT: {"view"},
-        ModuleKeyChoices.BASE_FILES: {"view"},
-        ModuleKeyChoices.INVENTORY_PLANNING: {"view"},
-        ModuleKeyChoices.SEAT_ALLOCATION: {"view"},
-        ModuleKeyChoices.SEQUENCE_LIST: {"view"},
-        ModuleKeyChoices.TOKEN_GENERATION: {"view"},
-        ModuleKeyChoices.LABELS: {"view"},
-        ModuleKeyChoices.REPORTS: {"view"},
-        ModuleKeyChoices.ORDER_FUND_REQUEST: {"view"},
-        ModuleKeyChoices.PURCHASE_ORDER: {"view"},
-        ModuleKeyChoices.VENDORS: {"view"},
-        ModuleKeyChoices.AUDIT_LOGS: set(),
-        ModuleKeyChoices.USER_MANAGEMENT: set(),
-        ModuleKeyChoices.USER_GUIDE: {"view"},
-    },
-}
-
-
-def build_role_module_permission_map(role: str):
+def build_role_module_permission_map(role: str | None = None):
     permission_map = {}
-    defaults = ROLE_MODULE_PERMISSION_DEFAULTS.get(role, {})
     for definition in MODULE_PERMISSION_DEFINITIONS:
         module_key = str(definition["key"])
-        allowed_actions = defaults.get(definition["key"], set())
         permission_map[module_key] = {
-            f"can_{action}": action in allowed_actions for action in ALL_MODULE_PERMISSION_ACTIONS
+            f"can_{action}": False for action in ALL_MODULE_PERMISSION_ACTIONS
         }
     return permission_map
 
@@ -459,7 +413,7 @@ class AppUser(AbstractUser):
 
         # This is used by the sidebar on every page. Cache it briefly to avoid a DB hit per request
         # when running against a remote Postgres (Supabase/Neon).
-        cache_key = f"mnp27:user_module_perms:{self.pk}:{self.role}"
+        cache_key = f"mnp27:user_module_perms:v2:{self.pk}:{self.role}"
         cached = cache.get(cache_key)
         if cached is not None:
             setattr(self, cache_name, cached)

@@ -60,6 +60,8 @@ class VendorListView(LoginRequiredMixin, RoleRequiredMixin, ListView):
         params = self.request.GET.copy()
         params.pop("page", None)
         context["query_string_without_page"] = params.urlencode()
+        context["can_create_edit"] = self.request.user.has_module_permission(self.module_key, "create_edit")
+        context["can_delete"] = self.request.user.has_module_permission(self.module_key, "delete")
         return context
 
     def _export_csv(self):

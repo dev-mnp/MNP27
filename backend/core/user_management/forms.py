@@ -3,6 +3,7 @@ from __future__ import annotations
 """Forms for user-management workflows."""
 
 from django import forms
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 
 from core import models
@@ -54,6 +55,7 @@ class AppUserPermissionFormMixin:
             permission.save()
         if hasattr(user, "_resolved_module_permission_map"):
             delattr(user, "_resolved_module_permission_map")
+        cache.delete(f"mnp27:user_module_perms:v2:{user.pk}:{user.role}")
 
 
 class AppUserCreateForm(AppUserPermissionFormMixin, forms.ModelForm):

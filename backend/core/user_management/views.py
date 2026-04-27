@@ -49,6 +49,15 @@ class UserManagementListView(LoginRequiredMixin, AdminRequiredMixin, ListView):
         }
         context["role_choices"] = models.RoleChoices.choices
         context["status_choices"] = models.StatusChoices.choices
+        context["can_create_edit"] = self.request.user.has_module_permission(
+            models.ModuleKeyChoices.USER_MANAGEMENT, "create_edit"
+        )
+        context["can_delete"] = self.request.user.has_module_permission(
+            models.ModuleKeyChoices.USER_MANAGEMENT, "delete"
+        )
+        context["can_reset_password"] = self.request.user.has_module_permission(
+            models.ModuleKeyChoices.USER_MANAGEMENT, "reset_password"
+        )
         return context
 
 
@@ -88,9 +97,6 @@ class UserManagementUpdateView(LoginRequiredMixin, AdminRequiredMixin, UpdateVie
         if self.object == self.request.user:
             if form.cleaned_data.get("status") != models.StatusChoices.ACTIVE:
                 form.add_error("status", "You cannot deactivate your own account.")
-                return self.form_invalid(form)
-            if form.cleaned_data.get("role") != models.RoleChoices.ADMIN:
-                form.add_error("role", "You cannot remove your own admin access.")
                 return self.form_invalid(form)
         messages.success(self.request, "User updated successfully.")
         return super().form_valid(form)

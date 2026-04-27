@@ -21,7 +21,7 @@ User Management creates users, assigns roles, and controls module-level permissi
 
 - `AppUser.id`: UUID primary key.
 - `AppUser.email`: login username.
-- `AppUser.role`: `admin`, `editor`, or `viewer`.
+- `AppUser.role`: stored user category for display/filtering. Module access is controlled by permission rows.
 - `AppUser.status`: active or inactive.
 - `UserModulePermission.module_key`: module name such as `dashboard`.
 - Permission booleans: `can_view`, `can_create_edit`, `can_delete`, `can_submit`, `can_reopen`, `can_export`, `can_upload_replace`, `can_reset_password`, `can_view_page_2`.
@@ -30,13 +30,13 @@ User Management creates users, assigns roles, and controls module-level permissi
 
 - Superusers pass every permission check.
 - Inactive users fail permission checks.
-- Role defaults are defined in `ROLE_MODULE_PERMISSION_DEFAULTS`.
-- Per-user permission rows override role defaults.
+- Permission rows are the source of truth for module access.
+- If a permission row is missing for a module, that module is denied for the user.
 - Sidebar visibility is based on resolved module permissions.
 
 ## Debug checklist
 
-- User cannot see a menu item: check `user_module_permissions` and role defaults.
+- User cannot see a menu item: check `user_module_permissions.can_view`.
 - User can see but cannot perform action: check action-specific permission.
 - Permissions seem stale: clear cache key `mnp27:user_module_perms:*` or re-login.
 - New module missing: add it to `ModuleKeyChoices`, `MODULE_PERMISSION_DEFINITIONS`, sidebar, view mixin, and user guide modules.

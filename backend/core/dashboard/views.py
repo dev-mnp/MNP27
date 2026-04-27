@@ -26,7 +26,7 @@ class DashboardView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
     template_name = "dashboard/dashboard.html"
 
     def post(self, request, *args, **kwargs):
-        if request.user.role not in {"admin", "editor"}:
+        if not request.user.has_module_permission(self.module_key, "create_edit"):
             messages.error(request, "You do not have permission to update the event budget.")
             return HttpResponseRedirect(reverse("ui:dashboard"))
         budget_raw = (request.POST.get("event_budget") or "").strip().replace(",", "")
@@ -65,7 +65,7 @@ class DashboardView(LoginRequiredMixin, RoleRequiredMixin, TemplateView):
                 "metrics": metrics,
                 "overall_event_budget": overall_event_budget,
                 "balance_to_allot": overall_event_budget - metrics["overall"]["total_value_accrued"],
-                "can_edit_event_budget": self.request.user.role in {"admin", "editor"},
+                "can_edit_event_budget": self.request.user.has_module_permission(self.module_key, "create_edit"),
                 "can_view_dashboard_page_2": can_view_dashboard_page_2,
                 "dashboard_page": dashboard_page,
                 "show_dashboard_page_2": show_page_2,

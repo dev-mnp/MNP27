@@ -152,30 +152,7 @@
       </div>
     {% endif %}
 
-    {% if selected_session and reconciliation.source_name %}
-      {% if reconciliation.all_matched %}
-        <details class="seat-reconciliation-box seat-reconciliation-summary">
-          <summary class="seat-reconciliation-summary-line">
-            <span class="seat-reconciliation-status is-ok">Master Copy Reconciliation Matched</span>
-            <span class="seat-reconciliation-source">Source: {{ reconciliation.source_name }}</span>
-            {% if reconciliation.last_checked_at %}
-              <span class="seat-reconciliation-source">Last reconciled: {{ reconciliation.last_checked_at|date:"d/m/Y h:i A" }}</span>
-            {% endif %}
-          </summary>
-          <ul class="seat-reconciliation-list" style="margin-top: 8px;">
-            {% for check in reconciliation.checks %}
-              <li class="seat-reconciliation-item is-ok">
-                <span class="seat-reconciliation-icon" aria-hidden="true">
-                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="m4.5 10 3.2 3.2 7.8-7.8"></path>
-                  </svg>
-                </span>
-                <span class="seat-reconciliation-text">{{ check.label }} matched</span>
-              </li>
-            {% endfor %}
-          </ul>
-        </details>
-      {% else %}
+    {% if selected_session and reconciliation.source_name and not reconciliation.all_matched %}
         <div class="seat-reconciliation-box">
           <div class="seat-reconciliation-header">
             <div>
@@ -189,40 +166,29 @@
           </div>
           <ul class="seat-reconciliation-list">
             {% for check in reconciliation.checks %}
-              <li class="seat-reconciliation-item {% if check.matched %}is-ok{% else %}is-issue{% endif %}">
+              {% if not check.matched %}
+              <li class="seat-reconciliation-item is-issue">
                 <span class="seat-reconciliation-icon" aria-hidden="true">
-                  {% if check.matched %}
-                    <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="m4.5 10 3.2 3.2 7.8-7.8"></path>
-                    </svg>
-                  {% else %}
-                    <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-                      <path d="M10 5.5v5"></path>
-                      <path d="M10 14.2h.01"></path>
-                      <circle cx="10" cy="10" r="8"></circle>
-                    </svg>
-                  {% endif %}
+                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                    <path d="M10 5.5v5"></path>
+                    <path d="M10 14.2h.01"></path>
+                    <circle cx="10" cy="10" r="8"></circle>
+                  </svg>
                 </span>
                 <span class="seat-reconciliation-text">
-                  {% if check.matched %}
-                    {{ check.label }} matched
-                  {% else %}
-                    {{ check.label }} mismatch: master {{ check.source }}, working copy {{ check.grouped }}
-                  {% endif %}
+                  {{ check.label }} mismatch: master {{ check.source }}, working copy {{ check.grouped }}
                 </span>
               </li>
+              {% endif %}
             {% endfor %}
           </ul>
         </div>
-      {% endif %}
     {% endif %}
 
-    {% if submit_result %}
-      <details class="seat-reconciliation-box {% if submit_result.all_matched %}seat-reconciliation-summary{% endif %}" open style="margin-bottom: 12px;">
+    {% if submit_result and not submit_result.all_matched %}
+      <details class="seat-reconciliation-box" open style="margin-bottom: 12px;">
         <summary class="seat-reconciliation-summary-line">
-          <span class="seat-reconciliation-status {% if submit_result.all_matched %}is-ok{% else %}is-issue{% endif %}">
-            {% if submit_result.all_matched %}Save Reconciliation Matched{% else %}Save Reconciliation Has Issues{% endif %}
-          </span>
+          <span class="seat-reconciliation-status is-issue">Save Reconciliation Has Issues</span>
           <span class="seat-reconciliation-source">Checked against master copy and saved split values</span>
           {% if submit_result.checked_at_display %}
             <span class="seat-reconciliation-source">Checked at: {{ submit_result.checked_at_display }}</span>
@@ -230,19 +196,14 @@
         </summary>
         <ul class="seat-reconciliation-list" style="margin-top: 8px;">
           {% for check in submit_result.checks %}
-            <li class="seat-reconciliation-item {% if check.matched %}is-ok{% else %}is-issue{% endif %}">
+            {% if not check.matched %}
+            <li class="seat-reconciliation-item is-issue">
               <span class="seat-reconciliation-icon" aria-hidden="true">
-                {% if check.matched %}
-                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="m4.5 10 3.2 3.2 7.8-7.8"></path>
-                  </svg>
-                {% else %}
-                  <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-                    <path d="M10 5.5v5"></path>
-                    <path d="M10 14.2h.01"></path>
-                    <circle cx="10" cy="10" r="8"></circle>
-                  </svg>
-                {% endif %}
+                <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                  <path d="M10 5.5v5"></path>
+                  <path d="M10 14.2h.01"></path>
+                  <circle cx="10" cy="10" r="8"></circle>
+                </svg>
               </span>
               <span class="seat-reconciliation-text">
                 {{ check.label }}
@@ -251,6 +212,7 @@
                 {% endif %}
               </span>
             </li>
+            {% endif %}
           {% endfor %}
         </ul>
       </details>

@@ -405,7 +405,59 @@ Common Drive errors:
 - `DJANGO_SUPERUSER_PASSWORD`: Initial admin password.
 - `DJANGO_SUPERUSER_NAME`: Initial admin display name.
 
-These are used only when the bootstrap admin logic runs. After production setup, manage users from User Management.
+These create or update the guaranteed superuser during migration/startup.
+
+### Regular user bootstrap
+
+- `DJANGO_BOOTSTRAP_USERS`: JSON array used to create or update non-superuser accounts during migration/startup.
+
+Use this when you want Cloud Run app creation to create normal users along with the superuser.
+
+Example:
+
+```json
+[
+  {
+    "email": "editor@example.com",
+    "password": "change-this-password",
+    "name": "Editor User",
+    "role": "editor",
+    "status": "active",
+    "permissions": {
+      "dashboard": ["view", "view_page_2"],
+      "application_entry": ["view", "create_edit", "submit", "reopen"],
+      "article_management": ["view", "create_edit"],
+      "user_guide": ["view"]
+    }
+  },
+  {
+    "email": "viewer@example.com",
+    "password": "change-this-password",
+    "name": "Viewer User",
+    "role": "viewer",
+    "status": "active",
+    "permissions": {
+      "dashboard": ["view"],
+      "user_guide": ["view"]
+    }
+  }
+]
+```
+
+Cloud Run environment variables are single-line values, so paste the JSON as one line:
+
+```env
+DJANGO_BOOTSTRAP_USERS=[{"email":"editor@example.com","password":"change-this-password","name":"Editor User","role":"editor","status":"active","permissions":{"dashboard":["view","view_page_2"],"application_entry":["view","create_edit","submit","reopen"],"user_guide":["view"]}}]
+```
+
+Permission rules:
+
+- `permissions` controls exactly what the user can see and do.
+- If a module is not listed, that module is disabled for the user.
+- `role` is kept for display/filtering, but module access comes from permissions.
+- Use `"*": true` inside `permissions` only if you intentionally want every supported action for every module.
+
+After production setup, you can still manage users from User Management.
 
 ### Runtime controls
 

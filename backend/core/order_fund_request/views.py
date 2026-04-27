@@ -43,7 +43,7 @@ from core.shared.permissions import AdminRequiredMixin, RoleRequiredMixin, Write
 def _is_editable_by_user(user, fr):
     if not user or not user.is_authenticated:
         return False
-    if user.role not in {"admin", "editor"}:
+    if not user.has_module_permission(models.ModuleKeyChoices.ORDER_FUND_REQUEST, "create_edit"):
         return False
     return fr.status == models.FundRequestStatusChoices.DRAFT
 
@@ -1358,8 +1358,11 @@ class FundRequestDetailView(LoginRequiredMixin, RoleRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         context["media_url"] = settings.MEDIA_URL
         context["can_edit"] = _is_editable_by_user(self.request.user, self.object)
-        context["can_reopen"] = self.request.user.role == "admin" and self.object.status == models.FundRequestStatusChoices.SUBMITTED
-        context["can_delete"] = self.request.user.role == "admin" and self.request.user.has_module_permission(
+        context["can_reopen"] = self.request.user.has_module_permission(
+            models.ModuleKeyChoices.ORDER_FUND_REQUEST,
+            "reopen",
+        ) and self.object.status == models.FundRequestStatusChoices.SUBMITTED
+        context["can_delete"] = self.request.user.has_module_permission(
             models.ModuleKeyChoices.ORDER_FUND_REQUEST,
             "delete",
         )
@@ -1412,7 +1415,7 @@ class FundRequestSubmitView(LoginRequiredMixin, WriteRoleMixin, View):
 
     def post(self, request, pk):
         fr = models.FundRequest.objects.get(pk=pk)
-        if not _is_editable_by_user(request.user, fr) or request.user.role == "viewer":
+        if not request.user.has_module_permission(self.module_key, "submit"):
             return HttpResponse("Forbidden", status=403)
         if fr.status != models.FundRequestStatusChoices.DRAFT:
             messages.error(request, "Only draft fund requests can be submitted.")
