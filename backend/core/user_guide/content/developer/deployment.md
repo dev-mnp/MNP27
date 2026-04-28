@@ -270,6 +270,18 @@ SSL:
 2. Set mode to Full.
 3. Do not use Flexible.
 
+Set Cloudflare WAP rules to stop traffic from botspammers.
+
+1. Security → WAF → Custom Rules
+2. Click Edit Expression and Paste the following:
+
+`(http.request.uri.path contains "/wp-") or
+(http.request.uri.path contains "/xmlrpc.php") or
+(http.request.uri.path contains "/.env") or
+(http.request.uri.path contains "/sitemap") or
+(http.request.uri.path contains "/robots.txt")`
+3. CLick Deploy
+
 ### Step 6: Test production
 
 Open:
